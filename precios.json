@@ -1,146 +1,20 @@
-{
- "generated_at": "2026-06-14T21:06:33+00:00",
- "fallos": [
-  "IE00BYX5NX33.IR: HTTP Error 404: Not Found",
-  "FBTC.DE: HTTP Error 404: Not Found"
- ],
- "alias": {
-  "BTC": "BTC",
-  "ETH": "ETH",
-  "IE0032620787": "IE0032620787.IR",
-  "IE0002639668": "IE0002639668.IR",
-  "LU0625737910": "0P0000TOUY.F",
-  "FR0000447823": "0P00000F24.F",
-  "JE00B8DFY052": "GBSE.MI",
-  "WGLD": "GBSE.MI",
-  "IE00B4ND3602": "IGLN.L",
-  "IGLN": "IGLN.L",
-  "CH1315732268": "XETH.DE",
-  "ETHE": "XETH.DE",
-  "FR0013416716": "GLDA.DE",
-  "GLDA": "GLDA.DE",
-  "JE00B1VS3333": "PHAG.MI",
-  "PHAG": "PHAG.MI",
-  "MSTR": "MSTR",
-  "AMZN": "AMZN",
-  "48CA": "CABK.MC",
-  "XAU": "GC=F",
-  "GLD": "GLD"
- },
- "resueltos": {
-  "LU0625737910": "0P0000TOUY.F",
-  "FR0000447823": "0P00000F24.F"
- },
- "precios": {
-  "BTC": {
-   "eur": 55284,
-   "cur": "EUR",
-   "src": "coingecko",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "ETH": {
-   "eur": 1442.35,
-   "cur": "EUR",
-   "src": "coingecko",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "IE0032620787.IR": {
-   "eur": 30.03,
-   "raw": 30.03,
-   "cur": "EUR",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "IE0002639668.IR": {
-   "eur": 28.961755,
-   "raw": 33.5,
-   "cur": "USD",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "0P0000TOUY.F": {
-   "eur": 129.87,
-   "raw": 129.87,
-   "cur": "EUR",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "0P00000F24.F": {
-   "eur": 2665.47,
-   "raw": 2665.47,
-   "cur": "EUR",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "GBSE.MI": {
-   "eur": 22.15,
-   "raw": 22.15,
-   "cur": "EUR",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "IGLN.L": {
-   "eur": 70.751406,
-   "raw": 81.838,
-   "cur": "USD",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "XETH.DE": {
-   "eur": 4.3104,
-   "raw": 4.3104,
-   "cur": "EUR",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "GLDA.DE": {
-   "eur": 144.52,
-   "raw": 144.52,
-   "cur": "EUR",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "PHAG.MI": {
-   "eur": 53.2,
-   "raw": 53.2,
-   "cur": "EUR",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "MSTR": {
-   "eur": 107.175784,
-   "raw": 123.97,
-   "cur": "USD",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "AMZN": {
-   "eur": 206.233632,
-   "raw": 238.55,
-   "cur": "USD",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "CABK.MC": {
-   "eur": 11.89,
-   "raw": 11.89,
-   "cur": "EUR",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "GC=F": {
-   "eur": 3664.569764,
-   "raw": 4238.8,
-   "cur": "USD",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  },
-  "GLD": {
-   "eur": 334.175426,
-   "raw": 386.54,
-   "cur": "USD",
-   "src": "yahoo",
-   "ts": "2026-06-14T21:06:33+00:00"
-  }
- }
-}
+[
+ {"sym": "BTC",           "cg": "bitcoin",  "ticker": "BTC",  "nombre": "Bitcoin"},
+ {"sym": "ETH",           "cg": "ethereum", "ticker": "ETH",  "nombre": "Ethereum"},
+ {"sym": "0P00000G12.F",  "isin": "IE0032620787", "nombre": "Vanguard US500 EUR Acc"},
+ {"sym": "0P00000RNC.F",  "isin": "IE0002639668", "nombre": "Vanguard US500 USD Acc"},
+ {"sym": "0P0001CLDK.F",  "isin": "IE00BYX5NX33", "nombre": "Fidelity MSCI World P-Acc-EUR"},
+ {"sym": "0P0000TOUY.F",  "isin": "LU0625737910", "nombre": "Pictet China Index P EUR"},
+ {"sym": "0P00000F24.F",  "isin": "FR0000447823", "nombre": "AXA Tresor Court Terme C"},
+ {"sym": "FBTC.SW",       "isin": "XS2434891219", "ticker": "FBTC", "nombre": "Fidelity Physical Bitcoin ETP"},
+ {"sym": "GBSE.MI",       "isin": "JE00B8DFY052", "ticker": "WGLD", "nombre": "WisdomTree Physical Gold EUR Hedged"},
+ {"sym": "IGLN.L",        "isin": "IE00B4ND3602", "ticker": "IGLN", "nombre": "iShares Physical Gold ETC"},
+ {"sym": "XETH.DE",       "isin": "CH1315732268", "ticker": "ETHE", "nombre": "Xtrackers Galaxy Physical Ethereum"},
+ {"sym": "GLDA.DE",       "isin": "FR0013416716", "ticker": "GLDA", "nombre": "Amundi Physical Gold ETC C"},
+ {"sym": "PHAG.MI",       "isin": "JE00B1VS3333", "ticker": "PHAG", "nombre": "WisdomTree Physical Silver"},
+ {"sym": "MSTR",          "ticker": "MSTR", "nombre": "Strategy Inc"},
+ {"sym": "AMZN",          "ticker": "AMZN", "nombre": "Amazon"},
+ {"sym": "CABK.MC",       "ticker": "48CA", "nombre": "CaixaBank"},
+ {"sym": "GC=F",          "ticker": "XAU",  "nombre": "Oro spot (futuro COMEX)"},
+ {"sym": "GLD",           "ticker": "GLD",  "nombre": "SPDR Gold Shares (watchlist)"}
+]
