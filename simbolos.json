@@ -2,7 +2,7 @@
  {"sym": "BTC",           "cg": "bitcoin",  "ticker": "BTC",  "nombre": "Bitcoin"},
  {"sym": "ETH",           "cg": "ethereum", "ticker": "ETH",  "nombre": "Ethereum"},
  {"sym": "0P00000G12.F",  "isin": "IE0032620787", "nombre": "Vanguard US500 EUR Acc"},
- {"sym": "0P00000RNC.F",  "isin": "IE0002639668", "nombre": "Vanguard US500 USD Acc"},
+ {"sym": "0P00000RNC",  "isin": "IE0002639668", "nombre": "Vanguard US500 USD Acc"},
  {"sym": "0P0001CLDK.F",  "isin": "IE00BYX5NX33", "nombre": "Fidelity MSCI World P-Acc-EUR"},
  {"sym": "0P0000TOUY.F",  "isin": "LU0625737910", "nombre": "Pictet China Index P EUR"},
  {"sym": "0P00000F24.F",  "isin": "FR0000447823", "nombre": "AXA Tresor Court Terme C"},
