@@ -1639,7 +1639,13 @@ async function loadFeed(){
         const sym=d.precios[t]?t:(alias[t]&&d.precios[alias[t]]?alias[t]:null);
         if(sym)wlpx[t]=d.precios[sym].eur;
       }
-      if(n){svSt();render();}                // pintar ya con el feed, el live refina después
+      if(n){
+        // marca de "última actualización" con la hora real del feed (fuente fiable),
+        // sin esperar a los proxies en vivo que pueden tardar o colgarse
+        const luEl=el('sb-lu');
+        if(luEl)luEl.textContent='act. '+new Date(ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+        svSt();render();
+      }
       return n;
     }catch(e){}
   }
