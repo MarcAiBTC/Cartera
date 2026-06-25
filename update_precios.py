@@ -27,14 +27,23 @@ def get_json(url, tries=3, timeout=15):
 
 
 def yf_quote(sym):
-    """Precio y divisa reales del listado en Yahoo."""
-    path = f"/v8/finance/chart/{urllib.parse.quote(sym)}?range=5d&interval=1d"
+    """Precio, divisa, cierre anterior y serie de cierres diarios (1 mes) en Yahoo."""
+    path = f"/v8/finance/chart/{urllib.parse.quote(sym)}?range=1mo&interval=1d"
     last = None
     for host in YF_HOSTS:
         try:
             d = get_json(f"https://{host}{path}", tries=2)
-            m = d["chart"]["result"][0]["meta"]
-            return float(m["regularMarketPrice"]), m.get("currency") or "USD"
+            res = d["chart"]["result"][0]
+            m = res["meta"]
+            price = float(m["regularMarketPrice"])
+            cur = m.get("currency") or "USD"
+            prev = m.get("previousClose") or m.get("chartPreviousClose")
+            prev = float(prev) if prev else None
+            try:
+                closes = [c for c in res["indicators"]["quote"][0]["close"] if c is not None]
+            except Exception:
+                closes = []
+            return price, cur, prev, closes
         except Exception as e:
             last = e
     raise last
@@ -52,7 +61,7 @@ def fx_to_eur(cur):
             d = get_json(f"https://api.frankfurter.app/latest?from={cur}&to=EUR")
             FX[cur] = float(d["rates"]["EUR"])
         except Exception:
-            p, _ = yf_quote(f"EUR{cur}=X")   # respaldo: cruce de Yahoo (divisa por 1 EUR)
+            p = yf_quote(f"EUR{cur}=X")[0]   # respaldo: cruce de Yahoo (divisa por 1 EUR)
             FX[cur] = 1.0 / p
     return FX[cur]
 
@@ -110,17 +119,41 @@ def main():
     precios, fallos = {}, []
     now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
-    # Cripto por CoinGecko (lote único)
+    # Cripto por CoinGecko. El PRECIO va por simple/price (endpoint probado y barato)
+    # con el cambio 24h para derivar el cierre anterior. La sparkline 7d se intenta
+    # aparte: si falla, los precios no se ven afectados.
     cg = {s["sym"]: s["cg"] for s in simbolos if s.get("cg")}
     if cg:
+        ids = ",".join(sorted(set(cg.values())))
         try:
-            ids = ",".join(sorted(set(cg.values())))
-            d = get_json(f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=eur")
+            d = get_json(f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=eur&include_24hr_change=true")
             for sym, cid in cg.items():
-                if d.get(cid, {}).get("eur"):
-                    precios[sym] = {"eur": d[cid]["eur"], "cur": "EUR", "src": "coingecko", "ts": now}
+                info = d.get(cid, {})
+                eur = info.get("eur")
+                if not eur:
+                    continue
+                entry = {"eur": eur, "cur": "EUR", "src": "coingecko", "ts": now}
+                chg = info.get("eur_24h_change")
+                if chg is not None:
+                    entry["prev"] = round(eur / (1 + chg / 100.0), 6)
+                precios[sym] = entry
         except Exception as e:
             fallos.append(f"coingecko: {e}")
+        try:  # sparkline 7d, best-effort
+            d2 = get_json(f"https://api.coingecko.com/api/v3/coins/markets?vs_currency=eur&ids={ids}&sparkline=true")
+            by_id = {c["id"]: c for c in d2}
+            for sym, cid in cg.items():
+                if sym not in precios:
+                    continue
+                sp = (by_id.get(cid, {}).get("sparkline_in_7d") or {}).get("price") or []
+                if sp:
+                    step = max(1, len(sp) // 30)              # 168 horas → ~30 puntos
+                    precios[sym]["spark"] = [round(x, 6) for x in sp[::step]][-30:]
+        except Exception as e:
+            fallos.append(f"coingecko spark: {e}")
+        for sym in cg:                                        # conservar último conocido
+            if sym not in precios and sym in previo:
+                precios[sym] = previo[sym]
 
     # Resto por Yahoo
     for s in simbolos:
@@ -128,9 +161,15 @@ def main():
         if sym in precios:
             continue
         try:
-            p, cur = yf_quote(sym)
-            eur = round(p * fx_to_eur(cur), 6)
-            precios[sym] = {"eur": eur, "raw": p, "cur": cur, "src": "yahoo", "ts": now}
+            p, cur, prev, closes = yf_quote(sym)
+            r = fx_to_eur(cur)
+            eur = round(p * r, 6)
+            entry = {"eur": eur, "raw": p, "cur": cur, "src": "yahoo", "ts": now}
+            if prev:
+                entry["prev"] = round(prev * r, 6)
+            if closes:
+                entry["spark"] = [round(c * r, 6) for c in closes[-30:]]
+            precios[sym] = entry
             time.sleep(0.4)   # sin ráfagas: Yahoo penaliza el exceso
         except Exception as e:
             fallos.append(f"{sym}: {e}")

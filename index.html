@@ -10,15 +10,23 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg0:#131722;--bg1:#1e222d;--bg2:#2a2e39;--bg3:#363a45;--bg4:#434651;
-  --line:#2a2e39;--line2:#363a45;--line3:#434651;
-  --fg0:#d1d4dc;--fg1:#b2b5be;--fg2:#787b86;--fg3:#4c525e;
+  /* lienzo profundo + escala de elevación: cada superficie se "levanta" del fondo */
+  --bg0:#0c0f16;--bg1:#141821;--bg2:#1d222d;--bg3:#2a303c;--bg4:#39414f;
+  /* hairlines translúcidas: el borde "caro" que se mezcla con cualquier superficie */
+  --line:rgba(255,255,255,.06);--line2:rgba(255,255,255,.10);--line3:rgba(255,255,255,.16);
+  --fg0:#e6e8ec;--fg1:#aeb2bd;--fg2:#787b86;--fg3:#565b66;
   --up:#26a69a;--dn:#ef5350;--up-bg:rgba(38,166,154,.12);--dn-bg:rgba(239,83,80,.12);
-  --blue:#2962ff;--gold:#f5a623;--purple:#a78bfa;
+  --blue:#2e6bff;--blue-glow:rgba(46,107,255,.35);--gold:#f5a623;--purple:#a78bfa;
   --sans:'Inter',sans-serif;
+  --elev1:0 1px 2px rgba(0,0,0,.35);
+  --elev2:0 4px 16px rgba(0,0,0,.32),0 1px 3px rgba(0,0,0,.4);
 }
-html{font-size:13px;-webkit-font-smoothing:antialiased}
-body{font-family:var(--sans);background:var(--bg0);color:var(--fg0);min-height:100vh;overflow-x:hidden}
+html{font-size:13px;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+/* tnum: dígitos de ancho fijo → todas las cifras alinean en columna (sello fintech) */
+body{font-family:var(--sans);background:var(--bg0);color:var(--fg0);min-height:100vh;overflow-x:hidden;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"cv01" 1}
+/* foco visible y accesible, sólo con teclado */
+:focus-visible{outline:2px solid var(--blue);outline-offset:1px;border-radius:3px}
+button:focus:not(:focus-visible){outline:none}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:2px}
@@ -86,7 +94,7 @@ body{font-family:var(--sans);background:var(--bg0);color:var(--fg0);min-height:1
 .btn-ghost{background:none;color:var(--fg1);border:1px solid var(--line2)}
 .btn-ghost:hover{background:var(--bg2);color:var(--fg0)}
 .btn-blue{background:var(--blue);color:#fff}
-.btn-blue:hover{background:#1e53e5}
+.btn-blue:hover{background:#1f56e6}
 
 /* ── PAGES ── */
 .page{display:none;flex:1;overflow-y:auto}
@@ -95,7 +103,7 @@ body{font-family:var(--sans);background:var(--bg0);color:var(--fg0);min-height:1
 
 /* ── RESUMEN PAGE ── */
 /* big number strip */
-.kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line);background:var(--bg1);align-items:start}
+.kpi-strip{display:grid;grid-template-columns:repeat(5,1fr);border-bottom:1px solid var(--line);background:var(--bg1);align-items:start}
 .kpi{padding:14px 18px;border-right:1px solid var(--line);cursor:default}
 .kpi:last-child{border-right:none}
 .kpi-lbl{font-size:9px;color:var(--fg3);text-transform:uppercase;letter-spacing:.7px;font-weight:600;margin-bottom:6px}
@@ -131,6 +139,12 @@ body{font-family:var(--sans);background:var(--bg0);color:var(--fg0);min-height:1
 table{width:100%;border-collapse:collapse}
 thead th{padding:8px 14px;text-align:left;font-size:9px;font-weight:600;color:var(--fg3);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--bg1)}
 th.r,td.r{text-align:right}
+th.c,td.c{text-align:center}
+.day-pct{font-size:12px;font-weight:600}
+.day-na{font-size:12px;color:var(--fg3)}
+.spark-td{padding-left:6px;padding-right:6px}
+.spark{display:inline-block;width:66px;height:22px;overflow:visible;vertical-align:middle}
+.spark-na{font-size:11px;color:var(--fg3)}
 th.sortable{cursor:pointer;user-select:none;transition:color .1s}
 th.sortable:hover{color:var(--fg1)}
 .sic{display:inline-flex;flex-direction:column;gap:1px;margin-left:3px;vertical-align:middle;opacity:.22}
@@ -189,6 +203,12 @@ td{padding:11px 14px;vertical-align:middle}
 
 /* ── CHARTS PAGE ── */
 .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);padding:0}
+.treemap{position:relative;width:100%;height:320px;margin-top:12px}
+.tm-cell{position:absolute;overflow:hidden;border-radius:3px;padding:6px 8px;display:flex;flex-direction:column;gap:2px;cursor:default;transition:filter .12s;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
+.tm-cell:hover{filter:brightness(1.18)}
+.tm-name{font-size:10px;font-weight:600;line-height:1.15;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tm-meta{font-size:9px;font-weight:500;color:rgba(255,255,255,.92);text-shadow:0 1px 2px rgba(0,0,0,.5);margin-top:auto}
+.tm-pct{font-weight:700}
 .chart-block{background:var(--bg0);padding:20px}
 .chart-block.full{grid-column:1/-1}
 .chart-block-title{font-size:10px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px}
@@ -358,10 +378,33 @@ td{padding:11px 14px;vertical-align:middle}
 .mc{flex:1;padding:8px;border-radius:4px;border:1px solid var(--line2);background:none;color:var(--fg1);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;transition:all .1s}
 .mc:hover{background:var(--bg2);color:var(--fg0)}
 .ms{flex:2;padding:8px;border-radius:4px;border:none;background:var(--blue);color:#fff;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;transition:all .1s}
-.ms:hover{background:#1e53e5}
+.ms:hover{background:#1f56e6}
 
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--line2);border-radius:4px;padding:8px 16px;font-size:11px;color:var(--fg1);z-index:300;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;font-weight:500}
 .toast.on{opacity:1}
+
+/* ── PULIDO: profundidad y acabado de superficies ───────────────────────────── */
+/* el lienzo gana un degradado casi imperceptible: deja de parecer un gris plano */
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(1100px 760px at 82% -12%,#10141d 0%,var(--bg0) 58%)}
+/* sidebar y topbar elevados sobre el lienzo */
+.sb{box-shadow:1px 0 0 rgba(255,255,255,.03),4px 0 24px rgba(0,0,0,.28)}
+.topbar{box-shadow:0 1px 0 rgba(255,255,255,.03)}
+/* tira de KPIs: superficie elevada con canto de luz superior */
+.kpi-strip{box-shadow:inset 0 1px 0 rgba(255,255,255,.04),var(--elev1)}
+/* iconos y badges con borde interior: se ven "tallados", no pegados */
+.sym-ic{box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 0 0 1px rgba(0,0,0,.15)}
+.tbadge{box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+/* botón primario: degradado sutil + sombra de color al pasar (sensación premium) */
+.btn-blue,.ms{background:linear-gradient(180deg,#3a76ff,var(--blue));box-shadow:0 1px 2px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.18)}
+.btn-blue:hover,.ms:hover{background:linear-gradient(180deg,#4980ff,#1f56e6);box-shadow:0 2px 12px var(--blue-glow),inset 0 1px 0 rgba(255,255,255,.2)}
+/* barras de peso/objetivo: un punto de brillo interior */
+.wt-fill,.cmp-bar-fill,.wl-prog-fill{box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
+/* puntito "en vivo" con halo, como un terminal real */
+.pxd.live{box-shadow:0 0 0 2px rgba(38,166,154,.18)}
+/* tarjetas con sus propias superficies: separan mejor del fondo */
+.evo-panel,.target-panel,.modal,.wl-card{box-shadow:var(--elev1)}
+/* foco de inputs con anillo de color suave además del borde */
+.fi:focus,.fta:focus,.tr-input:focus{box-shadow:0 0 0 3px var(--blue-glow)}
 
 @media(max-width:860px){
   .app{grid-template-columns:1fr}
@@ -536,8 +579,12 @@ td{padding:11px 14px;vertical-align:middle}
           <span class="kpi-sub">Invertido <strong style="color:var(--fg1)" id="k-cost">—</strong></span>
         </div>
       </div>
+      <div class="kpi"><div class="kpi-lbl">Hoy</div><div class="kpi-val" id="k-day" style="font-size:18px">—</div><div class="kpi-sub" id="k-daysub">—</div></div>
       <div class="kpi"><div class="kpi-lbl">Resultado</div><div class="kpi-val" id="k-pnl">—</div><div class="kpi-sub" id="k-pnlsub">—</div></div>
-      <div class="kpi"><div class="kpi-lbl">Mejor posición</div><div class="kpi-val" id="k-best" style="font-size:14px">—</div><div class="kpi-sub" id="k-bestp">—</div></div>
+      <div class="kpi"><div class="kpi-lbl">Mejor / Peor</div>
+        <div class="kpi-val" id="k-best" style="font-size:13px">—</div><div class="kpi-sub" id="k-bestp">—</div>
+        <div class="kpi-val" id="k-worst" style="font-size:13px;margin-top:7px">—</div><div class="kpi-sub" id="k-worstp">—</div>
+      </div>
     </div>
     <div class="br-strip" id="br-strip"></div>
     <div style="padding:0 0 0">
@@ -558,7 +605,7 @@ td{padding:11px 14px;vertical-align:middle}
           <table>
             <thead><tr>
               <th>Activo</th><th>Tipo</th><th class="r">Cantidad</th>
-              <th class="r">Precio</th><th class="r">Valor</th><th class="r">Invertido</th>
+              <th class="r">Precio</th><th class="r">Día</th><th class="c">7d</th><th class="r">Valor</th><th class="r">Invertido</th>
               <th class="r sortable" onclick="setSort('pnl')" id="th-pnl">P&L <span class="sic"><svg class="su" viewBox="0 0 6 4" fill="currentColor"><path d="M3 0L6 4H0z"/></svg><svg class="sd" viewBox="0 0 6 4" fill="currentColor"><path d="M3 4L0 0h6z"/></svg></span></th>
               <th class="r sortable" onclick="setSort('pct')" id="th-pct">Rent.% <span class="sic"><svg class="su" viewBox="0 0 6 4" fill="currentColor"><path d="M3 0L6 4H0z"/></svg><svg class="sd" viewBox="0 0 6 4" fill="currentColor"><path d="M3 4L0 0h6z"/></svg></span></th>
               <th class="r sortable" onclick="setSort('peso')" id="th-peso">Peso <span class="sic"><svg class="su" viewBox="0 0 6 4" fill="currentColor"><path d="M3 0L6 4H0z"/></svg><svg class="sd" viewBox="0 0 6 4" fill="currentColor"><path d="M3 4L0 0h6z"/></svg></span></th>
@@ -574,6 +621,12 @@ td{padding:11px 14px;vertical-align:middle}
   <!-- ── GRÁFICOS PAGE ── -->
   <div class="page" id="page-graficos">
     <div class="charts-grid">
+      <!-- Treemap de la cartera -->
+      <div class="chart-block" style="grid-column:1/-1">
+        <div class="chart-block-title">Mapa de la cartera</div>
+        <div class="chart-block-sub">Tamaño = peso en cartera · color = rentabilidad sobre el coste</div>
+        <div class="treemap" id="g-treemap"></div>
+      </div>
       <!-- Donut distribución -->
       <div class="chart-block">
         <div class="chart-block-title">Distribución</div>
@@ -923,7 +976,11 @@ const PROXIES=[
 // • Si sirves la app desde GitHub Pages junto a precios.json → no toques nada.
 // • Si la abres desde disco (file://) → pega aquí la URL raw de tu repo, p. ej.:
 //   'https://raw.githubusercontent.com/TU_USUARIO/TU_REPO/main/precios.json'
-const FEED_URL='';
+// En producción (Pages) se usa la ruta relativa 'precios.json'. Abierto en local
+// (file://) esa ruta no carga, así que tiramos de la URL raw del repo (CORS abierto).
+const FEED_URL=location.protocol==='file:'
+  ?'https://raw.githubusercontent.com/marcaibtc/Cartera/main/precios.json'
+  :'';
 const BD={MyInvestor:'#ff8c55',Revolut:'#7c8cf8','Trade Republic':'#34d399',ING:'#fb923c',Otro:'#9598a1'};
 
 const UND_MAP={
@@ -977,7 +1034,7 @@ const DEF_TRADES=[
 ];
 let trades = st.trades || [...DEF_TRADES];
 
-let lpx={},wlpx={},pxStat={},fxCache={EUR:1},fxPending={};
+let lpx={},lpxPrev={},lpxSpark={},wlpx={},pxStat={},fxCache={EUR:1},fxPending={};
 let eaid=null,pmid=null,ewid=null;
 let curCat='fondo',curMode='manual';
 let curPage='resumen',curAsset=null;
@@ -1011,6 +1068,27 @@ const gn  = a=>{const v=vl(a),c=cs(a);return v!=null?v-c:null;};
 const tv  = ()=>assets.reduce((s,a)=>s+(vl(a)||0),0);
 const tc  = ()=>assets.reduce((s,a)=>s+cs(a),0);
 const und = a=>a.underlying||UND_MAP[a.id]||a.name;
+// Cierre anterior (EUR) por activo: para variación intradía. null si no hay dato.
+const pxPrev = a=>{
+  if(a.cat==='liquidez')return a.mp??1;          // liquidez no se mueve
+  if(a.mode==='auto'){
+    if(lpxPrev['#'+a.id]!=null)return lpxPrev['#'+a.id];
+    if(a.ticker&&lpxPrev[up(a.ticker)]!=null)return lpxPrev[up(a.ticker)];
+  }
+  return null;
+};
+// Serie de cierres recientes (EUR) para el sparkline, o null.
+const sparkOf = a=>{
+  if(a.mode==='auto'){
+    if(lpxSpark['#'+a.id])return lpxSpark['#'+a.id];
+    if(a.ticker&&lpxSpark[up(a.ticker)])return lpxSpark[up(a.ticker)];
+  }
+  return null;
+};
+// Variación de la posición en el día: {abs:€, pct:%} o null.
+const dayChg = a=>{const p=px(a),pv=pxPrev(a);if(p==null||pv==null||pv<=0)return null;return{abs:a.qty*(p-pv),pct:(p-pv)/pv*100};};
+// Variación de toda la cartera hoy: {abs, pct} sobre los activos con dato intradía.
+const tDay = ()=>{let abs=0,base=0,has=false;for(const a of assets){const p=px(a),pv=pxPrev(a);if(p==null||pv==null||pv<=0)continue;abs+=a.qty*(p-pv);base+=a.qty*pv;has=true;}return has?{abs,pct:base>0?abs/base*100:0}:null;};
 
 // ── FORMAT ────────────────────────────────────────────────────────────────────
 const fe=(n,d=2)=>n==null||isNaN(n)?'—':new Intl.NumberFormat('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d}).format(n)+' €';
@@ -1021,6 +1099,38 @@ const el=id=>document.getElementById(id);
 const tip={backgroundColor:'#1e222d',titleColor:'#d1d4dc',bodyColor:'#787b86',borderColor:'rgba(255,255,255,.07)',borderWidth:1,padding:9,titleFont:{family:"'Inter'",size:11},bodyFont:{family:"'Inter'",size:11}};
 
 function mkChart(id,cfg){if(chartInstances[id])chartInstances[id].destroy();chartInstances[id]=new Chart(el(id).getContext('2d'),cfg);return chartInstances[id];}
+
+const REDUCE_MOTION=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Sparkline inline (SVG ligero, sin Chart.js) a partir de una serie de cierres.
+function sparkSVG(arr,w=66,h=22){
+  if(!arr||arr.length<2)return '<span class="spark-na">—</span>';
+  const min=Math.min(...arr),max=Math.max(...arr),rng=max-min||1,n=arr.length;
+  const up=arr[n-1]>=arr[0],col=up?'var(--up)':'var(--dn)';
+  const X=i=>(i/(n-1)*(w-2)+1).toFixed(1), Y=v=>(h-2-((v-min)/rng)*(h-4)).toFixed(1);
+  const pts=arr.map((v,i)=>X(i)+','+Y(v)).join(' ');
+  const gid='sg'+Math.random().toString(36).slice(2,7);
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">`
+    +`<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".22"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>`
+    +`<polygon points="1,${h} ${pts} ${(w-1)},${h}" fill="url(#${gid})"/>`
+    +`<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>`
+    +`<circle cx="${X(n-1)}" cy="${Y(arr[n-1])}" r="1.7" fill="${col}"/></svg>`;
+}
+
+// Anima un nº de su valor previo al nuevo (easeOutCubic). Guarda el último en dataset.
+function countUp(elm,to,fmt,dur=520){
+  if(!elm)return;
+  if(!isFinite(to)){elm.textContent=fmt(to);return;}
+  const from=parseFloat(elm.dataset.v||'');
+  elm.dataset.v=to;
+  if(REDUCE_MOTION||!isFinite(from)||from===to){elm.textContent=fmt(to);return;}
+  const t0=performance.now();
+  (function step(t){
+    const k=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-k,3);
+    elm.textContent=fmt(from+(to-from)*e);
+    if(k<1)requestAnimationFrame(step);
+  })(performance.now());
+}
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 const PAGES=['resumen','graficos','evolucion','objetivo','historial','watchlist'];
@@ -1046,7 +1156,7 @@ function render(){rKpis();rBrStrip();rTable();rSidebar();}
 
 function rSidebar(){
   const t=tv(),c=tc(),g=t-c,pct=c>0?(g/c)*100:0;
-  el('sb-total').textContent=fe(t,0);
+  countUp(el('sb-total'),t,n=>fe(n,0));
   el('sb-cost').textContent=fe(c,0);
   const pnlEl=el('sb-pnl');
   pnlEl.textContent=fe(g,0)+' ('+fp(pct)+')';
@@ -1065,7 +1175,7 @@ function rSidebar(){
 
 function rKpis(){
   const t=tv(),c=tc(),g=t-c,pct=c>0?(g/c)*100:0;
-  el('k-tot').textContent=fe(t);el('k-cost').textContent=fe(c);
+  countUp(el('k-tot'),t,n=>fe(n));el('k-cost').textContent=fe(c);
   el('k-pos').textContent=assets.filter(a=>a.cat!=='liquidez').length+' posiciones activas';
   const badgeEl=el('k-pnlbadge');
   badgeEl.textContent=fp(pct);
@@ -1074,11 +1184,19 @@ function rKpis(){
   el('k-pnleuro').textContent=(g>=0?'+':'')+fe(g);
   el('k-pnleuro').className='';
   el('k-pnleuro').style.color=g>=0?'var(--up)':'var(--dn)';
-  const pnlEl=el('k-pnl');pnlEl.textContent=fe(g);pnlEl.className='kpi-val '+(g>=0?'up':'dn');
+  const pnlEl=el('k-pnl');countUp(pnlEl,g,n=>(n>=0?'+':'')+fe(n));pnlEl.className='kpi-val '+(g>=0?'up':'dn');
   el('k-pnlsub').innerHTML=`<span class="kpi-badge ${g>=0?'up':'dn'}">${fp(pct)}</span> sobre lo invertido`;
   el('k-pnlsub').className='kpi-sub '+(g>=0?'up':'dn');
+  // Hoy (variación intradía de la cartera)
+  const day=tDay(),dEl=el('k-day'),dsEl=el('k-daysub');
+  if(day){countUp(dEl,day.abs,n=>(n>=0?'+':'')+fe(n));dEl.className='kpi-val '+(day.abs>=0?'up':'dn');dEl.style.fontSize='18px';dsEl.innerHTML=`<span class="kpi-badge ${day.abs>=0?'up':'dn'}">${fp(day.pct)}</span> en el día`;dsEl.className='kpi-sub';}
+  else{dEl.textContent='—';dEl.dataset.v='';dEl.className='kpi-val';dEl.style.fontSize='18px';dsEl.textContent='Sin datos intradía';dsEl.className='kpi-sub';}
+  // Mejor / Peor posición por rentabilidad
   const ranked=assets.map(a=>{const c2=cs(a),v=vl(a);return{a,p:c2>0&&v!=null?(v-c2)/c2*100:null};}).filter(x=>x.p!=null).sort((a,b)=>b.p-a.p);
-  if(ranked.length){const b=ranked[0];el('k-best').textContent=b.a.name;el('k-best').className='kpi-val '+(b.p>=0?'up':'dn');el('k-bestp').textContent=fp(b.p);el('k-bestp').className='kpi-sub '+(b.p>=0?'up':'dn');}
+  if(ranked.length){
+    const b=ranked[0];el('k-best').textContent=b.a.name;el('k-best').className='kpi-val '+(b.p>=0?'up':'dn');el('k-bestp').textContent=fp(b.p)+' ↑';el('k-bestp').className='kpi-sub '+(b.p>=0?'up':'dn');
+    const w=ranked[ranked.length-1];el('k-worst').textContent=w.a.name;el('k-worst').className='kpi-val '+(w.p>=0?'up':'dn');el('k-worstp').textContent=fp(w.p)+' ↓';el('k-worstp').className='kpi-sub '+(w.p>=0?'up':'dn');
+  }
 }
 
 function rBrStrip(){
@@ -1096,7 +1214,7 @@ function rTable(){
   let filtered=assets;
   if(catFilter!=='all')filtered=filtered.filter(a=>a.cat===catFilter);
   if(brFilter!=='all')filtered=filtered.filter(a=>(a.broker||'Otro')===brFilter);
-  if(!filtered.length){tbody.innerHTML=`<tr><td class="empty-td" colspan="10">Sin posiciones en esta vista.</td></tr>`;return;}
+  if(!filtered.length){tbody.innerHTML=`<tr><td class="empty-td" colspan="12">Sin posiciones en esta vista.</td></tr>`;return;}
 
   filtered=[...filtered].sort((a,b)=>{
     const dir=curSort.dir==='asc'?1:-1;
@@ -1110,6 +1228,7 @@ function rTable(){
   tbody.innerHTML=filtered.map(a=>{
     const p=px(a),v=vl(a),c=cs(a),g=gn(a),gp=c>0&&g!=null?(g/c)*100:null;
     const pct=t>0&&v!=null?(v/t)*100:0;
+    const dc=dayChg(a),sp=sparkOf(a);
     const cc=CC[a.cat];
     const st=pxState(a);
     const gc=g==null?'nu-c':g>=0?'up-c':'dn-c';
@@ -1135,6 +1254,8 @@ function rTable(){
       <td><span class="tbadge" style="background:${cc.b};color:${cc.t}">${CL[a.cat]}</span></td>
       <td class="r"><div class="qty-main">${fn(a.qty)}</div><div class="qty-unit">${a.unit}</div></td>
       <td class="r">${pxBadge}</td>
+      <td class="r">${dc!=null?`<div class="day-pct ${dc.pct>=0?'up-c':'dn-c'}" title="${(dc.abs>=0?'+':'')+fe(dc.abs)} hoy">${fp(dc.pct)}</div>`:`<span class="day-na">—</span>`}</td>
+      <td class="c spark-td">${sparkSVG(sp)}</td>
       <td class="r"><div class="val-main">${v!=null?fe(v):'—'}</div></td>
       <td class="r"><div class="val-cost" style="font-size:12px;color:var(--fg2)">${fe(c)}</div></td>
       <td class="r"><div class="pnl-val ${gc}">${g!=null?(g>=0?'+':'')+fe(g):'—'}</div></td>
@@ -1167,11 +1288,51 @@ function renderCharts(){
     const br=a.broker||'Otro';brs[br]=(brs[br]||0)+v;
   }
 
+  renderTreemap();
   renderPieG(cats,unds,t);
   renderBarG(t);
   renderBrokerG(brs,t);
   renderPnlBarG();
 }
+
+// Treemap squarified (Bruls et al.): rects {x,y,w,h} en el orden de los valores.
+function squarify(values,x,y,w,h){
+  const n=values.length,rects=new Array(n),total=values.reduce((s,v)=>s+v,0);
+  if(total<=0)return values.map(()=>({x,y,w:0,h:0}));
+  const norm=values.map(v=>v/total*(w*h));
+  let i=0,cx=x,cy=y,cw=w,ch=h;
+  const worst=(row,side)=>{const s=row.reduce((a,b)=>a+b,0),mx=Math.max(...row),mn=Math.min(...row);return Math.max(side*side*mx/(s*s),s*s/(side*side*mn));};
+  while(i<n){
+    const side=Math.min(cw,ch);let row=[norm[i]];
+    while(i+row.length<n){const nx=norm[i+row.length];if(worst([...row,nx],side)>worst(row,side))break;row.push(nx);}
+    const s=row.reduce((a,b)=>a+b,0),thick=s/side,horizontal=cw>=ch;let off=0;
+    for(let k=0;k<row.length;k++){const len=row[k]/thick;rects[i+k]=horizontal?{x:cx,y:cy+off,w:thick,h:len}:{x:cx+off,y:cy,w:len,h:thick};off+=len;}
+    if(horizontal){cx+=thick;cw-=thick;}else{cy+=thick;ch-=thick;}
+    i+=row.length;
+  }
+  return rects;
+}
+// Color por rentabilidad: rojo→gris→verde según magnitud (cap a ±30%).
+function pnlColor(pct){
+  if(pct==null)return 'hsl(220,9%,32%)';
+  const L=(26+Math.min(Math.abs(pct),30)/30*22).toFixed(0);
+  return pct>=0?`hsl(168,55%,${L}%)`:`hsl(2,68%,${L}%)`;
+}
+function renderTreemap(){
+  const box=el('g-treemap');if(!box)return;
+  const W=box.clientWidth,H=box.clientHeight||320;
+  const items=assets.map(a=>({a,v:vl(a)||0,gp:cs(a)>0&&gn(a)!=null?gn(a)/cs(a)*100:null})).filter(x=>x.v>0).sort((p,q)=>q.v-p.v);
+  if(!items.length){box.innerHTML='<div style="color:var(--fg3);font-size:12px;padding:20px">Sin posiciones con valor.</div>';return;}
+  if(!W){requestAnimationFrame(renderTreemap);return;}   // aún sin layout (pestaña oculta)
+  const rects=squarify(items.map(x=>x.v),0,0,W,H),t=tv();
+  box.innerHTML=items.map((x,i)=>{
+    const r=rects[i],pct=t>0?x.v/t*100:0,small=r.w<52||r.h<32,name=x.a.ticker||x.a.name;
+    return`<div class="tm-cell" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px;background:${pnlColor(x.gp)}" title="${x.a.name} · ${fe(x.v)} · ${pct.toFixed(1)}% · Rent. ${fp(x.gp)}">`
+      +(small?'':`<div class="tm-name">${name}</div><div class="tm-meta">${fe(x.v,0)} <span class="tm-pct">${x.gp!=null?fp(x.gp):''}</span></div>`)
+      +`</div>`;
+  }).join('');
+}
+addEventListener('resize',()=>{if(curPage==='graficos')renderTreemap();});
 
 function renderPieG(cats,unds,t){
   const data=curDist==='cat'?cats:unds;
@@ -1179,7 +1340,7 @@ function renderPieG(cats,unds,t){
   const vals=keys.map(k=>data[k]);
   const colors=curDist==='cat'?keys.map(k=>CC[k]?.s||'#787b86'):keys.map(k=>UND_COLORS[k]||PALETTE[keys.indexOf(k)%PALETTE.length]);
 
-  mkChart('g-pie',{type:'doughnut',data:{labels:keys.map(k=>curDist==='cat'?CL[k]:k),datasets:[{data:vals,backgroundColor:colors.map(c=>c+'bb'),borderColor:'#131722',borderWidth:3,hoverOffset:4}]},options:{cutout:'70%',plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>` ${fe(c.raw)}  ·  ${t>0?((c.raw/t)*100).toFixed(1):0}%`}}},animation:{duration:400}}});
+  mkChart('g-pie',{type:'doughnut',data:{labels:keys.map(k=>curDist==='cat'?CL[k]:k),datasets:[{data:vals,backgroundColor:colors.map(c=>c+'bb'),borderColor:'#0c0f16',borderWidth:3,hoverOffset:4}]},options:{cutout:'70%',plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>` ${fe(c.raw)}  ·  ${t>0?((c.raw/t)*100).toFixed(1):0}%`}}},animation:{duration:400}}});
   el('g-pie-val').textContent=fe(t,0);
   el('g-pie-legend').innerHTML=keys.map((k,i)=>{
     const pct=t>0?((data[k]/t)*100).toFixed(1):'0';
@@ -1205,7 +1366,7 @@ function renderBarG(t){
 function renderBrokerG(brs,t){
   const keys=Object.keys(brs).sort((a,b)=>brs[b]-brs[a]);
   const colors=keys.map(k=>BD[k]||'#9598a1');
-  mkChart('g-broker',{type:'doughnut',data:{labels:keys,datasets:[{data:keys.map(k=>brs[k]),backgroundColor:colors.map(c=>c+'cc'),borderColor:'#131722',borderWidth:3,hoverOffset:4}]},options:{cutout:'68%',plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>` ${fe(c.raw)}  ·  ${t>0?((c.raw/t)*100).toFixed(1):0}%`}}},animation:{duration:400}}});
+  mkChart('g-broker',{type:'doughnut',data:{labels:keys,datasets:[{data:keys.map(k=>brs[k]),backgroundColor:colors.map(c=>c+'cc'),borderColor:'#0c0f16',borderWidth:3,hoverOffset:4}]},options:{cutout:'68%',plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>` ${fe(c.raw)}  ·  ${t>0?((c.raw/t)*100).toFixed(1):0}%`}}},animation:{duration:400}}});
   el('g-broker-val').textContent=fe(t,0);
   el('g-broker-legend').innerHTML=keys.map((k,i)=>{
     const pct=t>0?((brs[k]/t)*100).toFixed(1):'0';
@@ -1467,6 +1628,9 @@ async function loadFeed(){
         if(!a.yfSym)a.yfSym=sym;            // ahorra la resolución al motor en vivo
         a.pxOk=true;a.mp=eur;a.mpT=ts;
         lpx['#'+a.id]=eur;pxStat['#'+a.id]='live';
+        const pe=d.precios[sym];
+        if(pe.prev>0)lpxPrev['#'+a.id]=pe.prev;
+        if(Array.isArray(pe.spark)&&pe.spark.length>1)lpxSpark['#'+a.id]=pe.spark;
         pxDiag[a.name]={ok:eur.toFixed(4)+' € · feed ('+sym+', '+new Date(ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})+')'};
         n++;
       }
@@ -1689,7 +1853,7 @@ function saveAsset(){
     if(i>=0){
       const old=assets[i];
       if(up(old.ticker)!==ticker||up(old.isin)!==isin){ // fuente cambiada → re-resolver
-        delete lpx['#'+old.id];delete pxStat['#'+old.id];
+        delete lpx['#'+old.id];delete pxStat['#'+old.id];delete lpxPrev['#'+old.id];delete lpxSpark['#'+old.id];
         asset.yfSym='';asset.pxOk=false;
       }else if(curMode==='auto'&&pxStat['#'+old.id]==='warn'){
         // el usuario revisó y guardó sin cambios → acepta el precio de mercado
@@ -1911,7 +2075,7 @@ function loadJSONFile(event){
       wl       = data.wl       || [];
       targets  = data.targets  || {};
       trades   = data.trades   || [];
-      lpx={};pxStat={};
+      lpx={};pxStat={};lpxPrev={};lpxSpark={};
       const upg=autoUpgradeAssets();
       svSt();
       render();
