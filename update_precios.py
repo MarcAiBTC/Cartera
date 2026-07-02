@@ -37,12 +37,17 @@ def yf_quote(sym):
             m = res["meta"]
             price = float(m["regularMarketPrice"])
             cur = m.get("currency") or "USD"
-            prev = m.get("previousClose") or m.get("chartPreviousClose")
-            prev = float(prev) if prev else None
             try:
                 closes = [c for c in res["indicators"]["quote"][0]["close"] if c is not None]
             except Exception:
                 closes = []
+            # Cierre anterior: el penúltimo de la serie diaria (el último es la sesión
+            # en curso). OJO: chartPreviousClose NO sirve — con range=1mo es el cierre
+            # de hace un mes y rompía la variación diaria de toda la cartera.
+            prev = m.get("regularMarketPreviousClose")
+            if len(closes) >= 2:
+                prev = closes[-2]
+            prev = float(prev) if prev else None
             return price, cur, prev, closes
         except Exception as e:
             last = e
