@@ -1,0 +1,44 @@
+name: Informe diario por correo
+
+# El cron de GitHub va en UTC y no ajusta el horario de verano: se programan
+# los dos horarios y el script comprueba la hora real en Europe/Madrid — solo
+# envía cuando allí son las 22h (el otro disparo sale limpio sin hacer nada).
+on:
+  schedule:
+    - cron: '5 20 * * 1-5'   # 22:05 Madrid en horario de verano (CEST)
+    - cron: '5 21 * * 1-5'   # 22:05 Madrid en horario de invierno (CET)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Solo generar el informe (no enviar correo)'
+        type: boolean
+        default: false
+
+concurrency: informe-diario
+
+permissions:
+  contents: read
+
+jobs:
+  informe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generar y enviar el informe
+        env:
+          POSICIONES_JSON: ${{ secrets.POSICIONES_JSON }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # Un disparo manual salta el control de las 22h
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
+          DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '1' || '' }}
+        run: node scripts/informe_diario.mjs
+
+      - name: Guardar copia del informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-html
+          path: informe.html
+          if-no-files-found: ignore
+          retention-days: 7
