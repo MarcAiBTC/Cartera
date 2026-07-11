@@ -165,6 +165,9 @@ th.c,td.c{text-align:center}
 .spark-td{padding-left:6px;padding-right:6px}
 .spark{display:inline-block;width:66px;height:22px;overflow:visible;vertical-align:middle}
 .spark-na{font-size:11px;color:var(--fg3)}
+.spark-pct{font-size:9px;font-weight:700;margin-top:1px;letter-spacing:.2px}
+a.abt{text-decoration:none}
+.ccy-tag{font-weight:700;color:var(--fg3);border:1px solid var(--line);border-radius:4px;padding:0 3px;font-size:8px;letter-spacing:.4px;vertical-align:1px}
 th.sortable{cursor:pointer;user-select:none;transition:color .1s}
 th.sortable:hover{color:var(--fg1)}
 .sic{display:inline-flex;flex-direction:column;gap:1px;margin-left:3px;vertical-align:middle;opacity:.3}
@@ -403,6 +406,15 @@ td{padding:11px 14px;vertical-align:middle}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#28234a;border:none;border-radius:99px;padding:9px 18px;font-size:11px;color:#fff;z-index:300;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;font-weight:600;box-shadow:0 10px 30px rgba(39,33,74,.35)}
 .toast.on{opacity:1}
 
+/* ── CASHFLOW PAGE ── */
+.cf-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px 20px 2px}
+.cf-in{width:92px;padding:5px 8px;background:var(--bg2);border:1px solid var(--line2);border-radius:8px;color:var(--fg0);font-family:var(--disp);font-size:12px;font-weight:700;text-align:right;outline:none;transition:all .12s}
+.cf-in:focus{border-color:var(--blue);background:var(--bg1);box-shadow:0 0 0 3px var(--blue-glow)}
+.cf-in.txt{text-align:left;font-family:var(--sans);font-weight:600;width:110px}
+.cf-out{font-size:12px;font-weight:700;font-family:var(--disp)}
+.cf-chart-wrap{padding:16px}
+.cf-empty{padding:24px;text-align:center;color:var(--fg3);font-size:11px;line-height:1.8}
+
 /* ── AURORA: el lienzo respira con tres focos pastel ─────────────────────────── */
 body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:
  radial-gradient(900px 540px at 88% -12%,rgba(198,181,248,.42),transparent 62%),
@@ -419,6 +431,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
   .app{grid-template-columns:1fr}
   .sb{display:none}
   .kpi-strip{grid-template-columns:repeat(2,1fr)}
+  .cf-kpis{grid-template-columns:repeat(2,1fr)}
   .charts-grid{grid-template-columns:1fr}
   .target-grid,.evo-grid{grid-template-columns:1fr}
   .pcontent{padding:12px 14px 48px}
@@ -481,6 +494,10 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
       <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M8 2l1.8 3.6L14 6.3l-3 2.9.7 4.1L8 11.4 4.3 13.3l.7-4.1-3-2.9 4.2-.7z" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Watchlist <span class="ct" id="sn-wct">0</span>
     </button>
+    <button class="nb" id="sn-cashflow" onclick="goto('cashflow')">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><circle cx="8" cy="8" r="2"/><path d="M4 8h.01M12 8h.01" stroke-linecap="round"/></svg>
+      Cashflow
+    </button>
     <div class="sb-sec">Acciones</div>
     <button class="nb" onclick="openAModal()">
       <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5"/><path d="M8 5.5v5M5.5 8h5" stroke-linecap="round"/></svg>
@@ -527,6 +544,10 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         <svg fill="none" stroke="currentColor" viewBox="0 0 16 16" width="11" height="11" stroke-width="1.5" stroke-linecap="round"><path d="M3 12h10M8 3v7M5 7l3 3 3-3"/></svg>
         Guardar cartera (.json)
       </button>
+      <button class="btn btn-ghost" onclick="copySecretJSON()" style="padding:4px 10px;font-size:11px" title="Copia el JSON de posiciones para pegarlo en GitHub → Settings → Secrets → Actions → POSICIONES_JSON. Así el informe diario por correo usa tu cartera actualizada.">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 16 16" width="11" height="11" stroke-width="1.5" stroke-linecap="round"><rect x="5" y="5" width="8" height="8" rx="1"/><path d="M3 11V3h8"/></svg>
+        Copiar secret informe
+      </button>
     </div>
   </div>
   <input type="file" id="json-file-input" accept=".json" style="display:none" onchange="loadJSONFile(event)">
@@ -556,6 +577,10 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
       <button class="tb-tab" id="tt-watchlist" onclick="goto('watchlist')">
         <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M8 2l1.8 3.6L14 6.3l-3 2.9.7 4.1L8 11.4 4.3 13.3l.7-4.1-3-2.9 4.2-.7z" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Watchlist
+      </button>
+      <button class="tb-tab" id="tt-cashflow" onclick="goto('cashflow')">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><circle cx="8" cy="8" r="2"/></svg>
+        Cashflow
       </button>
     </div>
     <div class="tb-right">
@@ -623,7 +648,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
               <th>Activo</th><th class="r">Cantidad</th>
               <th class="r">Precio</th>
               <th class="r sortable" onclick="setSort('dia')" id="th-dia">Día <span class="sic"><svg class="su" viewBox="0 0 6 4" fill="currentColor"><path d="M3 0L6 4H0z"/></svg><svg class="sd" viewBox="0 0 6 4" fill="currentColor"><path d="M3 4L0 0h6z"/></svg></span></th>
-              <th class="c">7d</th><th class="r">Valor</th>
+              <th class="c" title="Cierre diario del último mes (cripto: 7 días)">Tendencia</th><th class="r">Valor</th>
               <th class="r sortable" onclick="setSort('pnl')" id="th-pnl">P&L <span class="sic"><svg class="su" viewBox="0 0 6 4" fill="currentColor"><path d="M3 0L6 4H0z"/></svg><svg class="sd" viewBox="0 0 6 4" fill="currentColor"><path d="M3 4L0 0h6z"/></svg></span></th>
               <th class="r sortable" onclick="setSort('peso')" id="th-peso">Peso <span class="sic"><svg class="su" viewBox="0 0 6 4" fill="currentColor"><path d="M3 0L6 4H0z"/></svg><svg class="sd" viewBox="0 0 6 4" fill="currentColor"><path d="M3 4L0 0h6z"/></svg></span></th>
               <th></th>
@@ -806,6 +831,74 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
       Cuando cierres una posición, regístrala aquí para llevar el historial completo.
     </div>
   </div>
+
+  <!-- ── CASHFLOW PAGE ── -->
+  <div class="page" id="page-cashflow">
+    <div class="cf-kpis">
+      <div class="kpi"><div class="kpi-lbl">Ahorro medio mensual</div><div class="kpi-val" id="cf-k-ahorro">—</div><div class="kpi-sub" id="cf-k-ahorro-sub">—</div></div>
+      <div class="kpi"><div class="kpi-lbl">DCA semanal total</div><div class="kpi-val" id="cf-k-dcaw">—</div><div class="kpi-sub" id="cf-k-dcaw-sub">—</div></div>
+      <div class="kpi"><div class="kpi-lbl">Liquidez acumulada</div><div class="kpi-val" id="cf-k-liq">—</div><div class="kpi-sub">al final del plan</div></div>
+      <div class="kpi"><div class="kpi-lbl">Reserva satélites acumulada</div><div class="kpi-val" id="cf-k-res">—</div><div class="kpi-sub">al final del plan</div></div>
+    </div>
+    <div class="target-content">
+      <div class="target-grid">
+        <div class="target-panel full">
+          <div class="tp-head">
+            <span class="tp-title">Meses · ingresos y gastos</span>
+            <button class="btn btn-ghost" onclick="cfAddMes()" style="padding:4px 9px;font-size:11px">+ Añadir mes</button>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Mes</th><th class="r">Ingresos (€)</th><th class="r">Gastos (€)</th><th class="r">Ahorro</th><th></th></tr></thead>
+              <tbody id="cf-meses"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="target-panel">
+          <div class="tp-head"><span class="tp-title">Reglas de asignación del ahorro</span><span class="tp-subtitle" id="cf-pct-lbl">—</span></div>
+          <div class="target-row">
+            <div class="tr-sw" style="background:#6d7df6"></div>
+            <div class="tr-name">DCA <span style="color:var(--fg3);font-weight:500">· aportación periódica</span></div>
+            <div class="tr-input-wrap"><input class="tr-input" id="cf-pct-dca" type="number" min="0" max="100" step="1" oninput="cfSetPct('dca',this.value)"><span class="tr-pct-sym">%</span></div>
+          </div>
+          <div class="target-row">
+            <div class="tr-sw" style="background:#9a94b8"></div>
+            <div class="tr-name">Liquidez <span style="color:var(--fg3);font-weight:500">· colchón</span></div>
+            <div class="tr-input-wrap"><input class="tr-input" id="cf-pct-liq" type="number" min="0" max="100" step="1" oninput="cfSetPct('liq',this.value)"><span class="tr-pct-sym">%</span></div>
+          </div>
+          <div class="target-row">
+            <div class="tr-sw" style="background:#e9a23b"></div>
+            <div class="tr-name">Reserva satélites <span style="color:var(--fg3);font-weight:500">· oportunidades</span></div>
+            <div class="tr-input-wrap"><input class="tr-input" id="cf-pct-res" type="number" min="0" max="100" step="1" oninput="cfSetPct('res',this.value)"><span class="tr-pct-sym">%</span></div>
+          </div>
+          <div class="tr-total"><span class="tr-total-lbl">Total asignado</span><span class="tr-total-val" id="cf-pct-total">—</span></div>
+          <div style="padding:12px 16px" id="cf-flow"></div>
+        </div>
+        <div class="target-panel">
+          <div class="tp-head">
+            <span class="tp-title">Desglose DCA por activo</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost" onclick="cfSyncActivos()" style="padding:4px 9px;font-size:11px" title="Precarga la lista con los activos de tu cartera (pesos según su peso actual)">⇄ Sincronizar desde cartera</button>
+              <button class="btn btn-ghost" onclick="cfAddActivo()" style="padding:4px 9px;font-size:11px">+ Activo</button>
+            </div>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Activo</th><th class="r">Peso</th><th class="r">€ / mes</th><th class="r">€ / semana</th><th></th></tr></thead>
+              <tbody id="cf-activos"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="target-panel full">
+          <div class="tp-head"><span class="tp-title">Proyección acumulada</span><span class="tp-subtitle">Barras apiladas · DCA + liquidez + reserva, acumulado mes a mes</span></div>
+          <div class="cf-chart-wrap">
+            <div id="cf-chart"></div>
+            <div class="alloc-legend" id="cf-chart-legend"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div><!-- /main -->
 </div><!-- /app -->
 
@@ -845,12 +938,21 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
       <div class="field"><label class="fl">Ticker</label><input class="fi" id="a-ticker" placeholder="BTC · MSTR · WGLD…"><div class="fhint">Cripto: BTC, ETH… · Acciones/ETPs: MSTR, AMZN, IGLN, GBSE…</div></div>
       <div class="field"><label class="fl">ISIN <em>(fondos de inversión)</em></label><input class="fi" id="a-isin" placeholder="IE0032620787" style="text-transform:uppercase"><div class="fhint">Pega el ISIN del fondo y el VL se actualizará solo (vía Yahoo Finance). Si lo dejas vacío se usa el ticker.</div></div>
     </div>
-    <div id="az-manual" style="display:none"><div class="field"><label class="fl">Precio actual <em>(€/unidad)</em></label><input class="fi" id="a-mprice" type="number" step="any" min="0" placeholder="23.92"></div></div>
+    <div id="az-manual" style="display:none"><div class="field"><label class="fl">Precio actual <em>(por unidad, en la divisa de abajo)</em></label><input class="fi" id="a-mprice" type="number" step="any" min="0" placeholder="23.92"></div></div>
     <div class="frow">
       <div class="field" style="margin:0"><label class="fl">Cantidad</label><input class="fi" id="a-qty" type="number" step="any" min="0" placeholder="7"></div>
       <div class="field" style="margin:0"><label class="fl">Unidad</label><input class="fi" id="a-unit" placeholder="títulos · part. · BTC"></div>
     </div>
-    <div class="field" style="margin-top:11px"><label class="fl">Precio de compra <em>(€/unidad)</em></label><input class="fi" id="a-costunit" type="number" step="any" min="0" placeholder="21.51"></div>
+    <div class="frow" style="margin-top:11px">
+      <div class="field" style="margin:0"><label class="fl">Precio de compra <em>(por unidad)</em></label><input class="fi" id="a-costunit" type="number" step="any" min="0" placeholder="21.51"></div>
+      <div class="field" style="margin:0"><label class="fl">Divisa <em>· de tus precios</em></label>
+        <select class="fi" id="a-ccy" onchange="updCP()">
+          <option value="EUR">EUR €</option>
+          <option value="USD">USD $</option>
+        </select>
+      </div>
+    </div>
+    <div class="fhint" style="margin-top:3px">Si compraste en dólares elige USD: el coste y el precio manual se convierten a € en el total de la cartera (los precios automáticos ya llegan en €).</div>
     <div class="field"><label class="fl">Subyacente <em>· agrupa en exposición real</em></label><input class="fi" id="a-underlying" placeholder="Oro · S&P 500 · Bitcoin · (vacío = nombre)"></div>
     <div class="cp-row"><span class="cp-lbl">Coste total</span><span class="cp-val" id="a-cprev">—</span></div>
     <div class="ma"><button class="mc" onclick="closeAModal()">Cancelar</button><button class="ms" onclick="saveAsset()">Guardar</button></div>
@@ -863,7 +965,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
 <div class="modal modal-sm">
   <div class="mh"><span class="mt" id="pm-t">Actualizar precio</span><button class="mx" onclick="closePModal()"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-width="2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
   <div class="mb">
-    <div class="field"><label class="fl">Precio actual <em>(€/unidad)</em></label><input class="fi" id="pm-p" type="number" step="any" min="0"></div>
+    <div class="field"><label class="fl" id="pm-l">Precio actual <em>(€/unidad)</em></label><input class="fi" id="pm-p" type="number" step="any" min="0"></div>
     <div class="ma"><button class="mc" onclick="closePModal()">Cancelar</button><button class="ms" onclick="savePModal()">Actualizar</button></div>
   </div>
 </div>
@@ -980,6 +1082,24 @@ const SEED=[
   {match:a=>(a.broker||'')==='ING'&&/s ?& ?p ?500|naranja/i.test(a.name), isin:'ES0152769032', sym:'', keepManual:true},// ING F.Naranja S&P500 (qty=1 ≠ participaciones)
 ];
 function up(s){return (s||'').toUpperCase().trim();}
+// ── ENLACE AL GRÁFICO ─────────────────────────────────────────────────────────
+// TradingView para cripto/acciones/ETPs (mapa sufijo Yahoo → bolsa TV) y Yahoo
+// Finance para fondos 0P…/ISIN, que TradingView no cubre.
+const TV_EXCH={MC:'BME',MI:'MIL',DE:'XETR',L:'LSE',PA:'EURONEXT',AS:'EURONEXT',SW:'SIX',F:'FWB'};
+function chartURL(a){
+  const t=up(a.ticker);
+  if(CG[t])return 'https://www.tradingview.com/chart/?symbol='+encodeURIComponent(t+'EUR');
+  const sym=a.yfSym||YF_DIRECT[t]||(t&&!ISIN_RE.test(t)?t:'');
+  if(!sym)return null;
+  if(sym==='GC=F')return 'https://www.tradingview.com/chart/?symbol='+encodeURIComponent('COMEX:GC1!');
+  if(sym==='SI=F')return 'https://www.tradingview.com/chart/?symbol='+encodeURIComponent('COMEX:SI1!');
+  const [base,suf]=sym.split('.');
+  if(base.startsWith('0P')||ISIN_RE.test(base))return 'https://es.finance.yahoo.com/quote/'+encodeURIComponent(sym);
+  if(!suf)return 'https://www.tradingview.com/chart/?symbol='+encodeURIComponent(base);
+  const ex=TV_EXCH[suf];
+  return ex?'https://www.tradingview.com/chart/?symbol='+encodeURIComponent(ex+':'+base)
+           :'https://es.finance.yahoo.com/quote/'+encodeURIComponent(sym);
+}
 // Proxies CORS gratuitos, en orden de preferencia (rotación automática si fallan)
 const PROXIES=[
   {mk:u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u)},
@@ -1038,8 +1158,12 @@ const DEF=[
 ];
 
 function ldSt(){try{return JSON.parse(localStorage.getItem(SK))||{};}catch(e){return{};}}
-function svSt(){localStorage.setItem(SK,JSON.stringify({assets,snaps,wl,targets,trades}));}
+function svSt(){localStorage.setItem(SK,JSON.stringify({assets,snaps,wl,targets,trades,fx:fxRates}));}
 let st=ldSt();
+// Tipos de cambio (EUR por 1 unidad de divisa) para posiciones compradas en USD…
+// El valor real llega del feed (precios.json) o de Frankfurter; el 0.86 es solo
+// un respaldo para el primer arranque sin conexión y se pisa en cuanto hay dato.
+let fxRates=Object.assign({EUR:1,USD:0.86},st.fx||{});
 let assets   = st.assets  || [...DEF];
 let snaps    = st.snaps   || [];
 let wl       = st.wl      || [];
@@ -1062,13 +1186,18 @@ let curDist='cat';
 let chartInstances={};
 
 // ── COMPUTED ──────────────────────────────────────────────────────────────────
+// EUR por unidad de la divisa del activo (a.ccy). Los precios que escriben los
+// motores (feed/Yahoo/CoinGecko) ya vienen en EUR; solo se convierte lo que el
+// usuario introduce a mano (precio manual, coste de compra, liquidez en USD).
+const ccyRate=a=>{const c=up(a.ccy||'EUR');return c==='EUR'?1:(fxRates[c]>0?fxRates[c]:1);};
 const px  = a=>{
-  if(a.cat==='liquidez')return a.mp??1;
+  if(a.cat==='liquidez')return (a.mp??1)*ccyRate(a);
   if(a.mode==='auto'){
     if(lpx['#'+a.id]!=null)return lpx['#'+a.id];
     if(a.ticker&&lpx[up(a.ticker)]!=null)return lpx[up(a.ticker)];
   }
-  return a.mp??null;
+  if(a.mp==null)return null;
+  return a.mode==='auto'&&a.pxOk?a.mp:a.mp*ccyRate(a);
 };
 // Estado del precio de un activo: fijo | manual | live | load | stale | warn | err
 function pxState(a){
@@ -1081,14 +1210,14 @@ function pxState(a){
   return a.mp!=null?'stale':'load';
 }
 const vl  = a=>{const p=px(a);return p!=null?a.qty*p:null;};
-const cs  = a=>a.qty*(a.costUnit||0);
+const cs  = a=>a.qty*(a.costUnit||0)*ccyRate(a);
 const gn  = a=>{const v=vl(a),c=cs(a);return v!=null?v-c:null;};
 const tv  = ()=>assets.reduce((s,a)=>s+(vl(a)||0),0);
 const tc  = ()=>assets.reduce((s,a)=>s+cs(a),0);
 const und = a=>a.underlying||UND_MAP[a.id]||a.name;
 // Cierre anterior (EUR) por activo: para variación intradía. null si no hay dato.
 const pxPrev = a=>{
-  if(a.cat==='liquidez')return a.mp??1;          // liquidez no se mueve
+  if(a.cat==='liquidez')return (a.mp??1)*ccyRate(a);   // liquidez no se mueve
   if(a.mode==='auto'){
     if(lpxPrev['#'+a.id]!=null)return lpxPrev['#'+a.id];
     if(a.ticker&&lpxPrev[up(a.ticker)]!=null)return lpxPrev[up(a.ticker)];
@@ -1151,7 +1280,7 @@ function countUp(elm,to,fmt,dur=520){
 }
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
-const PAGES=['resumen','graficos','evolucion','objetivo','historial','watchlist'];
+const PAGES=['resumen','graficos','evolucion','objetivo','historial','watchlist','cashflow'];
 function goto(p){
   curPage=p;
   PAGES.forEach(x=>{
@@ -1159,14 +1288,15 @@ function goto(p){
     el('tt-'+x).classList.toggle('on',x===p);
     el('sn-'+x)?.classList.toggle('on',x===p);
   });
-  const lbl={resumen:'+ Añadir posición',graficos:'Guardar snapshot',evolucion:'Guardar snapshot',objetivo:'Guardar objetivos',historial:'+ Registrar operación',watchlist:'+ Watchlist'};
-  const act={resumen:openAModal,graficos:saveSnap,evolucion:saveSnap,objetivo:()=>{svSt();toast('Objetivos guardados ✓');},historial:openTradeModal,watchlist:openWModal};
+  const lbl={resumen:'+ Añadir posición',graficos:'Guardar snapshot',evolucion:'Guardar snapshot',objetivo:'Guardar objetivos',historial:'+ Registrar operación',watchlist:'+ Watchlist',cashflow:'+ Añadir mes'};
+  const act={resumen:openAModal,graficos:saveSnap,evolucion:saveSnap,objetivo:()=>{svSt();toast('Objetivos guardados ✓');},historial:openTradeModal,watchlist:openWModal,cashflow:()=>cfAddMes()};
   el('tb-btn').textContent=lbl[p];el('tb-btn').onclick=act[p];
   if(p==='graficos')renderCharts();
   if(p==='evolucion')renderEvo();
   if(p==='objetivo')renderTarget();
   if(p==='historial')renderHist();
   if(p==='watchlist')renderWL();
+  if(p==='cashflow')renderCF();
 }
 
 // ── MAIN RENDER ───────────────────────────────────────────────────────────────
@@ -1275,6 +1405,9 @@ function rTable(){
     const p=px(a),v=vl(a),c=cs(a),g=gn(a),gp=c>0&&g!=null?(g/c)*100:null;
     const pct=t>0&&v!=null?(v/t)*100:0;
     const dc=dayChg(a),sp=sparkOf(a);
+    const spPct=sp&&sp.length>1&&sp[0]>0?(sp[sp.length-1]-sp[0])/sp[0]*100:null;
+    const cu=chartURL(a);
+    const esUsd=up(a.ccy||'EUR')==='USD';
     const cc=CC[a.cat];
     const st=pxState(a);
     const gc=g==null?'nu-c':g>=0?'up-c':'dn-c';
@@ -1294,17 +1427,18 @@ function rTable(){
         <div class="sym-ic" style="background:${cc.b};color:${cc.t}">${init}</div>
         <div>
           <div class="sym-name" title="${a.name}">${a.name}</div>
-          <div class="sym-sub"><span style="color:${cc.t};font-weight:700">${CL[a.cat]}</span> · <span class="brdot" style="background:${BD[br]||'#9a94b8'}"></span>${br}${a.ticker?` · ${a.ticker}`:''}</div>
+          <div class="sym-sub"><span style="color:${cc.t};font-weight:700">${CL[a.cat]}</span> · <span class="brdot" style="background:${BD[br]||'#9a94b8'}"></span>${br}${a.ticker?` · ${a.ticker}`:''}${esUsd?` · <span class="ccy-tag" title="Posición en dólares: coste y precio manual en USD, convertidos a € con el cambio del día">USD</span>`:''}</div>
         </div>
       </div></td>
       <td class="r"><div class="qty-main">${fn(a.qty)}</div><div class="qty-unit">${a.unit}</div></td>
       <td class="r">${pxBadge}</td>
       <td class="r">${dc!=null?`<div class="day-pct ${dc.pct>=0?'up-c':'dn-c'}">${fp(dc.pct)}</div><div class="day-abs ${dc.pct>=0?'up-c':'dn-c'}">${(dc.abs>=0?'+':'')+fe(dc.abs)}</div>`:`<span class="day-na">—</span>`}</td>
-      <td class="c spark-td">${sparkSVG(sp)}</td>
+      <td class="c spark-td">${sparkSVG(sp)}${spPct!=null?`<div class="spark-pct ${spPct>=0?'up-c':'dn-c'}" title="Variación en el periodo del gráfico (~1 mes; cripto 7 días)">${fp(spPct)}</div>`:''}</td>
       <td class="r"><div class="val-main">${v!=null?fe(v):'—'}</div><div class="val-cost">de ${fe(c)}</div></td>
       <td class="r"><div class="pnl-val ${gc}">${g!=null?(g>=0?'+':'')+fe(g):'—'}</div><div class="pnl-pct ${gc}">${fp(gp)}</div></td>
       <td class="r"><div class="wt-cell"><span class="wt-pct">${pct.toFixed(1)}%</span><div class="wt-bar"><div class="wt-fill" style="width:${pct}%;background:${cc.s}"></div></div></div></td>
       <td><div class="acts">
+        ${cu?`<a class="abt" href="${cu}" target="_blank" rel="noopener" title="Ver gráfico en ${cu.includes('tradingview')?'TradingView':'Yahoo Finance'}"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M2 13l3-5 3 3 3-6 3 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 2v12h12" stroke-linecap="round"/></svg></a>`:''}
         ${a.mode==='manual'&&a.cat!=='liquidez'?`<button class="abt" onclick="openPModal(${a.id})" title="Actualizar"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M13.5 2.5A6.5 6.5 0 0 0 2 8M2.5 13.5A6.5 6.5 0 0 0 14 8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 4.5V2h2.5M14 11.5V14h-2.5" stroke-linecap="round"/></svg></button>`:''}
         <button class="abt" onclick="openAModal(${a.id})"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M11.5 2.5l2 2L5 13H3v-2z" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="abt del" onclick="delA(${a.id})"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M3 4h10M6 4V2h4v2M5 4l1 9h4l1-9" stroke-linecap="round"/></svg></button>
@@ -1624,6 +1758,7 @@ function renderWL(){
       <div class="wl-head">
         <div class="wl-sym"><div class="wl-ic">${tick}</div><div><div class="wl-name">${w.name}</div><div class="wl-ticker">${w.ticker||'—'}</div></div></div>
         <div class="wl-acts">
+          ${(()=>{const cu=chartURL({ticker:w.ticker});return cu?`<a class="abt" href="${cu}" target="_blank" rel="noopener" title="Ver gráfico"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M2 13l3-5 3 3 3-6 3 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 2v12h12" stroke-linecap="round"/></svg></a>`:'';})()}
           <button class="abt" onclick="openWModal(${w.id})"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M11.5 2.5l2 2L5 13H3v-2z" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           <button class="abt del" onclick="delW(${w.id})"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M3 4h10M6 4V2h4v2M5 4l1 9h4l1-9" stroke-linecap="round"/></svg></button>
         </div>
@@ -1677,6 +1812,8 @@ async function loadFeed(){
       };
       let n=0;
       feedTs=ts;
+      // Tipos de cambio del feed (EUR por unidad): USD para posiciones en dólares
+      if(d.fx)for(const[c,r]of Object.entries(d.fx))if(r>0)fxRates[up(c)]=r;
       for(const a of assets){
         if(a.mode!=='auto'||a.cat==='liquidez')continue;
         const sym=keyOf(a);if(!sym)continue;
@@ -1875,6 +2012,8 @@ async function fetchAll(manual=false){
   fxCache={EUR:1};
   try{
     await loadFeed();   // 1º el feed del repo: fiable y sin proxies; pinta al momento
+    // Refresca EUR/USD si el feed no lo trajo (Frankfurter tiene CORS abierto)
+    if(assets.some(a=>up(a.ccy||'EUR')!=='EUR'))fxToEUR('USD').then(r=>{if(r>0){fxRates.USD=r;svSt();}}).catch(()=>{});
     // Si el feed acaba de dar precio a un activo, el motor en vivo (proxies CORS,
     // menos fiable) no debe tocarlo: solo cubre los huecos que el feed no llega.
     const FEED_FRESH_MS=2*3600*1000;
@@ -1915,13 +2054,20 @@ setInterval(()=>fetchAll(false),300000);
 // ── ASSET MODAL ───────────────────────────────────────────────────────────────
 function pCat(c){curCat=c;document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('on',b.dataset.c===c));const liq=c==='liquidez';el('a-mode-wrap').style.opacity=liq?.4:1;el('a-mode-wrap').style.pointerEvents=liq?'none':'auto';}
 function pMode(m){curMode=m;el('atab-auto').classList.toggle('on',m==='auto');el('atab-manual').classList.toggle('on',m==='manual');el('az-auto').style.display=m==='auto'?'block':'none';el('az-manual').style.display=m==='manual'?'block':'none';}
-function updCP(){const q=parseFloat(el('a-qty').value)||0,c=parseFloat(el('a-costunit').value)||0;el('a-cprev').textContent=q&&c?fe(q*c):'—';}
+function updCP(){
+  const q=parseFloat(el('a-qty').value)||0,c=parseFloat(el('a-costunit').value)||0;
+  const ccy=el('a-ccy')?el('a-ccy').value:'EUR';
+  if(!q||!c){el('a-cprev').textContent='—';return;}
+  if(ccy==='EUR'){el('a-cprev').textContent=fe(q*c);return;}
+  const r=fxRates[ccy]>0?fxRates[ccy]:1;
+  el('a-cprev').textContent=new Intl.NumberFormat('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2}).format(q*c)+' $ ≈ '+fe(q*c*r);
+}
 ['a-qty','a-costunit'].forEach(i=>el(i).addEventListener('input',updCP));
 
 function openAModal(id=null){
   eaid=id;el('am-t').textContent=id?'Editar posición':'Nueva posición';
-  if(id){const a=assets.find(x=>x.id===id);el('a-name').value=a.name;el('a-broker').value=a.broker||'MyInvestor';el('a-ticker').value=a.ticker||'';el('a-isin').value=a.isin||'';el('a-qty').value=a.qty;el('a-unit').value=a.unit||'';el('a-costunit').value=a.costUnit||'';el('a-mprice').value=a.mp||'';el('a-underlying').value=a.underlying||UND_MAP[a.id]||'';pCat(a.cat);pMode(a.mode||'manual');}
-  else{['a-name','a-ticker','a-isin','a-qty','a-unit','a-costunit','a-mprice','a-underlying'].forEach(i=>el(i).value='');el('a-broker').value='MyInvestor';pCat('fondo');pMode('manual');}
+  if(id){const a=assets.find(x=>x.id===id);el('a-name').value=a.name;el('a-broker').value=a.broker||'MyInvestor';el('a-ticker').value=a.ticker||'';el('a-isin').value=a.isin||'';el('a-qty').value=a.qty;el('a-unit').value=a.unit||'';el('a-costunit').value=a.costUnit||'';el('a-mprice').value=a.mp||'';el('a-ccy').value=up(a.ccy||'EUR');el('a-underlying').value=a.underlying||UND_MAP[a.id]||'';pCat(a.cat);pMode(a.mode||'manual');}
+  else{['a-name','a-ticker','a-isin','a-qty','a-unit','a-costunit','a-mprice','a-underlying'].forEach(i=>el(i).value='');el('a-broker').value='MyInvestor';el('a-ccy').value='EUR';pCat('fondo');pMode('manual');}
   updCP();el('ov-a').classList.add('open');setTimeout(()=>el('a-name').focus(),50);
 }
 function closeAModal(){el('ov-a').classList.remove('open');eaid=null;}
@@ -1930,10 +2076,10 @@ function saveAsset(){
   const isin=el('a-isin').value.trim().toUpperCase();
   const qty=parseFloat(el('a-qty').value),unit=el('a-unit').value.trim();
   const costUnit=parseFloat(el('a-costunit').value)||0,mp=parseFloat(el('a-mprice').value)||null;
-  const broker=el('a-broker').value,underlying=el('a-underlying').value.trim();
+  const broker=el('a-broker').value,underlying=el('a-underlying').value.trim(),ccy=el('a-ccy').value;
   if(!name){toast('Introduce un nombre');return;}if(isNaN(qty)||qty<=0){toast('Cantidad inválida');return;}
   if(isin&&!ISIN_RE.test(isin)){toast('ISIN no válido (12 caracteres, ej. IE0032620787)');return;}
-  const asset={name,broker,cat:curCat,mode:curMode,ticker,isin,qty,unit,costUnit,underlying};
+  const asset={name,broker,cat:curCat,mode:curMode,ticker,isin,qty,unit,costUnit,ccy,underlying};
   if(curMode==='manual'&&mp!=null)asset.mp=mp;
   if(eaid){
     const i=assets.findIndex(a=>a.id===eaid);
@@ -1955,7 +2101,7 @@ function saveAsset(){
 }
 function delA(id){if(!confirm('¿Eliminar?'))return;assets=assets.filter(a=>a.id!==id);svSt();render();toast('Eliminado');}
 
-function openPModal(id){pmid=id;const a=assets.find(x=>x.id===id);el('pm-t').textContent='Actualizar · '+a.name;el('pm-p').value=a.mp||'';el('ov-p').classList.add('open');setTimeout(()=>el('pm-p').focus(),50);}
+function openPModal(id){pmid=id;const a=assets.find(x=>x.id===id);el('pm-t').textContent='Actualizar · '+a.name;el('pm-l').innerHTML='Precio actual <em>('+(up(a.ccy||'EUR')==='USD'?'$':'€')+'/unidad)</em>';el('pm-p').value=a.mp||'';el('ov-p').classList.add('open');setTimeout(()=>el('pm-p').focus(),50);}
 function closePModal(){el('ov-p').classList.remove('open');pmid=null;}
 function savePModal(){const p=parseFloat(el('pm-p').value);if(isNaN(p)||p<=0){toast('Precio inválido');return;}const i=assets.findIndex(a=>a.id===pmid);if(i>=0){assets[i].mp=p;assets[i].mpT=Date.now();delete pxStat['#'+assets[i].id];svSt();}closePModal();render();toast('Actualizado ✓');}
 el('pm-p').addEventListener('keydown',e=>{if(e.key==='Enter')savePModal();});
@@ -2132,6 +2278,7 @@ function exportJSON(){
     wl:        wl,
     targets:   targets,
     trades:    trades,
+    cashflow:  cf,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
@@ -2144,6 +2291,19 @@ function exportJSON(){
 
 function importJSON(){
   el('json-file-input').click();
+}
+
+// Copia el JSON de posiciones para el secret POSICIONES_JSON del informe diario.
+// Si cambias la cartera y no actualizas el secret, el correo sigue con la vieja.
+async function copySecretJSON(){
+  const txt=JSON.stringify({assets});
+  try{
+    await navigator.clipboard.writeText(txt);
+  }catch(e){
+    const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');}finally{ta.remove();}
+  }
+  toast('JSON copiado ✓ · pégalo en GitHub → Settings → Secrets → POSICIONES_JSON');
 }
 
 function loadJSONFile(event){
@@ -2162,6 +2322,11 @@ function loadJSONFile(event){
       wl       = data.wl       || [];
       targets  = data.targets  || {};
       trades   = data.trades   || [];
+      if(data.cashflow&&Array.isArray(data.cashflow.meses)&&data.cashflow.pct){
+        cf=data.cashflow;
+        localStorage.setItem(CFK,JSON.stringify(cf));
+        if(curPage==='cashflow')renderCF();
+      }
       lpx={};pxStat={};lpxPrev={};lpxSpark={};feedFresh={};
       const upg=autoUpgradeAssets();
       svSt();
@@ -2186,20 +2351,20 @@ function exportXLSX(){
   function r2(n){ return Math.round((n||0)*100)/100; }
 
   // Posiciones actuales
-  const ph = ['Activo','Broker','Categoría','Ticker','Cantidad','Unidad',
-    'Precio compra (€)','Precio actual (€)','Valor actual (€)',
+  const ph = ['Activo','Broker','Categoría','Ticker','Divisa','Cantidad','Unidad',
+    'Precio compra (divisa)','Precio actual (€)','Valor actual (€)',
     'Coste total (€)','P&L (€)','Rentabilidad %','Peso %'];
   const pd = assets.map(function(a){
     const p=px(a),v=vl(a),co=cs(a),g=gn(a);
     const rp=co>0&&g!=null?(g/co)*100:null;
     const wt=tot>0&&v!=null?(v/tot)*100:null;
-    return [a.name,a.broker||'',CL[a.cat]||a.cat,a.ticker||'',
+    return [a.name,a.broker||'',CL[a.cat]||a.cat,a.ticker||'',up(a.ccy||'EUR'),
       a.qty,a.unit||'',r2(a.costUnit),p?r2(p):'',v?r2(v):'',
       r2(co),g!=null?r2(g):'',rp!=null?r2(rp):'',wt!=null?r2(wt):''];
   });
   const ws1 = XLSX.utils.aoa_to_sheet([ph].concat(pd));
-  ws1['!cols']=[{wch:28},{wch:14},{wch:10},{wch:8},{wch:10},{wch:8},
-    {wch:16},{wch:16},{wch:16},{wch:14},{wch:12},{wch:14},{wch:8}];
+  ws1['!cols']=[{wch:28},{wch:14},{wch:10},{wch:8},{wch:7},{wch:10},{wch:8},
+    {wch:18},{wch:16},{wch:16},{wch:14},{wch:12},{wch:14},{wch:8}];
   XLSX.utils.book_append_sheet(wb, ws1, 'Posiciones actuales');
 
   // Historial
@@ -2240,6 +2405,175 @@ function exportXLSX(){
   const fecha = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, 'Cartera_Marc_' + fecha + '.xlsx');
   toast('Excel descargado ✓');
+}
+
+// ── PLANIFICADOR DE CASHFLOW ──────────────────────────────────────────────────
+// Estado propio en localStorage bajo 'cf1', separado de cv9: un fallo aquí nunca
+// puede tocar las posiciones. Estructura: {meses:[{label,ingresos,gastos}],
+// pct:{dca,liq,res}, activos:[{n,w}]}.
+const CFK='cf1';
+const CF_COLORS={dca:'#6d7df6',liq:'#9a94b8',res:'#e9a23b'};
+const CF_LBL={dca:'DCA',liq:'Liquidez',res:'Reserva satélites'};
+const CF_M=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const CF_SEM_MES=4.33;   // semanas por mes
+
+const cfMesLabel=d=>CF_M[d.getMonth()]+' '+String(d.getFullYear()).slice(2);
+function cfDefault(){
+  const now=new Date(),meses=[];
+  for(let i=0;i<3;i++)meses.push({label:cfMesLabel(new Date(now.getFullYear(),now.getMonth()+i,1)),ingresos:0,gastos:0});
+  return{meses,pct:{dca:60,liq:25,res:15},activos:[]};
+}
+let cf=(()=>{
+  try{
+    const d=JSON.parse(localStorage.getItem(CFK));
+    if(d&&Array.isArray(d.meses)&&d.pct)return{meses:d.meses,pct:{dca:+d.pct.dca||0,liq:+d.pct.liq||0,res:+d.pct.res||0},activos:Array.isArray(d.activos)?d.activos:[]};
+  }catch(e){}
+  return cfDefault();
+})();
+
+let cfSaveT;
+function cfSave(){clearTimeout(cfSaveT);cfSaveT=setTimeout(()=>localStorage.setItem(CFK,JSON.stringify(cf)),300);}
+const cfEsc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const cfNum=v=>{const n=parseFloat(v);return isFinite(n)?n:0;};
+
+function cfCalc(){
+  const n=cf.meses.length,p=cf.pct;
+  const ahorros=cf.meses.map(m=>(+m.ingresos||0)-(+m.gastos||0));
+  const medio=n?ahorros.reduce((s,v)=>s+v,0)/n:0;
+  const sum=(+p.dca||0)+(+p.liq||0)+(+p.res||0);
+  const apor=ahorros.map(v=>Math.max(v,0));   // un mes en negativo no aporta
+  const liqAcc=apor.reduce((s,v)=>s+v*(p.liq||0)/100,0);
+  const resAcc=apor.reduce((s,v)=>s+v*(p.res||0)/100,0);
+  const dcaMes=Math.max(medio,0)*(p.dca||0)/100;
+  return{ahorros,apor,medio,sum,dcaMes,dcaSem:dcaMes/CF_SEM_MES,liqAcc,resAcc};
+}
+
+function renderCF(){
+  el('cf-meses').innerHTML=cf.meses.length?cf.meses.map((m,i)=>`<tr>
+    <td><input class="cf-in txt" value="${cfEsc(m.label)}" oninput="cfSetMes(${i},'label',this.value)"></td>
+    <td class="r"><input class="cf-in" type="number" step="any" min="0" value="${m.ingresos||''}" placeholder="0" oninput="cfSetMes(${i},'ingresos',this.value)"></td>
+    <td class="r"><input class="cf-in" type="number" step="any" min="0" value="${m.gastos||''}" placeholder="0" oninput="cfSetMes(${i},'gastos',this.value)"></td>
+    <td class="r"><span class="cf-out" id="cf-ah-${i}">—</span></td>
+    <td><div class="acts" style="opacity:1"><button class="abt del" onclick="cfDelMes(${i})" title="Eliminar mes"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M3 4h10M6 4V2h4v2M5 4l1 9h4l1-9" stroke-linecap="round"/></svg></button></div></td>
+  </tr>`).join(''):`<tr><td class="empty-td" colspan="5">Sin meses en el plan. Pulsa «+ Añadir mes».</td></tr>`;
+  ['dca','liq','res'].forEach(k=>{const inp=el('cf-pct-'+k);if(inp&&document.activeElement!==inp)inp.value=cf.pct[k];});
+  el('cf-activos').innerHTML=cf.activos.length?cf.activos.map((a,i)=>`<tr>
+    <td><input class="cf-in txt" style="width:170px" value="${cfEsc(a.n)}" placeholder="Nombre" oninput="cfSetAct(${i},'n',this.value)"></td>
+    <td class="r"><input class="cf-in" style="width:64px" type="number" step="any" min="0" value="${a.w||''}" placeholder="0" oninput="cfSetAct(${i},'w',this.value)"></td>
+    <td class="r"><span class="cf-out" id="cf-am-${i}">—</span></td>
+    <td class="r"><span class="cf-out" id="cf-aw-${i}">—</span></td>
+    <td><div class="acts" style="opacity:1"><button class="abt del" onclick="cfDelAct(${i})" title="Eliminar activo"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M3 4h10M6 4V2h4v2M5 4l1 9h4l1-9" stroke-linecap="round"/></svg></button></div></td>
+  </tr>`).join(''):`<tr><td class="empty-td" colspan="5">Sin activos en el plan DCA.<br>Usa «Sincronizar desde cartera» o añade uno a mano.</td></tr>`;
+  cfRecalc();
+}
+
+// Recalcula solo las celdas de salida (sin repintar inputs → no se pierde el foco)
+function cfRecalc(){
+  const c=cfCalc(),p=cf.pct;
+  cf.meses.forEach((m,i)=>{
+    const e2=el('cf-ah-'+i);if(!e2)return;
+    const v=c.ahorros[i];
+    e2.textContent=fe(v);
+    e2.className='cf-out '+(v>0?'up-c':v<0?'dn-c':'nu-c');
+  });
+  el('cf-k-ahorro').textContent=fe(c.medio);
+  el('cf-k-ahorro-sub').textContent=cf.meses.length+(cf.meses.length===1?' mes planificado':' meses planificados');
+  el('cf-k-dcaw').textContent=fe(c.dcaSem);
+  el('cf-k-dcaw-sub').textContent=fe(c.dcaMes)+' al mes · '+(p.dca||0)+'% del ahorro';
+  el('cf-k-liq').textContent=fe(c.liqAcc);
+  el('cf-k-res').textContent=fe(c.resAcc);
+  const ok=Math.abs(c.sum-100)<0.1;
+  const tot=el('cf-pct-total');
+  tot.textContent=c.sum.toFixed(1)+'%';
+  tot.className='tr-total-val '+(ok?'ok':c.sum>100?'over':'under');
+  const lbl=el('cf-pct-lbl');
+  lbl.textContent=ok?'✓ Suma 100%':c.sum>100?`⚠ ${(c.sum-100).toFixed(1)}% de más`:`⚠ Falta ${(100-c.sum).toFixed(1)}%`;
+  lbl.style.color=ok?'var(--up)':c.sum>100?'var(--dn)':'#b97f14';
+  const base=c.sum>0?c.sum:1;
+  el('cf-flow').innerHTML=c.sum>0
+    ?'<div class="alloc-track">'+['dca','liq','res'].map(k=>`<div class="alloc-seg" style="width:${((p[k]||0)/base*100).toFixed(2)}%;background:${CF_COLORS[k]}" title="${CF_LBL[k]} · ${p[k]||0}% · ${fe(Math.max(c.medio,0)*(p[k]||0)/100)}/mes"></div>`).join('')
+     +'</div><div class="alloc-legend">'+['dca','liq','res'].map(k=>`<span class="alloc-key"><i style="background:${CF_COLORS[k]}"></i>${CF_LBL[k]} <b>${fe(Math.max(c.medio,0)*(p[k]||0)/100,0)}/mes</b></span>`).join('')+'</div>'
+    :'';
+  const sw=cf.activos.reduce((s,a)=>s+(+a.w||0),0);
+  cf.activos.forEach((a,i)=>{
+    const share=sw>0?(+a.w||0)/sw:0;
+    const em=el('cf-am-'+i),ew=el('cf-aw-'+i);
+    if(em)em.textContent=fe(c.dcaMes*share);
+    if(ew)ew.textContent=fe(c.dcaMes*share/CF_SEM_MES);
+  });
+  cfChart(c);
+}
+
+function cfChart(c){
+  const box=el('cf-chart'),leg=el('cf-chart-legend');
+  if(!box)return;
+  const p=cf.pct,n=cf.meses.length;
+  if(!n||c.sum<=0||!c.apor.some(v=>v>0)){box.innerHTML='<div class="cf-empty">Introduce ingresos y gastos (y % que sumen algo) para ver la proyección.</div>';leg.innerHTML='';return;}
+  let cd=0,cl=0,cr=0;
+  const pts=cf.meses.map((m,i)=>{
+    const a=c.apor[i];
+    cd+=a*(p.dca||0)/100;cl+=a*(p.liq||0)/100;cr+=a*(p.res||0)/100;
+    return{label:m.label,d:cd,l:cl,r:cr,t:cd+cl+cr};
+  });
+  const max=Math.max(...pts.map(x=>x.t),1);
+  const W=860,H=250,padL=62,padR=12,padT=18,padB=26,pw=W-padL-padR,ph=H-padT-padB;
+  const bw=Math.min(54,pw/n*0.62);
+  const lblEvery=n<=14?1:Math.ceil(n/14);
+  let g='';
+  for(let k=0;k<=4;k++){
+    const v=max*k/4,y=padT+ph-v/max*ph;
+    g+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="rgba(39,33,74,.07)"/>`
+      +`<text x="${padL-8}" y="${y+3}" text-anchor="end" font-size="9" fill="var(--fg3)">${fe(v,0)}</text>`;
+  }
+  let bars='';
+  pts.forEach((x2,i)=>{
+    const cx=padL+pw*(i+0.5)/n,x0=cx-bw/2;
+    let y=padT+ph;
+    for(const[k,val]of[['dca',x2.d],['liq',x2.l],['res',x2.r]]){
+      const hh=val/max*ph;
+      y-=hh;
+      bars+=`<rect x="${x0.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" rx="2" fill="${CF_COLORS[k]}"><title>${cfEsc(x2.label)} · ${CF_LBL[k]} acumulado: ${fe(val,0)}</title></rect>`;
+    }
+    bars+=`<text x="${cx.toFixed(1)}" y="${(y-5).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--fg2)">${fe(x2.t,0)}</text>`;
+    if(i%lblEvery===0)bars+=`<text x="${cx.toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="9" fill="var(--fg3)">${cfEsc(x2.label)}</text>`;
+  });
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img" aria-label="Proyección acumulada del plan de cashflow">${g}${bars}</svg>`;
+  leg.innerHTML=['dca','liq','res'].map(k=>`<span class="alloc-key"><i style="background:${CF_COLORS[k]}"></i>${CF_LBL[k]}</span>`).join('');
+}
+
+function cfSetMes(i,k,v){const m=cf.meses[i];if(!m)return;m[k]=k==='label'?v:cfNum(v);cfSave();cfRecalc();}
+function cfSetPct(k,v){cf.pct[k]=cfNum(v);cfSave();cfRecalc();}
+function cfSetAct(i,k,v){const a=cf.activos[i];if(!a)return;a[k]=k==='n'?v:cfNum(v);cfSave();cfRecalc();}
+
+function cfAddMes(){
+  if(curPage!=='cashflow')goto('cashflow');
+  const last=cf.meses[cf.meses.length-1];
+  let label=null;
+  if(last){
+    const m2=/^([a-zñ]{3})\s?(\d{2})?$/i.exec((last.label||'').trim());
+    if(m2){
+      const idx=CF_M.findIndex(x=>x.toLowerCase()===m2[1].toLowerCase());
+      if(idx>=0)label=cfMesLabel(new Date(m2[2]?2000+ +m2[2]:new Date().getFullYear(),idx+1,1));
+    }
+  }
+  if(!label)label=cf.meses.length?'Mes '+(cf.meses.length+1):cfMesLabel(new Date());
+  // el mes nuevo hereda ingresos/gastos del anterior: lo habitual es repetir
+  cf.meses.push({label,ingresos:last?+last.ingresos||0:0,gastos:last?+last.gastos||0:0});
+  cfSave();renderCF();
+}
+function cfDelMes(i){cf.meses.splice(i,1);cfSave();renderCF();}
+function cfAddActivo(){cf.activos.push({n:'',w:0});cfSave();renderCF();}
+function cfDelAct(i){cf.activos.splice(i,1);cfSave();renderCF();}
+
+// Precarga los activos del plan DCA desde la cartera (cv9), con peso inicial
+// proporcional a su peso actual. La liquidez se excluye: no se le hace DCA.
+function cfSyncActivos(){
+  const src=assets.filter(a=>a.cat!=='liquidez');
+  if(!src.length){toast('No hay activos en la cartera');return;}
+  const tot=src.reduce((s,a)=>s+(vl(a)||0),0);
+  cf.activos=src.map(a=>({n:a.name,w:tot>0?Math.max(1,Math.round((vl(a)||0)/tot*100)):Math.round(100/src.length)}));
+  cfSave();renderCF();
+  toast(src.length+' activos sincronizados desde la cartera ✓ · borra los que no aportes');
 }
 
 let tt;function toast(msg){const t=el('toast');t.textContent=msg;t.className='toast on';clearTimeout(tt);tt=setTimeout(()=>t.className='toast',2500);}

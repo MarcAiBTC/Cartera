@@ -20,16 +20,20 @@ const fp = n => n == null || !isFinite(n) ? '—' : (n >= 0 ? '+' : '') + n.toFi
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ── 1. Control horario: el cron UTC no sabe de horario de verano ──────────────
+// GitHub además retrasa los crons hasta 2 h, así que se acepta toda la franja
+// 22:00–23:59 en Madrid; el workflow deduplica con una cache diaria para que
+// los disparos de respaldo no envíen el correo dos veces.
 const partes = new Intl.DateTimeFormat('es-ES', {
-  timeZone: TZ, hour: '2-digit', hour12: false, weekday: 'long',
+  timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false, weekday: 'long',
   day: '2-digit', month: 'long', year: 'numeric',
 }).formatToParts(new Date());
 const parte = t => partes.find(p => p.type === t)?.value || '';
 const horaMadrid = parseInt(parte('hour'), 10);
+const horaTexto = `${parte('hour')}:${parte('minute')}`;
 const fechaLarga = `${parte('weekday')}, ${parte('day')} de ${parte('month')} de ${parte('year')}`;
 
-if (process.env.FORCE !== '1' && horaMadrid !== 22) {
-  console.log(`Son las ${horaMadrid}h en Madrid (no las 22h): este disparo del cron corresponde al otro horario (verano/invierno). No se envía nada.`);
+if (process.env.FORCE !== '1' && horaMadrid !== 22 && horaMadrid !== 23) {
+  console.log(`Son las ${horaTexto} en Madrid (fuera de la franja 22:00–23:59): este disparo corresponde al otro horario (verano/invierno) o llegó demasiado tarde. No se envía nada.`);
   process.exit(0);
 }
 
@@ -49,6 +53,12 @@ const alias = feed.alias || {};
 const precios = feed.precios || {};
 const feedTs = Date.parse(feed.generated_at) || Date.now();
 const feedViejo = Date.now() - feedTs > 3 * 3600 * 1000; // >3 h sin actualizar
+// EUR por unidad de divisa (para activos cuyo coste/precio manual va en USD…)
+const fx = Object.assign({ EUR: 1 }, feed.fx || {});
+const rateDe = a => {
+  const c = up(a.ccy || 'EUR');
+  return c === 'EUR' ? 1 : (fx[c] > 0 ? fx[c] : 1);
+};
 
 // Misma resolución de símbolo que keyOf() en index.html.
 const keyOf = a => {
@@ -59,16 +69,19 @@ const keyOf = a => {
        : (alias[t] && precios[alias[t]]) ? alias[t] : null;
 };
 // px()/pxPrev() como en index.html (con el arreglo del spark para el cierre anterior).
+// Los precios del feed ya están en EUR; los introducidos a mano van en la divisa
+// del activo (a.ccy) y se convierten aquí.
 const px = a => {
-  if (a.cat === 'liquidez') return a.mp ?? 1;
+  if (a.cat === 'liquidez') return (a.mp ?? 1) * rateDe(a);
   if (a.mode === 'auto') {
     const sym = keyOf(a);
     if (sym && precios[sym].eur > 0) return precios[sym].eur;
   }
-  return a.mp ?? null;
+  if (a.mp == null) return null;
+  return a.mode === 'auto' && a.pxOk ? a.mp : a.mp * rateDe(a);
 };
 const pxPrev = a => {
-  if (a.cat === 'liquidez') return a.mp ?? 1;
+  if (a.cat === 'liquidez') return (a.mp ?? 1) * rateDe(a);
   if (a.mode !== 'auto') return null;
   const sym = keyOf(a); if (!sym) return null;
   const pe = precios[sym];
@@ -85,7 +98,7 @@ const pxPrev = a => {
 const filas = assets.map(a => {
   const p = px(a), pv = pxPrev(a);
   const valor = p != null ? a.qty * p : null;
-  const coste = a.qty * (a.costUnit || 0);
+  const coste = a.qty * (a.costUnit || 0) * rateDe(a);
   const dia = (p != null && pv > 0 && a.cat !== 'liquidez')
     ? { abs: a.qty * (p - pv), pct: (p - pv) / pv * 100 } : null;
   return { a, valor, coste, dia };
@@ -139,6 +152,25 @@ const noticias = brutas
   .sort((x, y) => y.ts - x.ts)
   .slice(0, 8);
 
+// ── 4b. Enlace al gráfico de cada activo (TradingView; Yahoo para fondos) ────
+const TV_EXCH = { MC: 'BME', MI: 'MIL', DE: 'XETR', L: 'LSE', PA: 'EURONEXT', AS: 'EURONEXT', SW: 'SIX', F: 'FWB' };
+const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
+const CRIPTO = new Set(['BTC', 'ETH', 'SOL', 'BNB', 'ADA', 'XRP', 'DOT', 'AVAX', 'LINK', 'DOGE', 'LTC']);
+const chartURL = a => {
+  const t = up(a.ticker);
+  if (CRIPTO.has(t)) return 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(t + 'EUR');
+  const sym = a.yfSym || keyOf(a) || (t && !ISIN_RE.test(t) ? t : '');
+  if (!sym) return null;
+  if (sym === 'GC=F') return 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent('COMEX:GC1!');
+  if (sym === 'SI=F') return 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent('COMEX:SI1!');
+  const [base, suf] = sym.split('.');
+  if (base.startsWith('0P') || ISIN_RE.test(base)) return 'https://es.finance.yahoo.com/quote/' + encodeURIComponent(sym);
+  if (!suf) return 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(base);
+  const ex = TV_EXCH[suf];
+  return ex ? 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(ex + ':' + base)
+            : 'https://es.finance.yahoo.com/quote/' + encodeURIComponent(sym);
+};
+
 // ── 5. Correo (plantilla, sin IA) ────────────────────────────────────────────
 const col = n => n == null ? '#8b86a8' : n >= 0 ? '#1f9d55' : '#d64545';
 const flecha = n => n == null ? '' : n >= 0 ? '▲' : '▼';
@@ -150,8 +182,12 @@ const asunto = hayDia
 
 const filaHtml = f => {
   const d = f.dia;
+  const cu = chartURL(f.a);
+  const nombre = cu
+    ? `<a href="${esc(cu)}" style="color:#2c2846;text-decoration:none">${esc(f.a.name)} <span style="color:#8b86a8;font-size:11px">📈</span></a>`
+    : esc(f.a.name);
   return `<tr>
-    <td style="padding:7px 10px;border-bottom:1px solid #eee9f7">${esc(f.a.name)}</td>
+    <td style="padding:7px 10px;border-bottom:1px solid #eee9f7">${nombre}</td>
     <td style="padding:7px 10px;border-bottom:1px solid #eee9f7;text-align:right;white-space:nowrap">${fe(f.valor)}</td>
     <td style="padding:7px 10px;border-bottom:1px solid #eee9f7;text-align:right;white-space:nowrap;color:${col(d?.abs)}">${d ? `${flecha(d.abs)} ${fe(d.abs)}` : '—'}</td>
     <td style="padding:7px 10px;border-bottom:1px solid #eee9f7;text-align:right;white-space:nowrap;color:${col(d?.pct)}">${d ? fp(d.pct) : '—'}</td>
@@ -166,7 +202,7 @@ const notiHtml = n =>
 const html = `<!doctype html><html lang="es"><body style="margin:0;padding:0;background:#f4f2fb;font-family:'Segoe UI',Arial,sans-serif;color:#2c2846">
 <div style="max-width:640px;margin:0 auto;padding:24px 14px">
   <div style="background:linear-gradient(135deg,#5b4bc4,#8e7cf0);border-radius:16px;padding:22px 24px;color:#fff">
-    <div style="font-size:13px;opacity:.85">${esc(fechaLarga)} · 22:05 (Madrid)</div>
+    <div style="font-size:13px;opacity:.85">${esc(fechaLarga)} · ${esc(horaTexto)} (Madrid)</div>
     <div style="font-size:15px;margin-top:10px;opacity:.9">Valor de la cartera</div>
     <div style="font-size:32px;font-weight:800">${fe(total)}</div>
     <div style="font-size:18px;font-weight:700;margin-top:6px;color:${diaAbs >= 0 ? '#b8f5c9' : '#ffc9c9'}">
@@ -218,5 +254,9 @@ if (process.env.DRY_RUN === '1') {
   });
   const rsBody = await rs.text();
   if (!rs.ok) { console.error(`Resend devolvió ${rs.status}: ${rsBody}`); process.exitCode = 1; }
-  else console.log(`Correo enviado a ${DESTINO}: ${rsBody}`);
+  else {
+    console.log(`Correo enviado a ${DESTINO}: ${rsBody}`);
+    // Marca para el workflow: hoy ya se envió (los crons de respaldo no repiten)
+    writeFileSync('.informe-enviado', new Date().toISOString());
+  }
 }

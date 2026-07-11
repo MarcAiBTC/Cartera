@@ -41,6 +41,15 @@ def yf_quote(sym):
                 closes = [c for c in res["indicators"]["quote"][0]["close"] if c is not None]
             except Exception:
                 closes = []
+            # En fondos (símbolos 0P…) regularMarketPrice se queda a veces rezagado
+            # un día: el VL nuevo solo aparece en la serie de cierres. Si el gráfico
+            # trae un cierre más nuevo que la fecha del precio, manda ese cierre.
+            # (En acciones en sesión no salta: el último cierre nunca es posterior
+            # a la hora del último cruce.)
+            ts_list = res.get("timestamp") or []
+            mkt_ts = m.get("regularMarketTime") or 0
+            if closes and ts_list and mkt_ts and ts_list[-1] > mkt_ts and closes[-1]:
+                price = float(closes[-1])
             # Cierre anterior: el penúltimo de la serie diaria (el último es la sesión
             # en curso). OJO: chartPreviousClose NO sirve — con range=1mo es el cierre
             # de hace un mes y rompía la variación diaria de toda la cartera.
@@ -189,7 +198,15 @@ def main():
                 if k:
                     alias[k.upper()] = s["sym"]
 
-    out = {"generated_at": now, "fallos": fallos, "alias": alias, "resueltos": resueltos, "precios": precios}
+    # Tipos de cambio (EUR por 1 unidad): la app los usa para posiciones en USD.
+    # USD siempre incluido; el resto son las divisas que aparecieron al cotizar.
+    try:
+        fx_to_eur("USD")
+    except Exception as e:
+        fallos.append(f"fx USD: {e}")
+    fx = {c: round(r, 6) for c, r in FX.items() if c != "EUR"}
+
+    out = {"generated_at": now, "fallos": fallos, "alias": alias, "fx": fx, "resueltos": resueltos, "precios": precios}
     out_path.write_text(json.dumps(out, indent=1, ensure_ascii=False))
     print(f"OK: {len(precios)} precios · {len(fallos)} fallos")
     for f in fallos:
