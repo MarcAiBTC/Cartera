@@ -100,6 +100,76 @@ def yf_resolve(query):
     raise last
 
 
+def yf_history(sym, rng="2y"):
+    """Serie de cierres diarios {fecha ISO: cierre} de un símbolo en Yahoo."""
+    path = f"/v8/finance/chart/{urllib.parse.quote(sym)}?range={rng}&interval=1d"
+    last = None
+    for host in YF_HOSTS:
+        try:
+            d = get_json(f"https://{host}{path}", tries=2)
+            res = d["chart"]["result"][0]
+            stamps = res.get("timestamp") or []
+            closes = res["indicators"]["quote"][0].get("close") or []
+            serie = {}
+            for ts, c in zip(stamps, closes):
+                if c is None:
+                    continue
+                fecha = datetime.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d")
+                serie[fecha] = float(c)
+            if serie:
+                return serie
+        except Exception as e:
+            last = e
+    raise last or RuntimeError(f"sin datos para {sym}")
+
+
+def fx_series(base="USD", quote="EUR", dias=760):
+    """Serie diaria de tipos de cambio del BCE vía Frankfurter: {fecha: tipo}."""
+    hoy = datetime.date.today()
+    desde = hoy - datetime.timedelta(days=dias)
+    url = (f"https://api.frankfurter.app/{desde.isoformat()}..{hoy.isoformat()}"
+           f"?from={base}&to={quote}")
+    d = get_json(url)
+    return {f: v.get(quote) for f, v in (d.get("rates") or {}).items() if v.get(quote)}
+
+
+def escribir_benchmark():
+    """Guarda benchmark.json con el S&P 500 convertido a EUR.
+
+    En euros a propósito: la cartera se mide en euros y las posiciones en el
+    índice (Vanguard US500) son SIN cobertura de divisa, así que comparar contra
+    el índice en dólares escondería el efecto del cambio, que el usuario sí sufre.
+    Va en un archivo aparte y no dentro de precios.json porque éste se commitea
+    cada 15 minutos y el índice sólo cambia una vez al día.
+    """
+    ruta = ROOT / "benchmark.json"
+    sp = yf_history("^GSPC", "2y")            # cierres en USD
+    fx = fx_series("USD", "EUR")              # EUR por 1 USD, sólo días hábiles BCE
+
+    # Para cada cierre del índice se usa el cambio de ese día; si el BCE no
+    # publicó (festivo), se arrastra el último disponible. Sin arrastre se
+    # perderían días y la serie quedaría con huecos.
+    fechas = sorted(sp)
+    ultimo = None
+    dias, cierres = [], []
+    for f in fechas:
+        ultimo = fx.get(f, ultimo)
+        if ultimo is None:
+            continue                          # aún no hay ningún cambio previo
+        dias.append(f)
+        cierres.append(round(sp[f] * ultimo, 2))
+
+    if not dias:
+        raise RuntimeError("serie del S&P 500 vacía tras convertir a EUR")
+
+    out = {"generated_at": datetime.datetime.now(datetime.timezone.utc)
+                            .replace(microsecond=0).isoformat(),
+           "sp500_eur": {"d": dias, "c": cierres}}
+    ruta.write_text(json.dumps(out, ensure_ascii=False))
+    print(f"OK: benchmark S&P 500 · {len(dias)} sesiones "
+          f"({dias[0]} → {dias[-1]})")
+
+
 def main():
     simbolos = json.loads((ROOT / "simbolos.json").read_text())
     out_path = ROOT / "precios.json"
@@ -208,6 +278,13 @@ def main():
 
     out = {"generated_at": now, "fallos": fallos, "alias": alias, "fx": fx, "resueltos": resueltos, "precios": precios}
     out_path.write_text(json.dumps(out, indent=1, ensure_ascii=False))
+
+    # Benchmark aparte: si falla, no arrastra a los precios (que es lo crítico).
+    try:
+        escribir_benchmark()
+    except Exception as e:
+        fallos.append(f"benchmark S&P 500: {e}")
+
     print(f"OK: {len(precios)} precios · {len(fallos)} fallos")
     for f in fallos:
         print("  ⚠", f)

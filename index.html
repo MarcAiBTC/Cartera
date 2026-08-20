@@ -33,64 +33,25 @@ button:focus:not(:focus-visible){outline:none}
 ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
 
 /* ── APP SHELL ── */
-.app{display:grid;grid-template-columns:210px 1fr;min-height:100vh}
+.app{display:block;min-height:100vh}
 
-/* ── SIDEBAR ── */
-.sb{background:var(--bg1);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden}
-.sb-brand{padding:16px 14px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
-.sb-logo{width:26px;height:26px;border-radius:9px;background:linear-gradient(135deg,var(--blue),var(--purple) 55%,var(--rose));display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 3px 10px var(--blue-glow)}
-.sb-logo svg{width:14px;height:14px}
-.sb-title{font-family:var(--disp);font-size:15px;font-weight:700;letter-spacing:-.3px}
-.sb-tag{font-size:9px;color:var(--fg3);margin-left:auto;letter-spacing:.4px;text-transform:uppercase}
+/* ── MARCA EN LA BARRA SUPERIOR ──
+   Vivía en la barra lateral. Al desaparecer ésta (repetía navegación y cifras
+   que ya estaban en el área principal) la marca y el selector de perfil suben
+   aquí, que es el único sitio persistente que queda. */
+.tb-brand{display:flex;align-items:center;gap:8px;flex-shrink:0;padding-right:4px}
+.tb-logo{width:24px;height:24px;border-radius:8px;background:linear-gradient(135deg,var(--blue),var(--purple) 55%,var(--rose));display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 3px 10px var(--blue-glow)}
+.tb-logo svg{width:13px;height:13px}
+.tb-name{font-family:var(--disp);font-size:14px;font-weight:700;letter-spacing:-.3px;white-space:nowrap}
 
 /* ── SELECTOR DE PERFIL ──
    Un único CSS para todos los perfiles: lo que cambia es el TEXTO (data-driven),
-   nunca el color ni el tema. Un tema por perfil obligaría a mantener dos
-   estéticas en paralelo; así cualquier retoque futuro aplica a los dos a la vez. */
-.sb-perfil{padding:11px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:7px}
-.sb-perfil-lbl{font-size:9px;color:var(--fg3);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
-.pf-seg{display:flex;gap:3px;background:var(--bg2);border:1px solid var(--line2);border-radius:9px;padding:3px}
-.pf-seg button{flex:1;border:0;background:transparent;color:var(--fg2);font-family:var(--sans);font-size:11px;font-weight:700;padding:6px 4px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s}
+   nunca el color ni el tema. */
+.pf-seg{display:flex;gap:3px;background:var(--bg2);border:1px solid var(--line2);border-radius:9px;padding:3px;flex-shrink:0}
+.pf-seg button{border:0;background:transparent;color:var(--fg2);font-family:var(--sans);font-size:11px;font-weight:700;padding:4px 12px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s}
 .pf-seg button:hover:not(.on){color:var(--fg0)}
 .pf-seg button.on{background:var(--bg1);color:var(--blue);box-shadow:var(--elev1)}
-.pf-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:99px;font-size:10px;font-weight:700;background:var(--bg2);color:var(--fg0);border:1px solid var(--line2);white-space:nowrap;cursor:default}
-.pf-chip i{width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--purple));flex-shrink:0}
 
-/* sidebar KPIs */
-.sb-kpis{padding:14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
-.sb-kpi-row{display:flex;align-items:baseline;justify-content:space-between}
-.sb-kpi-lbl{font-size:10px;color:var(--fg3);font-weight:600}
-.sb-kpi-val{font-size:13px;font-weight:700;letter-spacing:-.3px;font-family:var(--disp)}
-.sb-total{font-family:var(--disp);font-size:24px;font-weight:700;letter-spacing:-.6px;color:var(--fg0);line-height:1;margin-bottom:3px}
-.sb-pnl{font-size:11px;font-weight:600}
-
-/* broker breakdown */
-.sb-brokers{padding:10px 14px;border-bottom:1px solid var(--line)}
-.sb-br-lbl{font-size:9px;color:var(--fg3);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:7px}
-.sb-br-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
-.sb-br-name{font-size:11px;color:var(--fg2);display:flex;align-items:center;gap:6px;font-weight:500}
-.sb-br-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.sb-br-val{font-size:11px;font-weight:700;font-family:var(--disp)}
-.sb-br-pct{font-size:10px;margin-left:4px;font-weight:600}
-
-/* nav */
-.sb-nav{padding:10px;flex:1;overflow-y:auto}
-.sb-sec{font-size:9px;color:var(--fg3);text-transform:uppercase;letter-spacing:.9px;font-weight:700;padding:12px 8px 5px}
-.nb{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border-radius:10px;border:none;background:none;color:var(--fg2);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;transition:all .12s;text-align:left;margin-bottom:2px}
-.nb svg{width:14px;height:14px;flex-shrink:0;stroke-width:1.6;opacity:.65}
-.nb:hover{background:var(--bg2);color:var(--fg0)}
-.nb.on{background:rgba(109,125,246,.12);color:#4553d4;font-weight:700}
-.nb.on svg{opacity:1}
-.nb .ct{margin-left:auto;font-size:9px;background:var(--bg3);color:var(--fg2);padding:2px 7px;border-radius:99px;font-weight:700}
-.nb.on .ct{background:rgba(109,125,246,.18);color:#4553d4}
-
-.sb-foot{padding:10px;border-top:1px solid var(--line)}
-.sb-ref{display:flex;align-items:center;justify-content:space-between;width:100%;padding:7px 10px;border-radius:10px;border:1px solid var(--line2);background:var(--bg1);color:var(--fg1);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;transition:all .12s}
-.sb-ref:hover{background:var(--bg2);color:var(--fg0)}
-.sb-ref svg{width:11px;height:11px}
-.spin{animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.sb-lu{font-size:9px;color:var(--fg3);padding:5px 10px 0;letter-spacing:.2px}
 
 /* ── MAIN ── */
 .main{display:flex;flex-direction:column;min-height:100vh;overflow:hidden}
@@ -125,8 +86,65 @@ button:focus:not(:focus-visible){outline:none}
 .page.on{display:block}
 .pcontent{padding:16px 20px 60px}
 
+/* ── INICIO · HÉROE ──
+   Una sola cifra manda: el patrimonio total. Todo lo demás es subordinado y
+   se lee después. Antes había tres bloques compitiendo (liquidez a 34px, valor
+   total a 28px y la barra lateral a 24px) y ninguno ganaba. */
+.hero{padding:34px 24px 28px}
+.hero-lbl{font-size:10px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--fg3);margin-bottom:12px}
+.hero-row{display:flex;align-items:baseline;gap:20px;flex-wrap:wrap}
+.hero-val{font-family:var(--disp);font-size:54px;font-weight:700;letter-spacing:-2px;line-height:1;color:var(--fg0)}
+.hero-chips{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.hero-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:99px;font-size:14px;font-weight:700}
+.hero-badge.up{background:var(--up-bg);color:#0b7c5c}
+.hero-badge.dn{background:var(--dn-bg);color:#c72e5c}
+.hero-badge.nu{background:var(--bg3);color:var(--fg2)}
+.hero-eur{font-size:14px;font-weight:600}
+.hero-day{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:99px;font-size:12px;font-weight:700;background:var(--bg2);border:1px solid var(--line2);color:var(--fg1)}
+.hero-day em{font-style:normal;font-size:10px;color:var(--fg3);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+/* barra de composición: sustituye a la tarta «Distribución» de Gráficos */
+.comp-track{display:flex;height:14px;border-radius:8px;overflow:hidden;gap:3px;margin-top:24px}
+.comp-seg{border-radius:8px;min-width:5px;transition:width .5s ease}
+.hero-meta{display:flex;gap:26px;margin-top:16px;align-items:center;flex-wrap:wrap}
+.hero-meta-item{display:flex;align-items:baseline;gap:8px}
+.hero-meta-val{font-family:var(--disp);font-size:19px;font-weight:700;letter-spacing:-.4px;color:var(--fg0)}
+.hero-meta-lbl{font-size:12px;color:var(--fg2);font-weight:500}
+.hero-sep{width:1px;height:16px;background:var(--line2)}
+.hero-note{font-size:12px;color:var(--fg3);font-weight:500}
+
+/* ── INICIO · BANDAS POR CLASE ──
+   Cinco filas, una por clase de activo. La tabla de posiciones sólo aparece
+   al desplegar una banda: de un vistazo se ve el reparto, y el detalle se pide. */
+.bands{background:var(--bg1);margin:0 24px 20px;border:1px solid var(--line);border-radius:20px;box-shadow:var(--elev1);overflow:hidden}
+.band{display:flex;align-items:center;gap:14px;width:100%;padding:17px 20px;border:none;border-bottom:1px solid var(--line);background:none;font-family:var(--sans);text-align:left;cursor:pointer;transition:background .13s}
+.band:last-of-type{border-bottom:none}
+.band:hover{background:var(--bg2)}
+.band.on{background:var(--bg2)}
+.band-dot{width:11px;height:11px;border-radius:4px;flex-shrink:0}
+.band-name{font-size:14px;font-weight:700;color:var(--fg0);width:104px;flex-shrink:0}
+.band-val{font-family:var(--disp);font-size:21px;font-weight:700;letter-spacing:-.5px;color:var(--fg0);width:132px;text-align:right;flex-shrink:0}
+.band-pct{font-size:13px;font-weight:600;color:var(--fg2);width:56px;text-align:right;flex-shrink:0}
+.band-bar{flex:1;height:8px;background:var(--bg2);border-radius:99px;overflow:hidden;margin:0 8px;min-width:40px}
+.band-fill{height:100%;border-radius:99px;transition:width .5s ease}
+.band-pnl{font-size:13px;font-weight:700;width:134px;text-align:right;flex-shrink:0;white-space:nowrap}
+.band-ct{font-size:10px;color:var(--fg3);font-weight:600;width:24px;text-align:right;flex-shrink:0}
+.band-chev{display:flex;align-items:center;color:var(--fg3);flex-shrink:0;transition:transform .18s}
+.band-chev svg{width:14px;height:14px;stroke-width:2}
+.band.on .band-chev{transform:rotate(180deg)}
+.band-body{border-bottom:1px solid var(--line);background:var(--bg2)}
+.band-body:last-child{border-bottom:none}
+.band-body .tbl-wrap{background:transparent}
+.band-body thead th{background:transparent;border-bottom:1px solid var(--line2)}
+.band-empty{padding:18px 20px;font-size:12px;color:var(--fg3)}
+@media(max-width:900px){
+  .band-bar,.band-pct{display:none}
+  .band-val{width:110px;font-size:18px}
+  .band-name{width:auto;flex:1}
+  .hero-val{font-size:40px;letter-spacing:-1.4px}
+}
+
 /* ── RESUMEN PAGE ── */
-/* héroe: tarjeta aurora con el valor total + tarjetas KPI satélite */
+/* tarjetas KPI · las usa ahora el planificador de Cashflow */
 .kpi-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:16px 20px 2px;align-items:stretch}
 .kpi{padding:16px 18px;background:var(--bg1);border:1px solid var(--line);border-radius:18px;box-shadow:var(--elev1);cursor:default}
 .kpi:first-child{background:linear-gradient(120deg,#edefff 0%,#fdedf6 52%,#e6faf1 100%);border-color:rgba(109,125,246,.20)}
@@ -147,45 +165,16 @@ button:focus:not(:focus-visible){outline:none}
 .alloc-key i{width:9px;height:9px;border-radius:3px;display:inline-block}
 .alloc-key b{color:var(--fg0);font-weight:700;font-family:var(--disp)}
 
-/* ── LIQUIDEZ HERO ── reservas en efectivo, lo primero que se ve en Inicio */
-.liq-hero{display:grid;grid-template-columns:minmax(210px,300px) 1fr;gap:22px;margin:16px 20px 0;padding:18px 22px 18px 26px;background:var(--bg1);border:1px solid var(--line);border-radius:20px;box-shadow:var(--elev1);position:relative;overflow:hidden}
-.liq-hero::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--mint),var(--lilac))}
-.liq-main{display:flex;flex-direction:column;justify-content:center;min-width:0}
-.liq-eyebrow{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--fg2)}
-.liq-dot{width:8px;height:8px;border-radius:50%;background:var(--mint);box-shadow:0 0 0 3px rgba(62,203,165,.18)}
-.liq-amount{font-family:var(--disp);font-size:34px;font-weight:700;letter-spacing:-1px;color:var(--fg0);line-height:1.02;margin:9px 0 5px}
-.liq-meta{font-size:11px;color:var(--fg3);line-height:1.5}
-.liq-meta strong{color:var(--fg1);font-weight:700}
-.liq-gauge{height:6px;background:var(--bg3);border-radius:99px;overflow:hidden;margin-top:13px}
-.liq-gauge-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--mint),var(--lilac));transition:width .55s cubic-bezier(.4,0,.2,1);min-width:3px}
-.liq-accounts{display:flex;flex-wrap:wrap;gap:9px;align-content:center;align-items:flex-start}
-.liq-acct{display:flex;flex-direction:column;gap:3px;padding:10px 13px;background:var(--bg2);border:1px solid var(--line);border-radius:13px;min-width:118px}
-.liq-acct-top{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--fg2);font-weight:600;max-width:150px}
-.liq-acct-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.liq-acct-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.liq-acct-val{font-family:var(--disp);font-size:15px;font-weight:700;color:var(--fg0);letter-spacing:-.3px}
-.liq-acct-ccy{font-size:9px;color:var(--fg3);font-weight:600;letter-spacing:.2px}
-.liq-empty{display:flex;align-items:center;font-size:11px;color:var(--fg3);line-height:1.6;padding:4px 0}
-@media(max-width:720px){.liq-hero{grid-template-columns:1fr;gap:16px}.liq-amount{font-size:28px}}
 
-/* broker chips */
-.br-strip{display:flex;align-items:center;gap:8px;padding:12px 20px 0;overflow-x:auto}
-.brtab{padding:6px 13px;font-size:11px;font-weight:600;color:var(--fg2);cursor:pointer;border:1px solid var(--line2);border-radius:99px;background:var(--bg1);font-family:var(--sans);transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:6px}
-.brtab:hover{border-color:var(--line3);color:var(--fg0)}
-.brtab.on{background:var(--fg0);border-color:var(--fg0);color:#fff}
-.brtab .bv{font-size:10px;color:inherit;opacity:.6;font-weight:500}
-.brtab .bdot{width:6px;height:6px;border-radius:50%}
-
-/* table section */
-.section{background:var(--bg1);margin:14px 20px 48px;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--elev1)}
 .sec-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
 .sec-title{font-size:10px;font-weight:700;color:var(--fg2);text-transform:uppercase;letter-spacing:.7px}
 
-/* cat filter pills */
-.cat-tabs{display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--line);overflow-x:auto}
-.ctab{padding:5px 13px;font-size:11px;font-weight:600;color:var(--fg2);cursor:pointer;border:1px solid transparent;border-radius:99px;background:none;font-family:var(--sans);transition:all .15s;white-space:nowrap}
-.ctab:hover{background:var(--bg2);color:var(--fg0)}
-.ctab.on{background:rgba(109,125,246,.12);color:#4553d4;border-color:rgba(109,125,246,.28)}
+
+/* leyenda del gráfico TWR · dos líneas comparables necesitan decir cuál es cuál */
+.twr-leg{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+.lgk{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--fg2)}
+.lgk i{width:12px;height:3px;border-radius:2px;display:inline-block}
+.lgk-off{color:var(--fg3);font-weight:500;font-style:italic}
 
 /* TABLE */
 .tbl-wrap{overflow-x:auto;background:var(--bg1)}
@@ -202,13 +191,6 @@ th.c,td.c{text-align:center}
 .spark-pct{font-size:9px;font-weight:700;margin-top:1px;letter-spacing:.2px}
 a.abt{text-decoration:none}
 .ccy-tag{font-weight:700;color:var(--fg3);border:1px solid var(--line);border-radius:4px;padding:0 3px;font-size:8px;letter-spacing:.4px;vertical-align:1px}
-th.sortable{cursor:pointer;user-select:none;transition:color .1s}
-th.sortable:hover{color:var(--fg1)}
-.sic{display:inline-flex;flex-direction:column;gap:1px;margin-left:3px;vertical-align:middle;opacity:.3}
-.sic svg{width:6px;height:6px;display:block}
-th.sort-asc .sic,.sort-desc .sic{opacity:1}
-th.sort-asc .sic .su{color:var(--blue)}
-th.sort-desc .sic .sd{color:var(--blue)}
 
 tbody tr{border-bottom:1px solid var(--line);transition:background .08s}
 tbody tr:last-child{border-bottom:none}
@@ -475,109 +457,13 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
   .charts-grid{grid-template-columns:1fr}
   .target-grid,.evo-grid{grid-template-columns:1fr}
   .pcontent{padding:12px 14px 48px}
-  .section{margin:12px 14px 40px}
+
 }
 </style>
 </head>
 <body>
 <div class="app">
 
-<!-- ═══ SIDEBAR ═══ -->
-<aside class="sb">
-  <div class="sb-brand">
-    <div class="sb-logo"><svg fill="none" stroke="white" viewBox="0 0 16 16" stroke-width="1.5" stroke-linecap="round"><path d="M2 12l3.5-5 3 2.5 3.5-6 2 2.5"/></svg></div>
-    <span class="sb-title">Cartera</span>
-    <span class="sb-tag">v5</span>
-  </div>
-  <!-- Perfil activo · los botones los pinta renderPerfil() a partir de PERFILES,
-       así añadir un tercer perfil no toca ni una línea de HTML ni de CSS. -->
-  <div class="sb-perfil">
-    <div class="sb-perfil-lbl">Perfil</div>
-    <div class="pf-seg" id="pf-seg"></div>
-  </div>
-  <div class="sb-kpis">
-    <div>
-      <div class="sb-kpi-lbl" style="font-size:9px;color:var(--fg3);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin-bottom:5px">Valor total</div>
-      <div class="sb-total" id="sb-total">—</div>
-      <div class="sb-pnl nu-c" id="sb-pnl">—</div>
-    </div>
-    <div class="sb-kpi-row">
-      <span class="sb-kpi-lbl">Invertido</span>
-      <span class="sb-kpi-val" id="sb-cost">—</span>
-    </div>
-    <div class="sb-kpi-row">
-      <span class="sb-kpi-lbl">Hoy</span>
-      <span class="sb-kpi-val nu-c" id="sb-day">—</span>
-    </div>
-  </div>
-  <div class="sb-brokers">
-    <div class="sb-br-lbl">Por broker</div>
-    <div id="sb-br-list"></div>
-  </div>
-  <nav class="sb-nav">
-    <div class="sb-sec">Vistas</div>
-    <button class="nb on" id="sn-resumen" onclick="goto('resumen')">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
-      Resumen <span class="ct" id="sn-ct">0</span>
-    </button>
-    <button class="nb" id="sn-graficos" onclick="goto('graficos')">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5"/><path d="M8 5v3l2 1.5" stroke-linecap="round"/></svg>
-      Gráficos
-    </button>
-    <button class="nb" id="sn-evolucion" onclick="goto('evolucion')">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M2 12l3-4.5 3 2 3.5-6 2.5 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Evolución
-    </button>
-    <button class="nb" id="sn-objetivo" onclick="goto('objetivo')">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2.5"/><path d="M8 2v1.5M8 12.5V14M2 8h1.5M12.5 8H14" stroke-linecap="round"/></svg>
-      Cartera objetivo
-    </button>
-    <button class="nb" id="sn-historial" onclick="goto('historial')">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M8 2v4l2.5 2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="8" r="6"/></svg>
-      Historial <span class="ct" id="sn-hct">0</span>
-    </button>
-    <button class="nb" id="sn-watchlist" onclick="goto('watchlist')">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M8 2l1.8 3.6L14 6.3l-3 2.9.7 4.1L8 11.4 4.3 13.3l.7-4.1-3-2.9 4.2-.7z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Watchlist <span class="ct" id="sn-wct">0</span>
-    </button>
-    <button class="nb" id="sn-cashflow" onclick="goto('cashflow')">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><circle cx="8" cy="8" r="2"/><path d="M4 8h.01M12 8h.01" stroke-linecap="round"/></svg>
-      Cashflow
-    </button>
-    <div class="sb-sec">Acciones</div>
-    <button class="nb" onclick="openAModal()">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5"/><path d="M8 5.5v5M5.5 8h5" stroke-linecap="round"/></svg>
-      Nueva posición
-    </button>
-    <button class="nb" onclick="saveSnap()">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5"/><path d="M8 5.5v2.5l1.5 1" stroke-linecap="round"/></svg>
-      Guardar snapshot
-    </button>
-    <button class="nb" onclick="openBuyModal()">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M2 3h2l1.6 7.5h6.9L14 5.5H5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.6" cy="13" r="1"/><circle cx="11.6" cy="13" r="1"/></svg>
-      Registrar compra
-    </button>
-    <button class="nb" onclick="openTradeModal()">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M4 8h8M10 5l3 3-3 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Registrar operación
-    </button>
-    <button class="nb" onclick="exportJSON()">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M3 12h10M8 3v7M5 7l3 3 3-3" stroke-linecap="round"/></svg>
-      Guardar cartera
-    </button>
-    <button class="nb" onclick="goto('watchlist');setTimeout(openWModal,50)">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M8 2l1.8 3.6L14 6.3l-3 2.9.7 4.1L8 11.4 4.3 13.3l.7-4.1-3-2.9 4.2-.7z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Añadir watchlist
-    </button>
-  </nav>
-  <div class="sb-foot">
-    <button class="sb-ref" onclick="fetchAll(true)">
-      <span>Actualizar precios</span>
-      <svg id="ref-ic" fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 2.5A6.5 6.5 0 0 0 2 8M2.5 13.5A6.5 6.5 0 0 0 14 8"/><path d="M2 4.5V2h2.5M14 11.5V14h-2.5"/></svg>
-    </button>
-    <div class="sb-lu" id="sb-lu">nunca actualizado</div>
-  </div>
-</aside>
 
 <!-- ═══ MAIN ═══ -->
 <div class="main">
@@ -603,10 +489,14 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
   <input type="file" id="json-file-input" accept=".json" style="display:none" onchange="loadJSONFile(event)">
   <!-- TOPBAR -->
   <div class="topbar">
+    <div class="tb-brand">
+      <div class="tb-logo"><svg fill="none" stroke="white" viewBox="0 0 16 16" stroke-width="1.5" stroke-linecap="round"><path d="M2 12l3.5-5 3 2.5 3.5-6 2 2.5"/></svg></div>
+      <span class="tb-name">Cartera</span>
+    </div>
     <div class="tb-tabs">
       <button class="tb-tab on" id="tt-resumen" onclick="goto('resumen')">
         <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
-        Resumen
+        Inicio
       </button>
       <button class="tb-tab" id="tt-graficos" onclick="goto('graficos')">
         <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M2 13l3-5 3 2.5 3.5-6 2.5 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -634,9 +524,9 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
       </button>
     </div>
     <div class="tb-right">
-      <!-- Perfil siempre visible en cabecera: evita meter una posición en la
-           cartera equivocada. Sólo cambia el texto, nunca el estilo. -->
-      <div class="pf-chip" id="pf-chip" title="Perfil activo"><i></i><span id="pf-chip-txt">—</span></div>
+      <!-- Perfil: el propio selector hace de indicador, así que ya no hace falta
+           además un chip que repita cuál está activo. -->
+      <div class="pf-seg" id="pf-seg" title="Perfil activo"></div>
       <div class="feed-chip" id="feed-chip"><i></i>cargando precios…</div>
       <button class="btn btn-ghost" onclick="exportXLSX()" title="Exportar a Excel">
         <svg fill="none" stroke="currentColor" viewBox="0 0 16 16" width="11" height="11" stroke-width="1.5" stroke-linecap="round"><path d="M3 12h10M8 3v7M5 7l3 3 3-3"/></svg>
@@ -647,80 +537,44 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         Guardar
       </button>
       <button class="btn btn-ghost" onclick="fetchAll(true)">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 2.5A6.5 6.5 0 0 0 2 8M2.5 13.5A6.5 6.5 0 0 0 14 8"/><path d="M2 4.5V2h2.5M14 11.5V14h-2.5"/></svg>
+        <svg id="ref-ic" fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 2.5A6.5 6.5 0 0 0 2 8M2.5 13.5A6.5 6.5 0 0 0 14 8"/><path d="M2 4.5V2h2.5M14 11.5V14h-2.5"/></svg>
         Actualizar
       </button>
       <button class="btn btn-blue" id="tb-btn" onclick="openAModal()">+ Añadir posición</button>
     </div>
   </div>
 
-  <!-- ── RESUMEN PAGE ── -->
+  <!-- ── INICIO ──
+       Una pantalla, dos niveles: el héroe responde «¿cuánto tengo?» sin pedir
+       nada, y las bandas responden «¿en qué?». La tabla de posiciones sólo
+       aparece cuando despliegas una banda. -->
   <div class="page on" id="page-resumen">
-    <!-- Liquidez disponible · reservas en efectivo listas para invertir -->
-    <div class="liq-hero" id="liq-hero">
-      <div class="liq-main">
-        <div class="liq-eyebrow"><span class="liq-dot"></span>Liquidez disponible</div>
-        <div class="liq-amount" id="liq-total">—</div>
-        <div class="liq-meta"><strong id="liq-share">—</strong> de la cartera · lista para invertir</div>
-        <div class="liq-gauge"><div class="liq-gauge-fill" id="liq-gauge-fill" style="width:0"></div></div>
-      </div>
-      <div class="liq-accounts" id="liq-accounts"></div>
-    </div>
-    <div class="kpi-strip">
-      <div class="kpi" style="grid-column:span 2">
-        <div class="kpi-lbl">Valor total</div>
-        <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
-          <div class="kpi-val" id="k-tot" style="font-size:28px">—</div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="kpi-badge nu" id="k-pnlbadge" style="font-size:12px;padding:2px 8px">—</span>
-            <span style="font-size:12px;color:var(--fg3)" id="k-pnleuro">—</span>
-          </div>
+    <div class="hero">
+      <div class="hero-lbl">Patrimonio total</div>
+      <div class="hero-row">
+        <div class="hero-val" id="h-tot">—</div>
+        <div class="hero-chips">
+          <span class="hero-badge nu" id="h-pnlbadge">—</span>
+          <span class="hero-eur" id="h-pnleur">—</span>
+          <span class="hero-day" id="h-day"><em>Hoy</em><span id="h-daytxt">—</span></span>
         </div>
-        <div style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap">
-          <span class="kpi-sub" id="k-pos">—</span>
-          <span class="kpi-sub" style="color:var(--fg3)">·</span>
-          <span class="kpi-sub">Invertido <strong style="color:var(--fg1)" id="k-cost">—</strong></span>
-        </div>
-        <div class="alloc" id="alloc-bar"></div>
       </div>
-      <div class="kpi"><div class="kpi-lbl">Hoy</div><div class="kpi-val" id="k-day" style="font-size:18px">—</div><div class="kpi-sub" id="k-daysub">—</div></div>
-      <div class="kpi"><div class="kpi-lbl">Resultado</div><div class="kpi-val" id="k-pnl">—</div><div class="kpi-sub" id="k-pnlsub">—</div></div>
-      <div class="kpi"><div class="kpi-lbl" id="k-bw-lbl">Mejor / Peor</div>
-        <div class="kpi-val" id="k-best" style="font-size:13px">—</div><div class="kpi-sub" id="k-bestp">—</div>
-        <div class="kpi-val" id="k-worst" style="font-size:13px;margin-top:7px">—</div><div class="kpi-sub" id="k-worstp">—</div>
+      <div class="comp-track" id="h-comp"></div>
+      <div class="hero-meta">
+        <div class="hero-meta-item">
+          <span class="hero-meta-val" id="h-inv">—</span>
+          <span class="hero-meta-lbl">invertido</span>
+        </div>
+        <div class="hero-sep"></div>
+        <div class="hero-meta-item">
+          <span class="hero-meta-val" id="h-liq">—</span>
+          <span class="hero-meta-lbl">líquido, listo para invertir</span>
+        </div>
+        <div class="hero-sep"></div>
+        <div class="hero-note" id="h-note">—</div>
       </div>
     </div>
-    <div class="br-strip" id="br-strip"></div>
-    <div style="padding:0 0 0">
-      <div class="section">
-        <div class="sec-head">
-          <span class="sec-title">Posiciones abiertas</span>
-          <button class="btn btn-ghost" onclick="openAModal()" style="padding:4px 9px;font-size:11px">+ Añadir</button>
-        </div>
-        <div class="cat-tabs">
-          <button class="ctab on" onclick="fCat('all',this)">Todas</button>
-          <button class="ctab" onclick="fCat('fondo',this)">Fondos</button>
-          <button class="ctab" onclick="fCat('cripto',this)">Cripto</button>
-          <button class="ctab" onclick="fCat('metal',this)">Metales</button>
-          <button class="ctab" onclick="fCat('accion',this)">Acciones</button>
-          <button class="ctab" onclick="fCat('liquidez',this)">Liquidez</button>
-        </div>
-        <div class="tbl-wrap">
-          <table>
-            <thead><tr>
-              <th>Activo</th><th class="r">Cantidad</th>
-              <th class="r">Precio</th>
-              <th class="r sortable" onclick="setSort('dia')" id="th-dia">Día <span class="sic"><svg class="su" viewBox="0 0 6 4" fill="currentColor"><path d="M3 0L6 4H0z"/></svg><svg class="sd" viewBox="0 0 6 4" fill="currentColor"><path d="M3 4L0 0h6z"/></svg></span></th>
-              <th class="c" title="Cierre diario del último mes (cripto: 7 días)">Tendencia</th><th class="r">Valor</th>
-              <th class="r sortable" onclick="setSort('pnl')" id="th-pnl">P&L <span class="sic"><svg class="su" viewBox="0 0 6 4" fill="currentColor"><path d="M3 0L6 4H0z"/></svg><svg class="sd" viewBox="0 0 6 4" fill="currentColor"><path d="M3 4L0 0h6z"/></svg></span></th>
-              <th class="r sortable" onclick="setSort('peso')" id="th-peso">Peso <span class="sic"><svg class="su" viewBox="0 0 6 4" fill="currentColor"><path d="M3 0L6 4H0z"/></svg><svg class="sd" viewBox="0 0 6 4" fill="currentColor"><path d="M3 4L0 0h6z"/></svg></span></th>
-              <th></th>
-            </tr></thead>
-            <tbody id="ptbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    <div class="bands" id="h-bands"></div>
   </div>
 
   <!-- ── GRÁFICOS PAGE ── -->
@@ -806,9 +660,10 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
           <div class="ch240"><canvas id="evo-line"></canvas></div>
         </div>
         <div class="evo-panel full">
-          <div class="ep-title">Rentabilidad real · TWR</div>
-          <div class="ep-sub">Descuenta las aportaciones: mide solo lo que el mercado hace con tu dinero (índice base 100)</div>
+          <div class="ep-title">Rentabilidad real · TWR vs S&amp;P 500</div>
+          <div class="ep-sub">Descuenta las aportaciones: mide solo lo que el mercado hace con tu dinero. Las dos líneas arrancan en 100 el día de tu primer snapshot, así que lo comparable es la distancia entre ellas.</div>
           <div class="hist-stats" id="twr-stats" style="margin-bottom:12px"></div>
+          <div class="twr-leg" id="twr-leg"></div>
           <div class="ch180" id="twr-chart-wrap"><canvas id="evo-twr"></canvas></div>
           <div class="no-data" id="twr-nodata" style="display:none">Se necesitan al menos 2 snapshots con fechas distintas.<br>Se guardan solos: uno al día, cada vez que abres la app con precios.</div>
         </div>
@@ -1207,8 +1062,8 @@ function renderPerfil(){
   const act=perfilActivo(),seg=el('pf-seg');
   if(seg)seg.innerHTML=Object.keys(PERFILES).map(p=>
     '<button class="'+(p===act?'on':'')+'" aria-pressed="'+(p===act)+'" onclick="setPerfil(\''+p+'\')">'+perfilNombre(p)+'</button>').join('');
-  const txt=el('pf-chip-txt');
-  if(txt)txt.textContent='Perfil · '+perfilNombre(act);
+  // El chip de perfil de la cabecera desapareció: el propio selector indica cuál
+  // está activo. Se mantiene el título de la pestaña, que sí distingue ventanas.
   document.title='Cartera '+perfilNombre(act);
 }
 
@@ -1281,6 +1136,12 @@ const PROXIES=[
 const FEED_URL=location.protocol==='file:'
   ?'https://raw.githubusercontent.com/marcaibtc/Cartera/main/precios.json'
   :'';
+// El S&P 500 va en su propio archivo (y no dentro de precios.json) porque el
+// índice sólo cambia una vez al día mientras que los precios se publican cada
+// 15 minutos: mezclarlos haría que cada commit arrastrara la serie entera.
+const BENCH_URL=location.protocol==='file:'
+  ?'https://raw.githubusercontent.com/marcaibtc/Cartera/main/benchmark.json'
+  :'';
 const BD={MyInvestor:'#ff7a52',Revolut:'#7c8cf8','Trade Republic':'#22b586',ING:'#f59e0b',Otro:'#9a94b8'};
 
 const UND_MAP={
@@ -1345,8 +1206,6 @@ let feedTs=null,feedFresh={};   // hora del feed y activos ya cubiertos por él
 let eaid=null,pmid=null,ewid=null;
 let curCat='fondo',curMode='manual';
 let curPage='resumen',curAsset=null;
-let catFilter='all',brFilter='all';
-let curSort={col:'peso',dir:'desc'};
 let curDist='cat';
 let chartInstances={};
 
@@ -1468,29 +1327,7 @@ function goto(p){
 }
 
 // ── MAIN RENDER ───────────────────────────────────────────────────────────────
-function render(){rKpis();rLiquidez();rBrStrip();rTable();rSidebar();rFeedChip();}
-
-// ── LIQUIDEZ ──────────────────────────────────────────────────────────────────
-// Reservas en efectivo (categoría «liquidez»), lo primero que se ve en Inicio.
-function rLiquidez(){
-  const acc=el('liq-accounts');if(!acc)return;
-  const liqs=assets.filter(a=>a.cat==='liquidez');
-  const total=liqs.reduce((s,a)=>s+(vl(a)||0),0);
-  const port=tv(),share=port>0?total/port*100:0;
-  countUp(el('liq-total'),total,n=>fe(n,2));
-  el('liq-share').textContent=share>0?share.toFixed(1).replace('.',',')+' %':'—';
-  el('liq-gauge-fill').style.width=Math.min(100,share)+'%';
-  if(!liqs.length){acc.innerHTML='<div class="liq-empty">Sin cuentas de efectivo todavía.<br>Añádelas como posiciones de categoría «Liquidez».</div>';return;}
-  acc.innerHTML=liqs.map(a=>{
-    const br=a.broker||'Otro',v=vl(a)||0,ccy=up(a.ccy||'EUR');
-    const nat=ccy!=='EUR'?fcur(a.qty*(a.mp??1),ccy):'';
-    return`<div class="liq-acct">
-      <div class="liq-acct-top"><span class="liq-acct-dot" style="background:${BD[br]||'#9a94b8'}"></span><span class="liq-acct-name">${a.name}</span></div>
-      <div class="liq-acct-val">${fe(v,2)}</div>
-      ${nat?`<div class="liq-acct-ccy">${nat} · cambio del día</div>`:''}
-    </div>`;
-  }).join('');
-}
+function render(){rHero();rBands();rFeedChip();}
 
 function rFeedChip(){
   const c=el('feed-chip');if(!c)return;
@@ -1502,96 +1339,100 @@ function rFeedChip(){
   else{c.className='feed-chip err';c.innerHTML=`<i></i>feed parado · ${txt}`;c.title='El feed lleva más de un día sin publicar. Entra en GitHub → Actions → «Actualizar precios» y ejecútalo manualmente para reactivarlo.';}
 }
 
-function rSidebar(){
-  const t=tv(),c=tc(),g=t-c,pct=c>0?(g/c)*100:0;
-  countUp(el('sb-total'),t,n=>fe(n,0));
-  el('sb-cost').textContent=fe(c,0);
-  const pnlEl=el('sb-pnl');
-  pnlEl.textContent=fe(g,0)+' ('+fp(pct)+')';
-  pnlEl.className='sb-pnl '+(g>0?'up-c':g<0?'dn-c':'nu-c');
-  const day=tDay(),sdEl=el('sb-day');
-  if(sdEl){
-    if(day){sdEl.textContent=(day.abs>=0?'+':'')+fe(day.abs,0)+' ('+fp(day.pct)+')';sdEl.className='sb-kpi-val '+(day.abs>=0?'up-c':'dn-c');}
-    else{sdEl.textContent='—';sdEl.className='sb-kpi-val nu-c';}
-  }
-  el('sn-ct').textContent=assets.length;
-  el('sn-wct').textContent=wl.length;
-  // broker list
-  const brokers=[...new Set(assets.map(a=>a.broker||'Otro'))];
-  el('sb-br-list').innerHTML=brokers.map(br=>{
-    const bv=assets.filter(a=>(a.broker||'Otro')===br).reduce((s,a)=>s+(vl(a)||0),0);
-    const bc=assets.filter(a=>(a.broker||'Otro')===br).reduce((s,a)=>s+cs(a),0);
-    const bg=bv-bc,bp=bc>0?(bg/bc)*100:0;
-    return`<div class="sb-br-row"><span class="sb-br-name"><span class="sb-br-dot" style="background:${BD[br]||'#9a94b8'}"></span>${br}</span><span class="sb-br-val">${fe(bv,0)}<span class="sb-br-pct ${bg>=0?'up-c':'dn-c'}">${fp(bp)}</span></span></div>`;
-  }).join('');
-}
+// ── INICIO · HÉROE ────────────────────────────────────────────────────────────
+// El patrimonio total incluye la liquidez a propósito: la pregunta que responde
+// es «¿cuánto tengo?», no «¿cuánto tengo en mercado?». El desglose invertido /
+// líquido va justo debajo, en pequeño, para quien quiera esa segunda lectura.
+const CLP={fondo:'Fondos',cripto:'Cripto',metal:'Metales',accion:'Acciones',liquidez:'Liquidez'};
 
-function rKpis(){
+function rHero(){
   const t=tv(),c=tc(),g=t-c,pct=c>0?(g/c)*100:0;
-  countUp(el('k-tot'),t,n=>fe(n));el('k-cost').textContent=fe(c);
-  el('k-pos').textContent=assets.filter(a=>a.cat!=='liquidez').length+' posiciones activas';
-  const badgeEl=el('k-pnlbadge');
-  badgeEl.textContent=fp(pct);
-  badgeEl.className='kpi-badge '+(g>=0?'up':'dn');
-  badgeEl.style.fontSize='12px';badgeEl.style.padding='2px 8px';
-  el('k-pnleuro').textContent=(g>=0?'+':'')+fe(g);
-  el('k-pnleuro').className='';
-  el('k-pnleuro').style.color=g>=0?'var(--up)':'var(--dn)';
-  const pnlEl=el('k-pnl');countUp(pnlEl,g,n=>(n>=0?'+':'')+fe(n));pnlEl.className='kpi-val '+(g>=0?'up':'dn');
-  el('k-pnlsub').innerHTML=`<span class="kpi-badge ${g>=0?'up':'dn'}">${fp(pct)}</span> sobre lo invertido`;
-  el('k-pnlsub').className='kpi-sub '+(g>=0?'up':'dn');
-  // Hoy (variación intradía de la cartera)
-  const day=tDay(),dEl=el('k-day'),dsEl=el('k-daysub');
-  if(day){countUp(dEl,day.abs,n=>(n>=0?'+':'')+fe(n));dEl.className='kpi-val '+(day.abs>=0?'up':'dn');dEl.style.fontSize='18px';dsEl.innerHTML=`<span class="kpi-badge ${day.abs>=0?'up':'dn'}">${fp(day.pct)}</span> en el día`;dsEl.className='kpi-sub';}
-  else{dEl.textContent='—';dEl.dataset.v='';dEl.className='kpi-val';dEl.style.fontSize='18px';dsEl.textContent='Sin datos intradía';dsEl.className='kpi-sub';}
-  // Mejor / Peor: por movimiento de HOY si hay datos intradía (la vista día a día);
-  // si no, por rentabilidad total como respaldo.
-  const dayRanked=assets.filter(a=>a.cat!=='liquidez').map(a=>({a,d:dayChg(a)})).filter(x=>x.d&&isFinite(x.d.pct)).sort((x,y)=>y.d.pct-x.d.pct);
-  const bwLbl=el('k-bw-lbl');
-  let ranked,sufijo;
-  if(dayRanked.length>=2){ranked=dayRanked.map(x=>({a:x.a,p:x.d.pct}));sufijo=' hoy';if(bwLbl)bwLbl.textContent='Hoy · mejor / peor';}
-  else{ranked=assets.map(a=>{const c2=cs(a),v=vl(a);return{a,p:c2>0&&v!=null?(v-c2)/c2*100:null};}).filter(x=>x.p!=null).sort((a,b)=>b.p-a.p);sufijo=' total';if(bwLbl)bwLbl.textContent='Mejor / Peor';}
-  if(ranked.length){
-    const b=ranked[0];el('k-best').textContent=b.a.name;el('k-best').className='kpi-val '+(b.p>=0?'up':'dn');el('k-bestp').textContent=fp(b.p)+sufijo+' ↑';el('k-bestp').className='kpi-sub '+(b.p>=0?'up':'dn');
-    const w=ranked[ranked.length-1];el('k-worst').textContent=w.a.name;el('k-worst').className='kpi-val '+(w.p>=0?'up':'dn');el('k-worstp').textContent=fp(w.p)+sufijo+' ↓';el('k-worstp').className='kpi-sub '+(w.p>=0?'up':'dn');
-  }
-  // Barra de asignación del héroe: composición por clase de activo de un vistazo
+  countUp(el('h-tot'),t,n=>fe(n));
+
+  const badge=el('h-pnlbadge');
+  badge.textContent=fp(pct);
+  badge.className='hero-badge '+(g>0?'up':g<0?'dn':'nu');
+  const eur=el('h-pnleur');
+  eur.textContent=(g>=0?'+':'')+fe(g);
+  eur.className='hero-eur '+(g>0?'up-c':g<0?'dn-c':'nu-c');
+
+  // «Hoy» se queda en el héroe: es una sola cifra y es la segunda pregunta que
+  // uno se hace al abrir. El detalle día a día por posición vive en las tablas.
+  const day=tDay(),dayEl=el('h-daytxt');
+  if(day){dayEl.textContent=(day.abs>=0?'+':'')+fe(day.abs,0)+' · '+fp(day.pct);dayEl.className=day.abs>=0?'up-c':'dn-c';}
+  else{dayEl.textContent='sin datos';dayEl.className='';}
+
+  // Invertido vs líquido: la liquidez ya no necesita su propio héroe gigante.
+  const liq=assets.filter(a=>a.cat==='liquidez').reduce((s,a)=>s+(vl(a)||0),0);
+  el('h-inv').textContent=fe(t-liq,0);
+  el('h-liq').textContent=fe(liq,0);
+  const nbr=new Set(assets.map(a=>a.broker||'Otro')).size;
+  el('h-note').textContent=assets.length+' posiciones · '+nbr+(nbr===1?' broker':' brokers');
+
+  // Barra de composición
   const cats={};for(const a of assets){const v=vl(a);if(!v||v<=0)continue;cats[a.cat]=(cats[a.cat]||0)+v;}
   const ck=Object.keys(cats).sort((x,y)=>cats[y]-cats[x]);
-  const ab=el('alloc-bar');
-  if(ab)ab.innerHTML=(t>0&&ck.length)
-    ?'<div class="alloc-track">'+ck.map(k=>`<div class="alloc-seg" style="width:${(cats[k]/t*100).toFixed(2)}%;background:${CC[k].s}" title="${CL[k]} · ${fe(cats[k],0)} · ${(cats[k]/t*100).toFixed(1)}%"></div>`).join('')
-     +'</div><div class="alloc-legend">'+ck.map(k=>`<span class="alloc-key"><i style="background:${CC[k].s}"></i>${CL[k]} <b>${(cats[k]/t*100).toFixed(0)}%</b></span>`).join('')+'</div>'
-    :'';
+  el('h-comp').innerHTML=(t>0&&ck.length)
+    ? ck.map(k=>`<div class="comp-seg" style="width:${(cats[k]/t*100).toFixed(2)}%;background:${CC[k].s}" title="${CLP[k]||k} · ${fe(cats[k],0)} · ${(cats[k]/t*100).toFixed(1)}%"></div>`).join('')
+    : '';
 }
 
-function rBrStrip(){
-  const brokers=['all',...new Set(assets.map(a=>a.broker||'Otro'))];
-  el('br-strip').innerHTML=brokers.map(br=>{
-    const lbl=br==='all'?'Todos':br;
-    const bv=br==='all'?tv():assets.filter(a=>(a.broker||'Otro')===br).reduce((s,a)=>s+(vl(a)||0),0);
-    const dot=br!=='all'?`<span class="bdot" style="background:${BD[br]||'#9a94b8'}"></span>`:'';
-    return`<button class="brtab ${brFilter===br?'on':''}" data-br="${br}" onclick="fBr('${br}')">${dot}${lbl} <span class="bv">${fe(bv,0)}</span></button>`;
+// ── INICIO · BANDAS POR CLASE ─────────────────────────────────────────────────
+// Una banda por clase de activo; al pulsar una se despliega su tabla completa.
+// Sustituye a la tabla única con pastillas de filtro: el reparto se ve sin
+// pulsar nada y el detalle se pide clase a clase.
+let openBand=null;
+
+function toggleBand(k){openBand=openBand===k?null:k;rBands();}
+
+function rBands(){
+  const cont=el('h-bands');if(!cont)return;
+  const t=tv();
+  const orden=['fondo','liquidez','metal','accion','cripto'];
+  const grupos=orden
+    .map(k=>({k,items:assets.filter(a=>a.cat===k)}))
+    .filter(gr=>gr.items.length)
+    .map(gr=>{
+      const v=gr.items.reduce((s,a)=>s+(vl(a)||0),0);
+      const c=gr.items.reduce((s,a)=>s+cs(a),0);
+      return{...gr,v,c,g:v-c,pct:t>0?v/t*100:0};
+    })
+    .sort((a,b)=>b.v-a.v);
+
+  if(!grupos.length){cont.innerHTML='<div class="band-empty">Aún no hay posiciones. Pulsa «+ Añadir posición» para empezar.</div>';return;}
+
+  const maxPct=Math.max(...grupos.map(gr=>gr.pct))||1;
+
+  cont.innerHTML=grupos.map(gr=>{
+    const on=openBand===gr.k,cc=CC[gr.k];
+    const gc=gr.g>0?'up-c':gr.g<0?'dn-c':'nu-c';
+    const gp=gr.c>0?(gr.g/gr.c)*100:null;
+    const banda=`<button class="band ${on?'on':''}" onclick="toggleBand('${gr.k}')" aria-expanded="${on}" title="${on?'Ocultar':'Ver'} las posiciones de ${CLP[gr.k]}">
+        <span class="band-dot" style="background:${cc.s}"></span>
+        <span class="band-name">${CLP[gr.k]}</span>
+        <span class="band-val">${fe(gr.v,0)}</span>
+        <span class="band-pct">${gr.pct.toFixed(1)}%</span>
+        <span class="band-bar"><span class="band-fill" style="width:${(gr.pct/maxPct*100).toFixed(1)}%;background:${cc.s};opacity:.55"></span></span>
+        <span class="band-pnl ${gc}">${(gr.g>=0?'+':'')+fe(gr.g,0)}${gp!=null?` <span style="font-weight:600;font-size:11px;opacity:.75">${fp(gp)}</span>`:''}</span>
+        <span class="band-ct">${gr.items.length}</span>
+        <span class="band-chev"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></span>
+      </button>`;
+    if(!on)return banda;
+    const filas=[...gr.items].sort((a,b)=>(vl(b)||0)-(vl(a)||0)).map(a=>rowHTML(a,t)).join('');
+    return banda+`<div class="band-body"><div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Activo</th><th class="r">Cantidad</th><th class="r">Precio</th><th class="r">Día</th>
+        <th class="c" title="Cierre diario del último mes (cripto: 7 días)">Tendencia</th>
+        <th class="r">Valor</th><th class="r">P&amp;L</th><th class="r">Peso</th><th></th>
+      </tr></thead>
+      <tbody>${filas}</tbody>
+    </table></div></div>`;
   }).join('');
 }
 
-function rTable(){
-  const t=tv(),tbody=el('ptbody');
-  let filtered=assets;
-  if(catFilter!=='all')filtered=filtered.filter(a=>a.cat===catFilter);
-  if(brFilter!=='all')filtered=filtered.filter(a=>(a.broker||'Otro')===brFilter);
-  if(!filtered.length){tbody.innerHTML=`<tr><td class="empty-td" colspan="9">Sin posiciones en esta vista.</td></tr>`;return;}
-
-  filtered=[...filtered].sort((a,b)=>{
-    const dir=curSort.dir==='asc'?1:-1;
-    if(curSort.col==='pnl'){const ga=gn(a)??-Infinity,gb=gn(b)??-Infinity;return(gb-ga)*dir;}
-    if(curSort.col==='dia'){const da=dayChg(a)?.pct??-Infinity,db=dayChg(b)?.pct??-Infinity;return(db-da)*dir;}
-    return((vl(b)||0)-(vl(a)||0))*dir;
-  });
-
-  ['pnl','dia','peso'].forEach(c=>{const th=el('th-'+c);if(!th)return;th.classList.remove('sort-asc','sort-desc');if(curSort.col===c)th.classList.add(curSort.dir==='asc'?'sort-asc':'sort-desc');});
-
-  tbody.innerHTML=filtered.map(a=>{
+// Devuelve la fila <tr> de una posición. Extraída de la antigua rTable() para
+// poder reutilizarla dentro de cada banda sin duplicar el marcado.
+function rowHTML(a,t){
     const p=px(a),v=vl(a),c=cs(a),g=gn(a),gp=c>0&&g!=null?(g/c)*100:null;
     const pct=t>0&&v!=null?(v/t)*100:0;
     const dc=dayChg(a),sp=sparkOf(a);
@@ -1635,13 +1476,7 @@ function rTable(){
         <button class="abt del" onclick="delA(${a.id})"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M3 4h10M6 4V2h4v2M5 4l1 9h4l1-9" stroke-linecap="round"/></svg></button>
       </div></td>
     </tr>`;
-  }).join('');
 }
-
-// ── FILTERS / SORT ────────────────────────────────────────────────────────────
-function fCat(c,btn){catFilter=c;document.querySelectorAll('.ctab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');rTable();}
-function fBr(b){brFilter=b;document.querySelectorAll('.brtab').forEach(x=>x.classList.toggle('on',x.dataset.br===b));rTable();}
-function setSort(col){curSort.dir=curSort.col===col?(curSort.dir==='desc'?'asc':'desc'):'desc';curSort.col=col;rTable();}
 
 // ── CHARTS PAGE ───────────────────────────────────────────────────────────────
 function renderCharts(){
@@ -1858,20 +1693,46 @@ function renderTWR(){
   const days=(tw[tw.length-1].ts-tw[0].ts)/86400000;
   const ann=days>=60?(Math.pow(tw[tw.length-1].idx/100,365/days)-1)*100:null;
   const mdd=twrMaxDD(tw);
+
+  // ── Comparación con el S&P 500 ──
+  // El índice se rebasa a 100 en la fecha del PRIMER snapshot, igual que el TWR,
+  // para que las dos líneas arranquen del mismo punto y sean comparables. Se
+  // compara contra el TWR (no contra el valor de la cartera) precisamente porque
+  // el TWR ya descuenta las aportaciones: sin eso, meter dinero parecería
+  // rentabilidad y la cartera «batiría» al índice sólo por ahorrar más.
+  const b0=benchAt(tw[0].ts);
+  let bpts=null,bTot=null;
+  if(b0){
+    bpts=tw.map(p=>{const b=benchAt(p.ts);return b?+(b/b0*100).toFixed(2):null;});
+    const last=[...bpts].reverse().find(x=>x!=null);
+    if(last!=null)bTot=last-100;
+  }
+  const dif=bTot!=null?twrTot-bTot:null;
+
   stats.innerHTML=[
     ['TWR del periodo',fp(twrTot),twrTot>=0?'up':'dn'],
     ann!=null?['TWR anualizado',fp(ann),ann>=0?'up':'dn']:null,
+    bTot!=null?['S&P 500 (€) mismo periodo',fp(bTot),bTot>=0?'up':'dn']:null,
+    dif!=null?['Diferencia',(dif>=0?'+':'')+dif.toFixed(2)+' pp',dif>=0?'up':'dn']:null,
     ['Aportado neto',(apTot>=0?'+':'')+fe(apTot,0),''],
     ['Ganancia de mercado',(mkt>=0?'+':'')+fe(mkt,0),mkt>=0?'up':'dn'],
     ['Máx. caída',fp(mdd),mdd<-0.05?'dn':''],
   ].filter(Boolean).map(x=>`<div><div class="hstat-lbl">${x[0]}</div><div class="hstat-val ${x[2]}">${x[1]}</div></div>`).join('');
+
+  const leg=el('twr-leg');
+  if(leg)leg.innerHTML='<span class="lgk"><i style="background:'+(tw[tw.length-1].idx>=100?'#0ea97d':'#f0537c')+'"></i>Tu cartera</span>'
+    +(bpts?'<span class="lgk"><i style="background:#6d7df6"></i>S&amp;P 500 en €</span>':'<span class="lgk lgk-off">S&amp;P 500 · aún sin datos del índice</span>');
+
   const ctx=el('evo-twr').getContext('2d');
   const up2=tw[tw.length-1].idx>=100,lc=up2?'#0ea97d':'#f0537c';
   const g=ctx.createLinearGradient(0,0,0,180);g.addColorStop(0,up2?'rgba(14,169,125,.16)':'rgba(240,83,124,.16)');g.addColorStop(1,'rgba(0,0,0,0)');
-  chartInstances['evo-twr']=new Chart(ctx,{type:'line',data:{labels:tw.map(p=>fd(p.ts)),datasets:[
-    {label:'TWR',data:tw.map(p=>+p.idx.toFixed(2)),borderColor:lc,borderWidth:2,backgroundColor:g,fill:true,tension:.35,pointRadius:2.5,pointHoverRadius:5,pointBackgroundColor:lc},
+  const ds=[
+    {label:'Tu cartera',data:tw.map(p=>+p.idx.toFixed(2)),borderColor:lc,borderWidth:2,backgroundColor:g,fill:true,tension:.35,pointRadius:2.5,pointHoverRadius:5,pointBackgroundColor:lc},
     {label:'Base',data:tw.map(()=>100),borderColor:'rgba(39,33,74,.28)',borderWidth:1.2,borderDash:[3,3],fill:false,pointRadius:0},
-  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{...tip,filter:c=>c.datasetIndex===0,callbacks:{label:c=>` índice ${c.raw}  ·  ${fp(c.raw-100)}`}}},scales:{x:{grid:{color:'rgba(39,33,74,.05)',drawTicks:false},border:{display:false},ticks:{color:'#9d97b8',font:{family:"'Manrope'",size:10},padding:4}},y:{grid:{color:'rgba(39,33,74,.06)',drawTicks:false},border:{display:false},ticks:{color:'#9d97b8',font:{family:"'Manrope'",size:10},padding:4}}},animation:{duration:400}}});
+  ];
+  if(bpts)ds.push({label:'S&P 500 en €',data:bpts,borderColor:'#6d7df6',borderWidth:1.8,borderDash:[5,3],fill:false,tension:.35,pointRadius:0,pointHoverRadius:4,spanGaps:true});
+  chartInstances['evo-twr']=new Chart(ctx,{type:'line',data:{labels:tw.map(p=>fd(p.ts)),datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{...tip,filter:c=>c.datasetIndex!==1,callbacks:{label:c=>` ${c.dataset.label}: ${c.raw}  ·  ${fp(c.raw-100)}`}}},scales:{x:{grid:{color:'rgba(39,33,74,.05)',drawTicks:false},border:{display:false},ticks:{color:'#9d97b8',font:{family:"'Manrope'",size:10},padding:4}},y:{grid:{color:'rgba(39,33,74,.06)',drawTicks:false},border:{display:false},ticks:{color:'#9d97b8',font:{family:"'Manrope'",size:10},padding:4}}},animation:{duration:400}}});
 }
 
 function renderEvo(){
@@ -2056,7 +1917,6 @@ const wlLive=w=>{const t=up(w.ticker);return !!(t&&(wlpxNat[t]||wlpx[t]!=null||l
 const wlHit=w=>{const p=wlprice(w),tar=w.target;return p!=null&&tar!=null&&p<=tar;};
 
 function renderWL(){
-  el('sn-wct').textContent=wl.length;
   const grid=el('wl-grid'),emp=el('wl-empty');
   if(!wl.length){grid.innerHTML='';emp.style.display='block';return;}
   emp.style.display='none';
@@ -2104,6 +1964,45 @@ async function fetchWLPx(){
     try{const q=await yfQuote(YF_DIRECT[t]||t);const r=await fxToEUR(q.cur);wlpx[t]=q.p*r;wlpxNat[t]={eur:q.p*r,raw:q.p,cur:q.cur};
       const c=up(q.cur||'EUR');if(c!=='EUR'&&!(fxRates[c]>0)&&r>0)fxRates[c]=r;}catch(e){}
   })));
+}
+
+// ── BENCHMARK · S&P 500 EN EUROS ─────────────────────────────────────────────
+// La serie la publica update_precios.py ya convertida a euros con el cambio del
+// BCE de cada día. En euros y no en dólares porque la cartera se mide en euros
+// y las posiciones en el índice son sin cobertura: comparar contra el índice en
+// dólares escondería el efecto divisa, que sí se sufre.
+let bench=null;   // {d:['2025-01-02',…], c:[4321.12,…]}
+
+async function loadBenchmark(){
+  const urls=[];
+  if(BENCH_URL)urls.push(BENCH_URL);
+  if(location.protocol!=='file:')urls.push('benchmark.json');
+  for(const base of urls){
+    try{
+      const r=await fetch(base+(base.includes('?')?'&':'?')+'t='+Date.now(),{cache:'no-store'});
+      if(!r.ok)continue;
+      const d=await r.json();
+      const s=d?.sp500_eur;
+      if(!s||!Array.isArray(s.d)||!Array.isArray(s.c)||s.d.length!==s.c.length||!s.d.length)continue;
+      bench=s;
+      return true;
+    }catch(e){}
+  }
+  return false;
+}
+
+// Cierre del índice en la fecha dada, o el último anterior disponible (el índice
+// no cotiza fines de semana ni festivos, y los snapshots sí caen en esos días).
+function benchAt(ts){
+  if(!bench)return null;
+  const f=new Date(ts).toISOString().slice(0,10);
+  const d=bench.d;
+  let lo=0,hi=d.length-1,res=-1;
+  while(lo<=hi){
+    const mid=(lo+hi)>>1;
+    if(d[mid]<=f){res=mid;lo=mid+1;}else{hi=mid-1;}
+  }
+  return res>=0?bench.c[res]:null;
 }
 
 // ── PRECIOS · MOTOR v5.3 ─────────────────────────────────────────────────────
@@ -2160,10 +2059,6 @@ async function loadFeed(){
         if(sym){const pe=d.precios[sym];wlpx[t]=pe.eur;wlpxNat[t]={eur:pe.eur,raw:pe.raw,cur:pe.cur};}
       }
       if(n){
-        // marca de "última actualización" con la hora real del feed (fuente fiable),
-        // sin esperar a los proxies en vivo que pueden tardar o colgarse
-        const luEl=el('sb-lu');
-        if(luEl)luEl.textContent='act. '+new Date(ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
         svSt();render();
       }
       return n;
@@ -2329,6 +2224,9 @@ async function fetchAll(manual=false){
   fxCache={EUR:1};
   try{
     await loadFeed();   // 1º el feed del repo: fiable y sin proxies; pinta al momento
+    // El índice de referencia se carga en paralelo y sin bloquear: si falla, el
+    // TWR se dibuja igual, sólo que sin la línea de comparación.
+    if(!bench)loadBenchmark().then(ok=>{if(ok&&curPage==='evolucion')renderTWR();}).catch(()=>{});
     // Tipos de cambio de todas las divisas usadas (posiciones y watchlist) que el
     // feed no trajera. Frankfurter tiene CORS abierto, así que no necesita proxy.
     const needCcy=new Set();
@@ -2361,7 +2259,6 @@ async function fetchAll(manual=false){
     console.groupEnd();
     if(manual)toast(errs.length?`${autos.length-errs.length} precios OK · ${errs.length} con aviso ⚠ (detalle: consola F12)`:'Precios actualizados ✓');
   }finally{
-    el('sb-lu').textContent='act. '+new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
     el('ref-ic').classList.remove('spin');
     render();
     if(curPage==='graficos')renderCharts();
@@ -2623,7 +2520,6 @@ function renderAports(){
 
 function renderHist(){
   renderAports();
-  el('sn-hct').textContent = trades.length;
   const tbody  = el('hist-tbody');
   const empty  = el('hist-empty');
   const totRes = trades.reduce(function(s,t){ return s + t.result; }, 0);
