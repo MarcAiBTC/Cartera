@@ -43,6 +43,19 @@ button:focus:not(:focus-visible){outline:none}
 .sb-title{font-family:var(--disp);font-size:15px;font-weight:700;letter-spacing:-.3px}
 .sb-tag{font-size:9px;color:var(--fg3);margin-left:auto;letter-spacing:.4px;text-transform:uppercase}
 
+/* ── SELECTOR DE PERFIL ──
+   Un único CSS para todos los perfiles: lo que cambia es el TEXTO (data-driven),
+   nunca el color ni el tema. Un tema por perfil obligaría a mantener dos
+   estéticas en paralelo; así cualquier retoque futuro aplica a los dos a la vez. */
+.sb-perfil{padding:11px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:7px}
+.sb-perfil-lbl{font-size:9px;color:var(--fg3);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.pf-seg{display:flex;gap:3px;background:var(--bg2);border:1px solid var(--line2);border-radius:9px;padding:3px}
+.pf-seg button{flex:1;border:0;background:transparent;color:var(--fg2);font-family:var(--sans);font-size:11px;font-weight:700;padding:6px 4px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s}
+.pf-seg button:hover:not(.on){color:var(--fg0)}
+.pf-seg button.on{background:var(--bg1);color:var(--blue);box-shadow:var(--elev1)}
+.pf-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:99px;font-size:10px;font-weight:700;background:var(--bg2);color:var(--fg0);border:1px solid var(--line2);white-space:nowrap;cursor:default}
+.pf-chip i{width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--purple));flex-shrink:0}
+
 /* sidebar KPIs */
 .sb-kpis{padding:14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
 .sb-kpi-row{display:flex;align-items:baseline;justify-content:space-between}
@@ -476,6 +489,12 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
     <span class="sb-title">Cartera</span>
     <span class="sb-tag">v5</span>
   </div>
+  <!-- Perfil activo · los botones los pinta renderPerfil() a partir de PERFILES,
+       así añadir un tercer perfil no toca ni una línea de HTML ni de CSS. -->
+  <div class="sb-perfil">
+    <div class="sb-perfil-lbl">Perfil</div>
+    <div class="pf-seg" id="pf-seg"></div>
+  </div>
   <div class="sb-kpis">
     <div>
       <div class="sb-kpi-lbl" style="font-size:9px;color:var(--fg3);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin-bottom:5px">Valor total</div>
@@ -615,6 +634,9 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
       </button>
     </div>
     <div class="tb-right">
+      <!-- Perfil siempre visible en cabecera: evita meter una posición en la
+           cartera equivocada. Sólo cambia el texto, nunca el estilo. -->
+      <div class="pf-chip" id="pf-chip" title="Perfil activo"><i></i><span id="pf-chip-txt">—</span></div>
       <div class="feed-chip" id="feed-chip"><i></i>cargando precios…</div>
       <button class="btn btn-ghost" onclick="exportXLSX()" title="Exportar a Excel">
         <svg fill="none" stroke="currentColor" viewBox="0 0 16 16" width="11" height="11" stroke-width="1.5" stroke-linecap="round"><path d="M3 12h10M8 3v7M5 7l3 3 3-3"/></svg>
@@ -1157,8 +1179,41 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
 <div class="toast" id="toast"></div>
 
 <script>
+// ── PERFILES ──────────────────────────────────────────────────────────────────
+// Dos carteras 100% independientes dentro de la misma app y el mismo despliegue.
+// Cada perfil añade un sufijo a las claves de localStorage; Marc va SIN sufijo
+// para no migrar ni renombrar sus datos existentes.
+//   marc → cv9 / cf1        leti → cv9_leti / cf1_leti
+// Regla: ninguna clave de datos se escribe literal fuera de aquí. Toda clave
+// nueva debe declararse como K('...') o quedará compartida entre perfiles.
+const PERFILES={marc:'',leti:'_leti'};
+const PERFIL_LBL={marc:'Marc',leti:'Leti'};
+// Global a propósito: es la selección de perfil, no un dato de cartera.
+const PERFIL_SK='perfil_activo';
+const esPerfil=p=>Object.prototype.hasOwnProperty.call(PERFILES,p);
+// Un valor corrupto o desconocido cae a 'marc' en vez de fabricar 'cv9undefined'.
+function perfilActivo(){const p=localStorage.getItem(PERFIL_SK);return esPerfil(p)?p:'marc';}
+function perfilNombre(p){return PERFIL_LBL[p||perfilActivo()]||PERFIL_LBL.marc;}
+function K(base){return base+PERFILES[perfilActivo()];}
+function setPerfil(p){
+  if(!esPerfil(p)||p===perfilActivo())return;
+  localStorage.setItem(PERFIL_SK,p);
+  // Recarga deliberada: repintar a mano dejaría vivos los arrays de posiciones,
+  // las instancias de gráficos y los listeners del perfil anterior — la vía más
+  // probable de fuga de datos entre perfiles. En una SPA sin backend es instantáneo.
+  location.reload();
+}
+function renderPerfil(){
+  const act=perfilActivo(),seg=el('pf-seg');
+  if(seg)seg.innerHTML=Object.keys(PERFILES).map(p=>
+    '<button class="'+(p===act?'on':'')+'" aria-pressed="'+(p===act)+'" onclick="setPerfil(\''+p+'\')">'+perfilNombre(p)+'</button>').join('');
+  const txt=el('pf-chip-txt');
+  if(txt)txt.textContent='Perfil · '+perfilNombre(act);
+  document.title='Cartera '+perfilNombre(act);
+}
+
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
-const SK='cv9';
+const SK=K('cv9');
 const CC={
   fondo:   {s:'#6d7df6',b:'#e8ebfe',t:'#4553d4'},
   cripto:  {s:'#ff8e42',b:'#ffeadb',t:'#c05c14'},
@@ -2616,6 +2671,11 @@ function renderHist(){
 function exportJSON(){
   const data = {
     version:   2,
+    // Perfil de origen: lo lee loadJSONFile() para avisar antes de sobrescribir
+    // la cartera equivocada, y sirve de control visual al actualizar el secret
+    // POSICIONES_JSON (que debe salir siempre del perfil Marc).
+    perfil:    perfilActivo(),
+    perfilNombre: perfilNombre(),
     exportedAt: new Date().toISOString(),
     assets:    assets,
     snaps:     snaps,
@@ -2628,10 +2688,10 @@ function exportJSON(){
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'Cartera_Marc_' + new Date().toISOString().slice(0,10) + '.json';
+  a.download = 'Cartera_' + perfilNombre() + '_' + new Date().toISOString().slice(0,10) + '.json';
   a.click();
   URL.revokeObjectURL(a.href);
-  toast('Cartera guardada ✓');
+  toast('Cartera de ' + perfilNombre() + ' guardada ✓');
 }
 
 function importJSON(){
@@ -2641,6 +2701,14 @@ function importJSON(){
 // Copia el JSON de posiciones para el secret POSICIONES_JSON del informe diario.
 // Si cambias la cartera y no actualizas el secret, el correo sigue con la vieja.
 async function copySecretJSON(){
+  // El informe diario es exclusivo de Marc: el workflow lee del secret, no de
+  // localStorage, así que Leti es invisible para el email por construcción. El
+  // único riesgo es humano — pegar en el secret un JSON exportado desde Leti.
+  if(perfilActivo()!=='marc' && !confirm(
+      '⚠ El informe diario por email es solo de la cartera de Marc, y el perfil '
+    + 'activo es «' + perfilNombre() + '».\n\n'
+    + 'Si pegas este JSON en el secret POSICIONES_JSON, el correo pasará a mostrar '
+    + 'la cartera de ' + perfilNombre() + '.\n\n¿Copiar de todas formas?')) return;
   const txt=JSON.stringify({assets});
   try{
     await navigator.clipboard.writeText(txt);
@@ -2661,7 +2729,23 @@ function loadJSONFile(event){
       if(!data.assets || !Array.isArray(data.assets)){
         toast('Archivo JSON no válido'); return;
       }
-      if(!confirm('¿Cargar la cartera desde el archivo? Se reemplazarán los datos actuales.')) return;
+      // Restaurar un backup de otro perfil borraría la cartera activa: el aviso
+      // nombra siempre origen y destino, y es explícito cuando no coinciden.
+      const org  = esPerfil(data.perfil) ? data.perfil : null;
+      const dest = perfilNombre();
+      let msg;
+      if(org && org !== perfilActivo())
+        msg = '⚠ ATENCIÓN · este backup es del perfil «' + perfilNombre(org) + '», '
+            + 'pero el perfil activo es «' + dest + '».\n\n'
+            + 'Si continúas, la cartera de ' + dest + ' se reemplazará por la de '
+            + perfilNombre(org) + ' y se perderá.\n\n¿Continuar de todas formas?';
+      else if(org)
+        msg = '¿Cargar la cartera del perfil «' + dest + '» desde el archivo? '
+            + 'Se reemplazarán los datos actuales de ' + dest + '.';
+      else
+        msg = 'Este archivo no indica perfil de origen (backup anterior a los perfiles).\n\n'
+            + 'Se cargará en el perfil activo «' + dest + '», reemplazando sus datos.\n\n¿Continuar?';
+      if(!confirm(msg)) return;
       assets   = data.assets   || [];
       snaps    = data.snaps    || [];
       wl       = data.wl       || [];
@@ -2731,6 +2815,7 @@ function exportXLSX(){
   const totH = trades.reduce(function(s,t){ return s+t.result; },0);
   const sd = [
     ['RESUMEN DE CARTERA',''],['',''],
+    ['Perfil', perfilNombre()],
     ['Fecha exportación', new Date().toLocaleDateString('es-ES')],
     ['Valor total (€)', r2(tot)],
     ['Capital invertido (€)', r2(cost)],
@@ -2749,15 +2834,17 @@ function exportXLSX(){
   XLSX.utils.book_append_sheet(wb, ws3, 'Resumen');
 
   const fecha = new Date().toISOString().slice(0,10);
-  XLSX.writeFile(wb, 'Cartera_Marc_' + fecha + '.xlsx');
+  XLSX.writeFile(wb, 'Cartera_' + perfilNombre() + '_' + fecha + '.xlsx');
   toast('Excel descargado ✓');
 }
 
 // ── PLANIFICADOR DE CASHFLOW ──────────────────────────────────────────────────
-// Estado propio en localStorage bajo 'cf1', separado de cv9: un fallo aquí nunca
-// puede tocar las posiciones. Estructura: {meses:[{label,ingresos,gastos}],
-// pct:{dca,liq,res}, activos:[{n,w}]}.
-const CFK='cf1';
+// Estado propio en localStorage, en su propia clave y separado del de la cartera:
+// un fallo aquí nunca puede tocar las posiciones. Va namespaceado por perfil
+// porque son datos financieros personales (ingresos, gastos y ahorro reales) y
+// porque cfSyncActivos() precarga el plan DCA desde la cartera del perfil activo.
+// Estructura: {meses:[{label,ingresos,gastos}], pct:{dca,liq,res}, activos:[{n,w}]}.
+const CFK=K('cf1');
 const CF_COLORS={dca:'#6d7df6',liq:'#9a94b8',res:'#e9a23b'};
 const CF_LBL={dca:'DCA',liq:'Liquidez',res:'Reserva satélites'};
 const CF_M=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -2963,7 +3050,7 @@ function cfDelMes(i){cf.meses.splice(i,1);cfSave();renderCF();}
 function cfAddActivo(){cf.activos.push({n:'',w:0});cfSave();renderCF();}
 function cfDelAct(i){cf.activos.splice(i,1);cfSave();renderCF();}
 
-// Precarga los activos del plan DCA desde la cartera (cv9), con peso inicial
+// Precarga los activos del plan DCA desde la cartera del perfil activo, con peso inicial
 // proporcional a su peso actual. La liquidez se excluye: no se le hace DCA.
 function cfSyncActivos(){
   const src=assets.filter(a=>a.cat!=='liquidez');
@@ -2976,7 +3063,7 @@ function cfSyncActivos(){
 
 let tt;function toast(msg){const t=el('toast');t.textContent=msg;t.className='toast on';clearTimeout(tt);tt=setTimeout(()=>t.className='toast',2500);}
 
-autoUpgradeAssets();render();fetchAll(false);
+renderPerfil();autoUpgradeAssets();render();fetchAll(false);
 </script>
 </body>
 </html>
