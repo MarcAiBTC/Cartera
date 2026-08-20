@@ -134,6 +134,27 @@ button:focus:not(:focus-visible){outline:none}
 .alloc-key i{width:9px;height:9px;border-radius:3px;display:inline-block}
 .alloc-key b{color:var(--fg0);font-weight:700;font-family:var(--disp)}
 
+/* ── LIQUIDEZ HERO ── reservas en efectivo, lo primero que se ve en Inicio */
+.liq-hero{display:grid;grid-template-columns:minmax(210px,300px) 1fr;gap:22px;margin:16px 20px 0;padding:18px 22px 18px 26px;background:var(--bg1);border:1px solid var(--line);border-radius:20px;box-shadow:var(--elev1);position:relative;overflow:hidden}
+.liq-hero::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--mint),var(--lilac))}
+.liq-main{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.liq-eyebrow{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--fg2)}
+.liq-dot{width:8px;height:8px;border-radius:50%;background:var(--mint);box-shadow:0 0 0 3px rgba(62,203,165,.18)}
+.liq-amount{font-family:var(--disp);font-size:34px;font-weight:700;letter-spacing:-1px;color:var(--fg0);line-height:1.02;margin:9px 0 5px}
+.liq-meta{font-size:11px;color:var(--fg3);line-height:1.5}
+.liq-meta strong{color:var(--fg1);font-weight:700}
+.liq-gauge{height:6px;background:var(--bg3);border-radius:99px;overflow:hidden;margin-top:13px}
+.liq-gauge-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--mint),var(--lilac));transition:width .55s cubic-bezier(.4,0,.2,1);min-width:3px}
+.liq-accounts{display:flex;flex-wrap:wrap;gap:9px;align-content:center;align-items:flex-start}
+.liq-acct{display:flex;flex-direction:column;gap:3px;padding:10px 13px;background:var(--bg2);border:1px solid var(--line);border-radius:13px;min-width:118px}
+.liq-acct-top{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--fg2);font-weight:600;max-width:150px}
+.liq-acct-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.liq-acct-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.liq-acct-val{font-family:var(--disp);font-size:15px;font-weight:700;color:var(--fg0);letter-spacing:-.3px}
+.liq-acct-ccy{font-size:9px;color:var(--fg3);font-weight:600;letter-spacing:.2px}
+.liq-empty{display:flex;align-items:center;font-size:11px;color:var(--fg3);line-height:1.6;padding:4px 0}
+@media(max-width:720px){.liq-hero{grid-template-columns:1fr;gap:16px}.liq-amount{font-size:28px}}
+
 /* broker chips */
 .br-strip{display:flex;align-items:center;gap:8px;padding:12px 20px 0;overflow-x:auto}
 .brtab{padding:6px 13px;font-size:11px;font-weight:600;color:var(--fg2);cursor:pointer;border:1px solid var(--line2);border-radius:99px;background:var(--bg1);font-family:var(--sans);transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:6px}
@@ -338,7 +359,7 @@ td{padding:11px 14px;vertical-align:middle}
 .wl-ticker{font-size:10px;color:var(--fg3)}
 .wl-acts{display:flex;gap:2px}
 .wl-pxs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
-.wl-px-lbl{font-size:9px;color:var(--fg3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px}
+.wl-px-lbl{font-size:9px;color:var(--fg3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:5px;display:flex;align-items:center;gap:6px;min-height:14px}
 .wl-px-val{font-family:var(--disp);font-size:16px;font-weight:700;color:var(--fg0);letter-spacing:-.3px}
 .wl-px-val.tgt{color:#b97f14}
 .wl-gap-row{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg2);border-radius:10px;margin-bottom:7px}
@@ -348,6 +369,12 @@ td{padding:11px 14px;vertical-align:middle}
 .wl-prog-fill{height:4px;border-radius:2px;transition:width .4s ease}
 .wl-notes{font-size:11px;color:var(--fg2);font-style:italic;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);line-height:1.5}
 .wl-empty{padding:48px;text-align:center;color:var(--fg3);font-size:11px;line-height:2}
+.wl-ccy{margin-left:5px;font-weight:700;color:var(--fg2);border:1px solid var(--line2);border-radius:5px;padding:1px 4px;font-size:8px;letter-spacing:.4px}
+.wl-src{display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:2px 6px;border-radius:99px}
+.wl-src.live{color:#0b7c5c;background:var(--up-bg)}
+.wl-src.live i{width:5px;height:5px;border-radius:50%;background:var(--up);box-shadow:0 0 0 2px rgba(14,169,125,.2)}
+.wl-src.man{color:var(--fg2);background:var(--bg3)}
+.wl-src.man i{width:5px;height:5px;border-radius:50%;background:var(--fg3)}
 
 
 /* ── HISTORIAL ── */
@@ -507,6 +534,10 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
       <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5"/><path d="M8 5.5v2.5l1.5 1" stroke-linecap="round"/></svg>
       Guardar snapshot
     </button>
+    <button class="nb" onclick="openBuyModal()">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M2 3h2l1.6 7.5h6.9L14 5.5H5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.6" cy="13" r="1"/><circle cx="11.6" cy="13" r="1"/></svg>
+      Registrar compra
+    </button>
     <button class="nb" onclick="openTradeModal()">
       <svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M4 8h8M10 5l3 3-3 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Registrar operación
@@ -603,6 +634,16 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
 
   <!-- ── RESUMEN PAGE ── -->
   <div class="page on" id="page-resumen">
+    <!-- Liquidez disponible · reservas en efectivo listas para invertir -->
+    <div class="liq-hero" id="liq-hero">
+      <div class="liq-main">
+        <div class="liq-eyebrow"><span class="liq-dot"></span>Liquidez disponible</div>
+        <div class="liq-amount" id="liq-total">—</div>
+        <div class="liq-meta"><strong id="liq-share">—</strong> de la cartera · lista para invertir</div>
+        <div class="liq-gauge"><div class="liq-gauge-fill" id="liq-gauge-fill" style="width:0"></div></div>
+      </div>
+      <div class="liq-accounts" id="liq-accounts"></div>
+    </div>
     <div class="kpi-strip">
       <div class="kpi" style="grid-column:span 2">
         <div class="kpi-lbl">Valor total</div>
@@ -710,6 +751,19 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         <div class="chart-block-sub">% de ganancia/pérdida sobre el capital invertido</div>
         <div class="ch300"><canvas id="g-pnl-bar"></canvas></div>
       </div>
+      <!-- Riesgo: métricas -->
+      <div class="chart-block">
+        <div class="chart-block-title">Riesgo de la cartera</div>
+        <div class="chart-block-sub">Concentración, volatilidad y caída máxima</div>
+        <div id="risk-tiles" style="display:grid;grid-template-columns:1fr 1fr;gap:16px 14px"></div>
+      </div>
+      <!-- Riesgo: dispersión -->
+      <div class="chart-block">
+        <div class="chart-block-title">Volatilidad vs rentabilidad</div>
+        <div class="chart-block-sub">Cada burbuja es una posición · tamaño = peso en cartera</div>
+        <div class="ch300"><canvas id="g-risk-scatter"></canvas></div>
+        <div class="no-data" id="risk-scatter-nodata" style="display:none;padding:16px">Sin datos de volatilidad aún: se calculan con las series del feed de precios.</div>
+      </div>
     </div>
   </div>
 
@@ -728,6 +782,13 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
           <div class="ep-title">Evolución del valor total</div>
           <div class="ep-sub">Valor de mercado vs capital invertido en el tiempo</div>
           <div class="ch240"><canvas id="evo-line"></canvas></div>
+        </div>
+        <div class="evo-panel full">
+          <div class="ep-title">Rentabilidad real · TWR</div>
+          <div class="ep-sub">Descuenta las aportaciones: mide solo lo que el mercado hace con tu dinero (índice base 100)</div>
+          <div class="hist-stats" id="twr-stats" style="margin-bottom:12px"></div>
+          <div class="ch180" id="twr-chart-wrap"><canvas id="evo-twr"></canvas></div>
+          <div class="no-data" id="twr-nodata" style="display:none">Se necesitan al menos 2 snapshots con fechas distintas.<br>Se guardan solos: uno al día, cada vez que abres la app con precios.</div>
         </div>
         <div class="evo-panel">
           <div class="ep-title">Precio histórico · 30 días</div>
@@ -805,6 +866,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         <div><div class="hstat-lbl">Resultado acumulado</div><div class="hstat-val" id="h-total-pnl">—</div></div>
         <div><div class="hstat-lbl">Ganadoras</div><div class="hstat-val up" id="h-wins">0</div></div>
         <div><div class="hstat-lbl">Perdedoras</div><div class="hstat-val dn" id="h-losses">0</div></div>
+        <div><div class="hstat-lbl">Aportado este año</div><div class="hstat-val" id="h-aport-yr">—</div></div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost" onclick="exportXLSX()" style="padding:5px 11px;font-size:11px">
@@ -829,6 +891,16 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
     <div class="hist-empty" id="hist-empty">
       Sin operaciones registradas todavía.<br>
       Cuando cierres una posición, regístrala aquí para llevar el historial completo.
+    </div>
+    <div class="sec-head" style="border-top:1px solid var(--line)">
+      <span class="sec-title">Aportaciones registradas · compras DCA</span>
+      <button class="btn btn-ghost" onclick="openBuyModal()" style="padding:4px 10px;font-size:11px">+ Registrar compra</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Activo</th><th class="r">Cantidad</th><th class="r">Precio/u</th><th class="r">Importe (€)</th><th></th></tr></thead>
+        <tbody id="aport-tbody"></tbody>
+      </table>
     </div>
   </div>
 
@@ -877,11 +949,16 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         <div class="target-panel">
           <div class="tp-head">
             <span class="tp-title">Desglose DCA por activo</span>
-            <div style="display:flex;gap:6px">
+            <div style="display:flex;gap:6px" id="cf-act-btns">
               <button class="btn btn-ghost" onclick="cfSyncActivos()" style="padding:4px 9px;font-size:11px" title="Precarga la lista con los activos de tu cartera (pesos según su peso actual)">⇄ Sincronizar desde cartera</button>
               <button class="btn btn-ghost" onclick="cfAddActivo()" style="padding:4px 9px;font-size:11px">+ Activo</button>
             </div>
           </div>
+          <div class="dist-toggle" style="margin:10px 16px 2px">
+            <button class="dtab" id="cf-modo-manual" onclick="cfSetModo('manual')">Pesos manuales</button>
+            <button class="dtab" id="cf-modo-obj" onclick="cfSetModo('objetivo')">Auto → objetivo</button>
+          </div>
+          <div id="cf-modo-hint" style="padding:2px 16px 6px;font-size:10px;color:var(--fg3);line-height:1.6"></div>
           <div class="tbl-wrap">
             <table>
               <thead><tr><th>Activo</th><th class="r">Peso</th><th class="r">€ / mes</th><th class="r">€ / semana</th><th></th></tr></thead>
@@ -949,6 +1026,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         <select class="fi" id="a-ccy" onchange="updCP()">
           <option value="EUR">EUR €</option>
           <option value="USD">USD $</option>
+          <option value="CHF">CHF</option>
         </select>
       </div>
     </div>
@@ -971,19 +1049,49 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
 </div>
 </div>
 
+<!-- BUY MODAL (aportación DCA) -->
+<div class="veil" id="ov-b">
+<div class="modal">
+  <div class="mh"><span class="mt">Registrar compra</span><button class="mx" onclick="closeBuyModal()"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-width="2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <div class="mb">
+    <div class="field"><label class="fl">Activo</label>
+      <select class="fi" id="b-asset" onchange="updBuyP()"></select>
+    </div>
+    <div class="frow">
+      <div class="field" style="margin:0"><label class="fl">Cantidad comprada</label><input class="fi" id="b-qty" type="number" step="any" min="0" oninput="updBuyP()"></div>
+      <div class="field" style="margin:0"><label class="fl" id="b-price-l">Precio por unidad</label><input class="fi" id="b-price" type="number" step="any" min="0" oninput="updBuyP()"></div>
+    </div>
+    <div class="field" style="margin-top:11px"><label class="fl">Fecha</label><input class="fi" id="b-date" type="date"></div>
+    <div class="cp-row"><span class="cp-lbl">Importe de la compra</span><span class="cp-val" id="b-total">—</span></div>
+    <div class="cp-row" style="margin-top:8px"><span class="cp-lbl">Nuevo precio medio</span><span class="cp-val" id="b-avg">—</span></div>
+    <div class="cp-row" style="margin-top:8px"><span class="cp-lbl">Posición resultante</span><span class="cp-val" id="b-after" style="font-size:12px">—</span></div>
+    <div class="fhint" style="margin-top:8px">La compra actualiza cantidad y precio medio de la posición, y queda registrada en Historial → Aportaciones (alimenta la rentabilidad real TWR).</div>
+    <div class="ma"><button class="mc" onclick="closeBuyModal()">Cancelar</button><button class="ms" onclick="saveBuy()">Registrar compra</button></div>
+  </div>
+</div>
+</div>
+
 <!-- WATCHLIST MODAL -->
 <div class="veil" id="ov-w">
 <div class="modal">
   <div class="mh"><span class="mt" id="wm-t">Añadir a watchlist</span><button class="mx" onclick="closeWModal()"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-width="2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
   <div class="mb">
     <div class="frow">
-      <div class="field" style="margin:0"><label class="fl">Nombre</label><input class="fi" id="w-name" placeholder="Apple, Tesla…"></div>
-      <div class="field" style="margin:0"><label class="fl">Ticker</label><input class="fi" id="w-ticker" placeholder="AAPL · BTC…"></div>
+      <div class="field" style="margin:0"><label class="fl">Nombre</label><input class="fi" id="w-name" placeholder="Apple, Nestlé…"></div>
+      <div class="field" style="margin:0"><label class="fl">Ticker</label><input class="fi" id="w-ticker" placeholder="AAPL · NESN.SW · BTC" style="text-transform:uppercase"></div>
     </div>
     <div class="frow" style="margin-top:11px">
-      <div class="field" style="margin:0"><label class="fl">Precio objetivo <em>(€)</em></label><input class="fi" id="w-target" type="number" step="any" min="0" placeholder="150.00"></div>
-      <div class="field" style="margin:0"><label class="fl">Precio actual manual</label><input class="fi" id="w-cprice" type="number" step="any" min="0" placeholder="165.00"></div>
+      <div class="field" style="margin:0"><label class="fl">Divisa <em>· del activo</em></label>
+        <select class="fi" id="w-ccy" onchange="wCcyChg()">
+          <option value="EUR">EUR €</option>
+          <option value="USD">USD $</option>
+          <option value="CHF">CHF</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0"><label class="fl">Precio objetivo <em id="w-target-em">(€)</em></label><input class="fi" id="w-target" type="number" step="any" min="0" placeholder="150.00"></div>
     </div>
+    <div class="field" style="margin-top:11px"><label class="fl">Precio actual manual <em id="w-cprice-em">(€ · opcional)</em></label><input class="fi" id="w-cprice" type="number" step="any" min="0" placeholder="165.00"></div>
+    <div class="fhint" style="margin-top:2px">Pon el ticker y el precio se actualiza solo (cripto: BTC, ETH… · acciones/ETPs de Yahoo: AAPL, NESN.SW…). El objetivo y el precio manual van en la divisa elegida; el manual solo se usa como respaldo si el ticker no cotiza.</div>
     <div class="field" style="margin-top:11px"><label class="fl">Notas / tesis</label><textarea class="fta" id="w-notes" placeholder="Por qué me interesa, niveles clave, catalizadores…"></textarea></div>
     <div class="ma"><button class="mc" onclick="closeWModal()">Cancelar</button><button class="ms" onclick="saveWL()">Guardar</button></div>
   </div>
@@ -1158,7 +1266,7 @@ const DEF=[
 ];
 
 function ldSt(){try{return JSON.parse(localStorage.getItem(SK))||{};}catch(e){return{};}}
-function svSt(){localStorage.setItem(SK,JSON.stringify({assets,snaps,wl,targets,trades,fx:fxRates}));}
+function svSt(){localStorage.setItem(SK,JSON.stringify({assets,snaps,wl,targets,trades,aports,fx:fxRates}));}
 let st=ldSt();
 // Tipos de cambio (EUR por 1 unidad de divisa) para posiciones compradas en USD…
 // El valor real llega del feed (precios.json) o de Frankfurter; el 0.86 es solo
@@ -1174,8 +1282,10 @@ const DEF_TRADES=[
   {id:1748300003,name:'Alphabet',     cat:'accion',broker:'Revolut',qty:1,      unit:'acc.',  priceIn:174.00,priceOut:210.00,dateIn:'',          dateOut:'2025-08-05',notes:'',invested:174.00,recovered:210.00,result:36.00,pct:20.69},
 ];
 let trades = st.trades || [...DEF_TRADES];
+// Aportaciones registradas (compras DCA): alimentan el precio medio y el TWR
+let aports = st.aports || [];
 
-let lpx={},lpxPrev={},lpxSpark={},wlpx={},pxStat={},fxCache={EUR:1},fxPending={};
+let lpx={},lpxPrev={},lpxSpark={},wlpx={},wlpxNat={},pxStat={},fxCache={EUR:1},fxPending={};
 let feedTs=null,feedFresh={};   // hora del feed y activos ya cubiertos por él
 let eaid=null,pmid=null,ewid=null;
 let curCat='fondo',curMode='manual';
@@ -1239,6 +1349,9 @@ const tDay = ()=>{let abs=0,base=0,has=false;for(const a of assets){const p=px(a
 
 // ── FORMAT ────────────────────────────────────────────────────────────────────
 const fe=(n,d=2)=>n==null||isNaN(n)?'—':new Intl.NumberFormat('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d}).format(n)+' €';
+// Símbolo por divisa y formateo de un importe en su propia divisa (número + símbolo).
+const CCY_SYM={EUR:'€',USD:'$',CHF:'CHF',GBP:'£'};
+const fcur=(n,ccy='EUR',d=2)=>{if(n==null||isNaN(n))return '—';const c=up(ccy||'EUR');const s=CCY_SYM[c]||c;return new Intl.NumberFormat('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d}).format(n)+' '+s;};
 const fp=n=>n==null||!isFinite(n)?'—':(n>=0?'+':'')+n.toFixed(2)+'%';
 const fn=(n,d=6)=>n==null?'—':parseFloat(n.toFixed(d)).toString();
 const fd=ts=>new Date(ts).toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'});
@@ -1300,7 +1413,29 @@ function goto(p){
 }
 
 // ── MAIN RENDER ───────────────────────────────────────────────────────────────
-function render(){rKpis();rBrStrip();rTable();rSidebar();rFeedChip();}
+function render(){rKpis();rLiquidez();rBrStrip();rTable();rSidebar();rFeedChip();}
+
+// ── LIQUIDEZ ──────────────────────────────────────────────────────────────────
+// Reservas en efectivo (categoría «liquidez»), lo primero que se ve en Inicio.
+function rLiquidez(){
+  const acc=el('liq-accounts');if(!acc)return;
+  const liqs=assets.filter(a=>a.cat==='liquidez');
+  const total=liqs.reduce((s,a)=>s+(vl(a)||0),0);
+  const port=tv(),share=port>0?total/port*100:0;
+  countUp(el('liq-total'),total,n=>fe(n,2));
+  el('liq-share').textContent=share>0?share.toFixed(1).replace('.',',')+' %':'—';
+  el('liq-gauge-fill').style.width=Math.min(100,share)+'%';
+  if(!liqs.length){acc.innerHTML='<div class="liq-empty">Sin cuentas de efectivo todavía.<br>Añádelas como posiciones de categoría «Liquidez».</div>';return;}
+  acc.innerHTML=liqs.map(a=>{
+    const br=a.broker||'Otro',v=vl(a)||0,ccy=up(a.ccy||'EUR');
+    const nat=ccy!=='EUR'?fcur(a.qty*(a.mp??1),ccy):'';
+    return`<div class="liq-acct">
+      <div class="liq-acct-top"><span class="liq-acct-dot" style="background:${BD[br]||'#9a94b8'}"></span><span class="liq-acct-name">${a.name}</span></div>
+      <div class="liq-acct-val">${fe(v,2)}</div>
+      ${nat?`<div class="liq-acct-ccy">${nat} · cambio del día</div>`:''}
+    </div>`;
+  }).join('');
+}
 
 function rFeedChip(){
   const c=el('feed-chip');if(!c)return;
@@ -1438,6 +1573,7 @@ function rTable(){
       <td class="r"><div class="pnl-val ${gc}">${g!=null?(g>=0?'+':'')+fe(g):'—'}</div><div class="pnl-pct ${gc}">${fp(gp)}</div></td>
       <td class="r"><div class="wt-cell"><span class="wt-pct">${pct.toFixed(1)}%</span><div class="wt-bar"><div class="wt-fill" style="width:${pct}%;background:${cc.s}"></div></div></div></td>
       <td><div class="acts">
+        ${a.cat!=='liquidez'?`<button class="abt" onclick="openBuyModal(${a.id})" title="Registrar compra · actualiza cantidad y precio medio"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M2 3h2l1.6 7.5h6.9L14 5.5H5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.6" cy="13" r="1"/><circle cx="11.6" cy="13" r="1"/></svg></button>`:''}
         ${cu?`<a class="abt" href="${cu}" target="_blank" rel="noopener" title="Ver gráfico en ${cu.includes('tradingview')?'TradingView':'Yahoo Finance'}"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M2 13l3-5 3 3 3-6 3 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 2v12h12" stroke-linecap="round"/></svg></a>`:''}
         ${a.mode==='manual'&&a.cat!=='liquidez'?`<button class="abt" onclick="openPModal(${a.id})" title="Actualizar"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M13.5 2.5A6.5 6.5 0 0 0 2 8M2.5 13.5A6.5 6.5 0 0 0 14 8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 4.5V2h2.5M14 11.5V14h-2.5" stroke-linecap="round"/></svg></button>`:''}
         <button class="abt" onclick="openAModal(${a.id})"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M11.5 2.5l2 2L5 13H3v-2z" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -1470,6 +1606,55 @@ function renderCharts(){
   renderBarG(t);
   renderBrokerG(brs,t);
   renderPnlBarG();
+  renderRiskG(t);
+}
+
+// ── RIESGO ────────────────────────────────────────────────────────────────────
+// Volatilidad anualizada (%) a partir de la serie de cierres del feed (~1 mes;
+// cripto 7 días): desviación típica de los retornos diarios log × √252.
+function volOf(a){
+  const sp=sparkOf(a);
+  if(!sp||sp.length<5)return null;
+  const rs=[];
+  for(let i=1;i<sp.length;i++)if(sp[i-1]>0&&sp[i]>0)rs.push(Math.log(sp[i]/sp[i-1]));
+  if(rs.length<4)return null;
+  const m=rs.reduce((s,v)=>s+v,0)/rs.length;
+  const sd=Math.sqrt(rs.reduce((s,v)=>s+(v-m)*(v-m),0)/(rs.length-1));
+  return sd*Math.sqrt(252)*100;
+}
+
+function renderRiskG(t){
+  const tiles=el('risk-tiles');if(!tiles)return;
+  // exposición por subyacente (agrupa ETPs y fondos que replican lo mismo)
+  const unds={};
+  for(const a of assets){const v=vl(a);if(!v||v<=0)continue;const u=und(a);unds[u]=(unds[u]||0)+v;}
+  const uk=Object.keys(unds).sort((a,b)=>unds[b]-unds[a]);
+  const top3=t>0?uk.slice(0,3).reduce((s,u)=>s+unds[u],0)/t*100:0;
+  const items=assets.map(a=>({a,v:vl(a)||0,vol:volOf(a),g:cs(a)>0&&gn(a)!=null?gn(a)/cs(a)*100:null})).filter(x=>x.v>0);
+  const conVol=items.filter(x=>x.vol!=null);
+  const volPond=conVol.length?conVol.reduce((s,x)=>s+x.vol*x.v,0)/conVol.reduce((s,x)=>s+x.v,0):null;
+  const volCob=t>0?conVol.reduce((s,x)=>s+x.v,0)/t*100:0;
+  const tw=twrSeries();
+  const mdd=tw?twrMaxDD(tw):null;
+  tiles.innerHTML=[
+    ['Concentración top 3',top3.toFixed(0)+'%','peso de los 3 mayores subyacentes',top3>60?'dn':top3>40?'':'up'],
+    ['Mayor exposición',uk[0]?uk[0]:'—',uk[0]?(unds[uk[0]]/t*100).toFixed(0)+'% de la cartera':'',''],
+    ['Volatilidad media',volPond!=null?volPond.toFixed(0)+'%':'—','anualizada · cubre el '+volCob.toFixed(0)+'% del valor',''],
+    ['Máx. caída (TWR)',mdd!=null?fp(mdd):'—','entre snapshots, sin aportaciones',mdd!=null&&mdd<-10?'dn':''],
+  ].map(x=>`<div><div class="hstat-lbl">${x[0]}</div><div class="hstat-val ${x[3]}">${x[1]}</div><div style="font-size:9px;color:var(--fg3);margin-top:3px">${x[2]}</div></div>`).join('');
+  // dispersión volatilidad-rentabilidad
+  const pts=items.filter(x=>x.vol!=null&&x.g!=null);
+  const cv=el('g-risk-scatter'),nd=el('risk-scatter-nodata');
+  if(!pts.length){if(chartInstances['g-risk-scatter'])chartInstances['g-risk-scatter'].destroy();cv.style.display='none';nd.style.display='block';return;}
+  cv.style.display='block';nd.style.display='none';
+  mkChart('g-risk-scatter',{type:'bubble',
+    data:{datasets:pts.map(x=>({label:x.a.name,data:[{x:+x.vol.toFixed(1),y:+x.g.toFixed(1),r:Math.max(4,Math.sqrt(x.v/t)*26)}],backgroundColor:CC[x.a.cat].s+'88',borderColor:CC[x.a.cat].s,borderWidth:1}))},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>` ${c.dataset.label} · vol ${c.raw.x}% · rent ${fp(c.raw.y)} · peso ${t>0?(pts[c.datasetIndex].v/t*100).toFixed(1):0}%`}}},
+      scales:{
+        x:{title:{display:true,text:'Volatilidad anualizada',color:'#9d97b8',font:{family:"'Manrope'",size:9,weight:'700'}},grid:{color:'rgba(39,33,74,.05)',drawTicks:false},border:{display:false},ticks:{color:'#9d97b8',font:{family:"'Manrope'",size:10},callback:v=>v+'%',padding:4}},
+        y:{title:{display:true,text:'Rentabilidad total',color:'#9d97b8',font:{family:"'Manrope'",size:9,weight:'700'}},grid:{color:'rgba(39,33,74,.06)',drawTicks:false},border:{display:false},ticks:{color:'#9d97b8',font:{family:"'Manrope'",size:10},callback:v=>v+'%',padding:4}}
+      },animation:{duration:400}}});
 }
 
 // Treemap squarified (Bruls et al.): rects {x,y,w,h} en el orden de los valores.
@@ -1580,7 +1765,62 @@ function autoSnapDaily(){
   if(curPage==='evolucion')renderEvo();
 }
 
+// ── TWR: rentabilidad real descontando aportaciones ──────────────────────────
+// Serie índice base 100 encadenando la rentabilidad entre snapshots (Dietz
+// simple). El flujo de cada periodo se aproxima con la variación del capital
+// invertido (cost), que ya recoge compras, ventas y ediciones manuales.
+function twrSeries(){
+  const s=[...snaps].sort((a,b)=>a.ts-b.ts);
+  if(s.length<2)return null;
+  let idx=100;
+  const pts=[{ts:s[0].ts,idx}];
+  for(let i=1;i<s.length;i++){
+    const f=(s[i].cost||0)-(s[i-1].cost||0);
+    const base=s[i-1].val+f/2;
+    const r=base>0?(s[i].val-s[i-1].val-f)/base:0;
+    idx*=1+r;
+    pts.push({ts:s[i].ts,idx});
+  }
+  return pts;
+}
+function twrMaxDD(pts){
+  let peak=-Infinity,mdd=0;
+  for(const p of pts){peak=Math.max(peak,p.idx);mdd=Math.min(mdd,p.idx/peak-1);}
+  return mdd*100;
+}
+
+function renderTWR(){
+  const wrap=el('twr-chart-wrap'),no=el('twr-nodata'),stats=el('twr-stats');
+  if(!wrap)return;
+  if(chartInstances['evo-twr'])chartInstances['evo-twr'].destroy();
+  const tw=twrSeries();
+  if(!tw){wrap.style.display='none';no.style.display='block';stats.innerHTML='';return;}
+  wrap.style.display='block';no.style.display='none';
+  const s=[...snaps].sort((a,b)=>a.ts-b.ts);
+  const apTot=(s[s.length-1].cost||0)-(s[0].cost||0);
+  const mkt=s[s.length-1].val-s[0].val-apTot;
+  const twrTot=(tw[tw.length-1].idx/100-1)*100;
+  const days=(tw[tw.length-1].ts-tw[0].ts)/86400000;
+  const ann=days>=60?(Math.pow(tw[tw.length-1].idx/100,365/days)-1)*100:null;
+  const mdd=twrMaxDD(tw);
+  stats.innerHTML=[
+    ['TWR del periodo',fp(twrTot),twrTot>=0?'up':'dn'],
+    ann!=null?['TWR anualizado',fp(ann),ann>=0?'up':'dn']:null,
+    ['Aportado neto',(apTot>=0?'+':'')+fe(apTot,0),''],
+    ['Ganancia de mercado',(mkt>=0?'+':'')+fe(mkt,0),mkt>=0?'up':'dn'],
+    ['Máx. caída',fp(mdd),mdd<-0.05?'dn':''],
+  ].filter(Boolean).map(x=>`<div><div class="hstat-lbl">${x[0]}</div><div class="hstat-val ${x[2]}">${x[1]}</div></div>`).join('');
+  const ctx=el('evo-twr').getContext('2d');
+  const up2=tw[tw.length-1].idx>=100,lc=up2?'#0ea97d':'#f0537c';
+  const g=ctx.createLinearGradient(0,0,0,180);g.addColorStop(0,up2?'rgba(14,169,125,.16)':'rgba(240,83,124,.16)');g.addColorStop(1,'rgba(0,0,0,0)');
+  chartInstances['evo-twr']=new Chart(ctx,{type:'line',data:{labels:tw.map(p=>fd(p.ts)),datasets:[
+    {label:'TWR',data:tw.map(p=>+p.idx.toFixed(2)),borderColor:lc,borderWidth:2,backgroundColor:g,fill:true,tension:.35,pointRadius:2.5,pointHoverRadius:5,pointBackgroundColor:lc},
+    {label:'Base',data:tw.map(()=>100),borderColor:'rgba(39,33,74,.28)',borderWidth:1.2,borderDash:[3,3],fill:false,pointRadius:0},
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{...tip,filter:c=>c.datasetIndex===0,callbacks:{label:c=>` índice ${c.raw}  ·  ${fp(c.raw-100)}`}}},scales:{x:{grid:{color:'rgba(39,33,74,.05)',drawTicks:false},border:{display:false},ticks:{color:'#9d97b8',font:{family:"'Manrope'",size:10},padding:4}},y:{grid:{color:'rgba(39,33,74,.06)',drawTicks:false},border:{display:false},ticks:{color:'#9d97b8',font:{family:"'Manrope'",size:10},padding:4}}},animation:{duration:400}}});
+}
+
 function renderEvo(){
+  renderTWR();
   const sv=el('snap-now-val');if(sv)sv.textContent=fe(tv(),0);
   // chips
   const chips=el('snap-chips');
@@ -1740,7 +1980,24 @@ function renderComparison(){
 }
 
 // ── WATCHLIST ─────────────────────────────────────────────────────────────────
-const wlprice=w=>{const t=up(w.ticker);if(t&&wlpx[t]!=null)return wlpx[t];if(t&&lpx[t]!=null)return lpx[t];return w.curPrice||null;};
+// Convierte un precio en EUR a la divisa elegida del activo (EUR por unidad = fxRates).
+const eurToCcy=(eur,ccy)=>{const c=up(ccy||'EUR');if(c==='EUR')return eur;const r=fxRates[c];return r>0?eur/r:null;};
+// Precio actual del activo vigilado, EN SU DIVISA. Prefiere la cotización nativa del
+// ticker (misma divisa → precio exacto); si no, convierte el precio en EUR del feed.
+// Último recurso: el precio manual que puso el usuario (ya en la divisa elegida).
+const wlprice=w=>{
+  const ccy=up(w.ccy||'EUR'),t=up(w.ticker);
+  const d=t?wlpxNat[t]:null;
+  if(d){
+    if(d.cur&&up(d.cur)===ccy&&d.raw!=null)return d.raw;   // cotización nativa exacta
+    if(d.eur!=null){const v=eurToCcy(d.eur,ccy);if(v!=null)return v;}
+  }
+  if(t&&wlpx[t]!=null){const v=eurToCcy(wlpx[t],ccy);if(v!=null)return v;}
+  if(t&&lpx[t]!=null){const v=eurToCcy(lpx[t],ccy);if(v!=null)return v;}
+  return w.curPrice||null;
+};
+// ¿El precio viene de una fuente en vivo (feed/Yahoo/CoinGecko) o es manual?
+const wlLive=w=>{const t=up(w.ticker);return !!(t&&(wlpxNat[t]||wlpx[t]!=null||lpx[t]!=null));};
 const wlHit=w=>{const p=wlprice(w),tar=w.target;return p!=null&&tar!=null&&p<=tar;};
 
 function renderWL(){
@@ -1749,14 +2006,17 @@ function renderWL(){
   if(!wl.length){grid.innerHTML='';emp.style.display='block';return;}
   emp.style.display='none';
   grid.innerHTML=wl.map(w=>{
-    const p=wlprice(w),tar=w.target,hit=wlHit(w);
+    const p=wlprice(w),tar=w.target,hit=wlHit(w),ccy=up(w.ccy||'EUR');
     const gap=p!=null&&tar!=null?((p-tar)/tar)*100:null;
     const prog=p!=null&&tar!=null?Math.min((p/tar)*100,100):null;
     const tick=(w.ticker||w.name.slice(0,4)).toUpperCase().slice(0,4);
+    const live=p!=null&&wlLive(w);
+    const ccyBadge=ccy!=='EUR'?`<span class="wl-ccy">${ccy}</span>`:'';
+    const srcPill=p==null?'':(live?`<span class="wl-src live"><i></i>en vivo</span>`:`<span class="wl-src man"><i></i>manual</span>`);
     return`<div class="wl-card ${hit?'alert':''}">
       ${hit?`<div class="wl-alert-tag"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-width="1.5"><path d="M8 2l1.5 4.5H14l-3.7 2.7 1.4 4.3L8 11 4.3 13.5l1.4-4.3L2 6.5h4.5z" stroke-linecap="round"/></svg>Precio objetivo alcanzado</div>`:''}
       <div class="wl-head">
-        <div class="wl-sym"><div class="wl-ic">${tick}</div><div><div class="wl-name">${w.name}</div><div class="wl-ticker">${w.ticker||'—'}</div></div></div>
+        <div class="wl-sym"><div class="wl-ic">${tick}</div><div><div class="wl-name">${w.name}</div><div class="wl-ticker">${w.ticker||'—'}${ccyBadge}</div></div></div>
         <div class="wl-acts">
           ${(()=>{const cu=chartURL({ticker:w.ticker});return cu?`<a class="abt" href="${cu}" target="_blank" rel="noopener" title="Ver gráfico"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M2 13l3-5 3 3 3-6 3 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 2v12h12" stroke-linecap="round"/></svg></a>`:'';})()}
           <button class="abt" onclick="openWModal(${w.id})"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M11.5 2.5l2 2L5 13H3v-2z" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -1764,8 +2024,8 @@ function renderWL(){
         </div>
       </div>
       <div class="wl-pxs">
-        <div><div class="wl-px-lbl">Actual</div><div class="wl-px-val">${p!=null?fe(p):'—'}</div></div>
-        <div><div class="wl-px-lbl">Objetivo</div><div class="wl-px-val tgt">${tar!=null?fe(tar):'—'}</div></div>
+        <div><div class="wl-px-lbl">Actual ${srcPill}</div><div class="wl-px-val">${p!=null?fcur(p,ccy):'—'}</div></div>
+        <div><div class="wl-px-lbl">Objetivo</div><div class="wl-px-val tgt">${tar!=null?fcur(tar,ccy):'—'}</div></div>
       </div>
       ${gap!=null?`<div class="wl-gap-row"><span class="wl-gap-lbl">Distancia al objetivo</span><span class="wl-gap-val ${gap<=0?'up-c':'dn-c'}">${gap<=0?'✓ Alcanzado':fp(gap)}</span></div><div class="wl-prog"><div class="wl-prog-fill" style="width:${Math.min(100,prog)}%;background:${hit?'var(--gold)':'var(--blue)'}"></div></div>`:''}
       ${w.notes?`<div class="wl-notes">${w.notes}</div>`:''}
@@ -1780,12 +2040,14 @@ async function fetchWLPx(){
   const cgT=[...new Set(items.map(w=>up(w.ticker)).filter(t=>CG[t]))];
   if(cgT.length){
     const ids=cgT.map(t=>CG[t]).join(',');
-    try{const d=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=eur`).then(r=>r.json());for(const t of cgT){const id=CG[t];if(d[id]?.eur)wlpx[t]=d[id].eur;}}catch(e){}
+    try{const d=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=eur`).then(r=>r.json());for(const t of cgT){const id=CG[t];if(d[id]?.eur){wlpx[t]=d[id].eur;wlpxNat[t]={eur:d[id].eur,cur:'EUR'};}}}catch(e){}
   }
-  // 2) Resto por Yahoo (en paralelo)
+  // 2) Resto por Yahoo (en paralelo). Guardamos también el precio y la divisa nativos
+  //    (raw+cur): si el activo se vigila en su propia divisa, se muestra el precio exacto.
   const yfT=[...new Set(items.map(w=>up(w.ticker)).filter(t=>!CG[t]))];
   await Promise.allSettled(yfT.map(t=>yfLimit(async()=>{
-    try{const q=await yfQuote(YF_DIRECT[t]||t);const r=await fxToEUR(q.cur);wlpx[t]=q.p*r;}catch(e){}
+    try{const q=await yfQuote(YF_DIRECT[t]||t);const r=await fxToEUR(q.cur);wlpx[t]=q.p*r;wlpxNat[t]={eur:q.p*r,raw:q.p,cur:q.cur};
+      const c=up(q.cur||'EUR');if(c!=='EUR'&&!(fxRates[c]>0)&&r>0)fxRates[c]=r;}catch(e){}
   })));
 }
 
@@ -1840,7 +2102,7 @@ async function loadFeed(){
       for(const w of wl){                    // watchlist también desde el feed
         const t=up(w.ticker);if(!t)continue;
         const sym=d.precios[t]?t:(alias[t]&&d.precios[alias[t]]?alias[t]:null);
-        if(sym)wlpx[t]=d.precios[sym].eur;
+        if(sym){const pe=d.precios[sym];wlpx[t]=pe.eur;wlpxNat[t]={eur:pe.eur,raw:pe.raw,cur:pe.cur};}
       }
       if(n){
         // marca de "última actualización" con la hora real del feed (fuente fiable),
@@ -2012,8 +2274,12 @@ async function fetchAll(manual=false){
   fxCache={EUR:1};
   try{
     await loadFeed();   // 1º el feed del repo: fiable y sin proxies; pinta al momento
-    // Refresca EUR/USD si el feed no lo trajo (Frankfurter tiene CORS abierto)
-    if(assets.some(a=>up(a.ccy||'EUR')!=='EUR'))fxToEUR('USD').then(r=>{if(r>0){fxRates.USD=r;svSt();}}).catch(()=>{});
+    // Tipos de cambio de todas las divisas usadas (posiciones y watchlist) que el
+    // feed no trajera. Frankfurter tiene CORS abierto, así que no necesita proxy.
+    const needCcy=new Set();
+    assets.forEach(a=>{const c=up(a.ccy||'EUR');if(c!=='EUR')needCcy.add(c);});
+    wl.forEach(w=>{const c=up(w.ccy||'EUR');if(c!=='EUR')needCcy.add(c);});
+    needCcy.forEach(c=>{if(!(fxRates[c]>0))fxToEUR(c).then(r=>{if(r>0){fxRates[c]=r;svSt();if(curPage==='watchlist')renderWL();render();}}).catch(()=>{});});
     // Si el feed acaba de dar precio a un activo, el motor en vivo (proxies CORS,
     // menos fiable) no debe tocarlo: solo cubre los huecos que el feed no llega.
     const FEED_FRESH_MS=2*3600*1000;
@@ -2106,21 +2372,81 @@ function closePModal(){el('ov-p').classList.remove('open');pmid=null;}
 function savePModal(){const p=parseFloat(el('pm-p').value);if(isNaN(p)||p<=0){toast('Precio inválido');return;}const i=assets.findIndex(a=>a.id===pmid);if(i>=0){assets[i].mp=p;assets[i].mpT=Date.now();delete pxStat['#'+assets[i].id];svSt();}closePModal();render();toast('Actualizado ✓');}
 el('pm-p').addEventListener('keydown',e=>{if(e.key==='Enter')savePModal();});
 
-function openWModal(id=null){ewid=id;el('wm-t').textContent=id?'Editar watchlist':'Añadir a watchlist';if(id){const w=wl.find(x=>x.id===id);el('w-name').value=w.name;el('w-ticker').value=w.ticker||'';el('w-target').value=w.target||'';el('w-cprice').value=w.curPrice||'';el('w-notes').value=w.notes||'';}else{['w-name','w-ticker','w-target','w-cprice','w-notes'].forEach(i=>el(i).value='');}el('ov-w').classList.add('open');setTimeout(()=>el('w-name').focus(),50);}
+// Actualiza los símbolos de divisa de las etiquetas del modal al cambiar el selector.
+function wCcyChg(){const c=up(el('w-ccy').value),s=CCY_SYM[c]||c;el('w-target-em').textContent='('+s+')';el('w-cprice-em').textContent='('+s+' · opcional)';}
+function openWModal(id=null){ewid=id;el('wm-t').textContent=id?'Editar watchlist':'Añadir a watchlist';if(id){const w=wl.find(x=>x.id===id);el('w-name').value=w.name;el('w-ticker').value=w.ticker||'';el('w-ccy').value=up(w.ccy||'EUR');el('w-target').value=w.target||'';el('w-cprice').value=w.curPrice||'';el('w-notes').value=w.notes||'';}else{['w-name','w-ticker','w-target','w-cprice','w-notes'].forEach(i=>el(i).value='');el('w-ccy').value='EUR';}wCcyChg();el('ov-w').classList.add('open');setTimeout(()=>el('w-name').focus(),50);}
 function closeWModal(){el('ov-w').classList.remove('open');ewid=null;}
 function saveWL(){
   const name=el('w-name').value.trim(),ticker=el('w-ticker').value.trim().toUpperCase();
+  const ccy=up(el('w-ccy').value||'EUR');
   const target=parseFloat(el('w-target').value)||null,curPrice=parseFloat(el('w-cprice').value)||null;
   const notes=el('w-notes').value.trim();
   if(!name){toast('Introduce un nombre');return;}
-  const item={name,ticker,target,curPrice,notes};
+  const item={name,ticker,ccy,target,curPrice,notes};
   if(ewid){const i=wl.findIndex(w=>w.id===ewid);if(i>=0)wl[i]={...wl[i],...item};}
   else wl.push({id:Date.now(),...item});
   svSt();closeWModal();fetchWLPx().then(()=>renderWL());toast('Watchlist actualizada ✓');
 }
 function delW(id){if(!confirm('¿Eliminar?'))return;wl=wl.filter(w=>w.id!==id);svSt();renderWL();toast('Eliminado');}
 
-['ov-a','ov-p','ov-w','ov-trade'].forEach(function(oid){el(oid).addEventListener('click',function(e){if(e.target===this){if(oid==='ov-a')closeAModal();else if(oid==='ov-p')closePModal();else if(oid==='ov-trade')closeTradeModal();else closeWModal();}});});
+['ov-a','ov-p','ov-w','ov-trade','ov-b'].forEach(function(oid){el(oid).addEventListener('click',function(e){if(e.target===this)({'ov-a':closeAModal,'ov-p':closePModal,'ov-trade':closeTradeModal,'ov-w':closeWModal,'ov-b':closeBuyModal})[oid]();});});
+
+// ── REGISTRAR COMPRA (aportación DCA) ─────────────────────────────────────────
+// Actualiza cantidad y precio medio ponderado de la posición y deja registro en
+// aports (fecha + importe €), que alimenta el TWR y el "aportado este año".
+function openBuyModal(id=null){
+  const sel=el('b-asset');
+  const opts=assets.filter(a=>a.cat!=='liquidez');
+  if(!opts.length){toast('No hay posiciones donde registrar compras');return;}
+  sel.innerHTML=opts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  if(id&&opts.some(a=>a.id===id))sel.value=id;
+  el('b-qty').value='';el('b-price').value='';
+  el('b-date').value=new Date().toISOString().slice(0,10);
+  updBuyP();
+  el('ov-b').classList.add('open');setTimeout(()=>el('b-qty').focus(),50);
+}
+function closeBuyModal(){el('ov-b').classList.remove('open');}
+function updBuyP(){
+  const a=assets.find(x=>x.id==el('b-asset').value);if(!a)return;
+  const usd=up(a.ccy||'EUR')==='USD';
+  el('b-price-l').innerHTML='Precio por unidad <em>('+(usd?'$':'€')+')</em>';
+  const pxa=px(a);
+  el('b-price').placeholder=pxa!=null?fn(pxa/ccyRate(a),4):'';
+  const q=parseFloat(el('b-qty').value)||0,p=parseFloat(el('b-price').value)||0;
+  if(q>0&&p>0){
+    const nq=a.qty+q,nc=(a.qty*(a.costUnit||0)+q*p)/nq;
+    el('b-total').textContent=fe(q*p*ccyRate(a));
+    el('b-avg').textContent=fn(nc,4)+(usd?' $':' €')+'/u  (antes '+fn(a.costUnit||0,4)+')';
+    el('b-after').textContent=fn(nq)+' '+(a.unit||'u')+' · coste total '+fe(nq*nc*ccyRate(a));
+  }else{el('b-total').textContent='—';el('b-avg').textContent='—';el('b-after').textContent='—';}
+}
+function saveBuy(){
+  const a=assets.find(x=>x.id==el('b-asset').value);
+  const q=parseFloat(el('b-qty').value),p=parseFloat(el('b-price').value);
+  if(!a){toast('Selecciona un activo');return;}
+  if(isNaN(q)||q<=0){toast('Cantidad inválida');return;}
+  if(isNaN(p)||p<0){toast('Precio inválido');return;}
+  const nq=a.qty+q;
+  a.costUnit=(a.qty*(a.costUnit||0)+q*p)/nq;
+  a.qty=nq;
+  aports.unshift({id:Date.now(),date:el('b-date').value||new Date().toISOString().slice(0,10),assetId:a.id,name:a.name,qty:q,price:p,eur:q*p*ccyRate(a)});
+  svSt();closeBuyModal();render();
+  if(curPage==='historial')renderHist();
+  toast('Compra registrada ✓ · precio medio '+fn(a.costUnit,4));
+}
+function delAport(id){
+  const ap=aports.find(x=>x.id===id);if(!ap)return;
+  const a=assets.find(x=>x.id===ap.assetId);
+  const revertible=a&&a.qty>ap.qty;
+  if(!confirm('¿Eliminar esta aportación del registro?'+(revertible?' También se revertirá en la posición (cantidad y precio medio).':'')))return;
+  if(revertible){
+    const oq=a.qty-ap.qty;
+    const oc=(a.qty*(a.costUnit||0)-ap.qty*ap.price)/oq;
+    if(oq>0&&oc>=0){a.qty=oq;a.costUnit=oc;}
+  }
+  aports=aports.filter(x=>x.id!==id);
+  svSt();render();renderHist();toast('Aportación eliminada');
+}
 
 
 // ── HISTORIAL ─────────────────────────────────────────────────────────────────
@@ -2223,7 +2549,25 @@ function delTrade(id){
   svSt(); renderHist(); toast('Eliminado');
 }
 
+function renderAports(){
+  const atb=el('aport-tbody');if(!atb)return;
+  const yr=String(new Date().getFullYear());
+  const aportYr=aports.filter(x=>(x.date||'').startsWith(yr)).reduce(function(s,x){return s+(x.eur||0);},0);
+  const ay=el('h-aport-yr');if(ay)ay.textContent=aports.length?fe(aportYr,0):'—';
+  atb.innerHTML=aports.length?aports.map(function(x){
+    return '<tr>'
+      +'<td style="font-size:11px;color:var(--fg2)">'+(x.date||'—')+'</td>'
+      +'<td style="font-size:12px;font-weight:600;color:var(--fg0)">'+x.name+'</td>'
+      +'<td class="r" style="font-size:12px;color:var(--fg1)">'+fn(x.qty)+'</td>'
+      +'<td class="r" style="font-size:12px;color:var(--fg2)">'+fn(x.price,4)+'</td>'
+      +'<td class="r" style="font-size:12px;font-weight:700;color:var(--fg0)">'+fe(x.eur)+'</td>'
+      +'<td><div style="display:flex;justify-content:flex-end"><button class="abt del" onclick="delAport('+x.id+')" title="Eliminar y revertir en la posición"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M3 4h10M6 4V2h4v2M5 4l1 9h4l1-9" stroke-linecap="round"/></svg></button></div></td>'
+      +'</tr>';
+  }).join(''):'<tr><td class="empty-td" colspan="6">Sin aportaciones registradas.<br>Usa «Registrar compra» en cada aportación DCA: actualiza el precio medio solo y alimenta la rentabilidad real (TWR).</td></tr>';
+}
+
 function renderHist(){
+  renderAports();
   el('sn-hct').textContent = trades.length;
   const tbody  = el('hist-tbody');
   const empty  = el('hist-empty');
@@ -2278,6 +2622,7 @@ function exportJSON(){
     wl:        wl,
     targets:   targets,
     trades:    trades,
+    aports:    aports,
     cashflow:  cf,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
@@ -2322,6 +2667,7 @@ function loadJSONFile(event){
       wl       = data.wl       || [];
       targets  = data.targets  || {};
       trades   = data.trades   || [];
+      aports   = data.aports   || [];
       if(data.cashflow&&Array.isArray(data.cashflow.meses)&&data.cashflow.pct){
         cf=data.cashflow;
         localStorage.setItem(CFK,JSON.stringify(cf));
@@ -2421,12 +2767,12 @@ const cfMesLabel=d=>CF_M[d.getMonth()]+' '+String(d.getFullYear()).slice(2);
 function cfDefault(){
   const now=new Date(),meses=[];
   for(let i=0;i<3;i++)meses.push({label:cfMesLabel(new Date(now.getFullYear(),now.getMonth()+i,1)),ingresos:0,gastos:0});
-  return{meses,pct:{dca:60,liq:25,res:15},activos:[]};
+  return{meses,pct:{dca:60,liq:25,res:15},activos:[],modo:'manual'};
 }
 let cf=(()=>{
   try{
     const d=JSON.parse(localStorage.getItem(CFK));
-    if(d&&Array.isArray(d.meses)&&d.pct)return{meses:d.meses,pct:{dca:+d.pct.dca||0,liq:+d.pct.liq||0,res:+d.pct.res||0},activos:Array.isArray(d.activos)?d.activos:[]};
+    if(d&&Array.isArray(d.meses)&&d.pct)return{meses:d.meses,pct:{dca:+d.pct.dca||0,liq:+d.pct.liq||0,res:+d.pct.res||0},activos:Array.isArray(d.activos)?d.activos:[],modo:d.modo==='objetivo'?'objetivo':'manual'};
   }catch(e){}
   return cfDefault();
 })();
@@ -2457,7 +2803,11 @@ function renderCF(){
     <td><div class="acts" style="opacity:1"><button class="abt del" onclick="cfDelMes(${i})" title="Eliminar mes"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M3 4h10M6 4V2h4v2M5 4l1 9h4l1-9" stroke-linecap="round"/></svg></button></div></td>
   </tr>`).join(''):`<tr><td class="empty-td" colspan="5">Sin meses en el plan. Pulsa «+ Añadir mes».</td></tr>`;
   ['dca','liq','res'].forEach(k=>{const inp=el('cf-pct-'+k);if(inp&&document.activeElement!==inp)inp.value=cf.pct[k];});
-  el('cf-activos').innerHTML=cf.activos.length?cf.activos.map((a,i)=>`<tr>
+  const obj=cf.modo==='objetivo';
+  el('cf-modo-manual').classList.toggle('on',!obj);
+  el('cf-modo-obj').classList.toggle('on',obj);
+  el('cf-act-btns').style.display=obj?'none':'flex';
+  if(!obj)el('cf-activos').innerHTML=cf.activos.length?cf.activos.map((a,i)=>`<tr>
     <td><input class="cf-in txt" style="width:170px" value="${cfEsc(a.n)}" placeholder="Nombre" oninput="cfSetAct(${i},'n',this.value)"></td>
     <td class="r"><input class="cf-in" style="width:64px" type="number" step="any" min="0" value="${a.w||''}" placeholder="0" oninput="cfSetAct(${i},'w',this.value)"></td>
     <td class="r"><span class="cf-out" id="cf-am-${i}">—</span></td>
@@ -2494,14 +2844,62 @@ function cfRecalc(){
     ?'<div class="alloc-track">'+['dca','liq','res'].map(k=>`<div class="alloc-seg" style="width:${((p[k]||0)/base*100).toFixed(2)}%;background:${CF_COLORS[k]}" title="${CF_LBL[k]} · ${p[k]||0}% · ${fe(Math.max(c.medio,0)*(p[k]||0)/100)}/mes"></div>`).join('')
      +'</div><div class="alloc-legend">'+['dca','liq','res'].map(k=>`<span class="alloc-key"><i style="background:${CF_COLORS[k]}"></i>${CF_LBL[k]} <b>${fe(Math.max(c.medio,0)*(p[k]||0)/100,0)}/mes</b></span>`).join('')+'</div>'
     :'';
-  const sw=cf.activos.reduce((s,a)=>s+(+a.w||0),0);
-  cf.activos.forEach((a,i)=>{
-    const share=sw>0?(+a.w||0)/sw:0;
-    const em=el('cf-am-'+i),ew=el('cf-aw-'+i);
-    if(em)em.textContent=fe(c.dcaMes*share);
-    if(ew)ew.textContent=fe(c.dcaMes*share/CF_SEM_MES);
-  });
+  const hint=el('cf-modo-hint');
+  if(cf.modo==='objetivo'){
+    const r=cfObjetivoAlloc(c.dcaMes);
+    if(hint)hint.innerHTML='Reparte el DCA para converger a tu <b>cartera objetivo</b> sin vender: prioriza lo infraponderado.'+(r?' <button class="btn btn-ghost" onclick="cfCopiarPesos()" style="padding:1px 8px;font-size:10px;vertical-align:1px">Copiar a pesos manuales</button>':'');
+    el('cf-activos').innerHTML=!r
+      ?`<tr><td class="empty-td" colspan="5">${c.dcaMes>0?'Define porcentajes en la vista «Cartera objetivo» para calcular el reparto automático.':'Introduce ingresos y gastos en los meses para tener presupuesto DCA.'}</td></tr>`
+      :r.keys.map(u=>{
+        const e2=r.alloc[u],curPct=r.t>0?(r.curr[u]||0)/r.t*100:0;
+        return`<tr>
+          <td><div style="display:flex;align-items:center;gap:8px"><span class="tr-sw" style="background:${UND_COLORS[u]||'#736d95'}"></span><span style="font-size:12px;font-weight:600;color:var(--fg0)">${u}</span></div>
+          <div style="font-size:9px;color:var(--fg3);margin-top:2px;padding-left:17px">actual ${curPct.toFixed(1)}% · objetivo ${targets[u]||0}%</div></td>
+          <td class="r"><span class="cf-out">${c.dcaMes>0?(e2/c.dcaMes*100).toFixed(0):0}%</span></td>
+          <td class="r"><span class="cf-out">${fe(e2)}</span></td>
+          <td class="r"><span class="cf-out">${fe(e2/CF_SEM_MES)}</span></td>
+          <td></td>
+        </tr>`;
+      }).join('');
+  }else{
+    if(hint)hint.textContent='Pesos relativos entre sí (se normalizan). Cambia a «Auto → objetivo» para que el reparto salga de tu cartera objetivo.';
+    const sw=cf.activos.reduce((s,a)=>s+(+a.w||0),0);
+    cf.activos.forEach((a,i)=>{
+      const share=sw>0?(+a.w||0)/sw:0;
+      const em=el('cf-am-'+i),ew=el('cf-aw-'+i);
+      if(em)em.textContent=fe(c.dcaMes*share);
+      if(ew)ew.textContent=fe(c.dcaMes*share/CF_SEM_MES);
+    });
+  }
   cfChart(c);
+}
+
+// Reparto del presupuesto DCA para converger a la cartera objetivo sin vender:
+// primero cubre los subyacentes infraponderados (proporcional al déficit contra
+// el total futuro cartera+aportación); el sobrante se reparte por peso objetivo.
+function cfSetModo(m){cf.modo=m;cfSave();renderCF();}
+function cfObjetivoAlloc(budget){
+  const keys=Object.keys(targets).filter(u=>u!=='Liquidez'&&(targets[u]||0)>0);
+  if(!keys.length||!(budget>0))return null;
+  const t=tv();
+  const curr={};
+  for(const a of assets){const v=vl(a);if(!v||v<=0)continue;const u=und(a);curr[u]=(curr[u]||0)+v;}
+  const future=t+budget;
+  const sumT=keys.reduce((s,u)=>s+targets[u],0);
+  const need={};let sumNeed=0;
+  for(const u of keys){const n=Math.max(0,targets[u]/100*future-(curr[u]||0));need[u]=n;sumNeed+=n;}
+  const alloc={};
+  if(sumNeed<=0)for(const u of keys)alloc[u]=budget*targets[u]/sumT;
+  else if(sumNeed>=budget)for(const u of keys)alloc[u]=budget*need[u]/sumNeed;
+  else{const rem=budget-sumNeed;for(const u of keys)alloc[u]=need[u]+rem*targets[u]/sumT;}
+  return{alloc,keys:[...keys].sort((a,b)=>alloc[b]-alloc[a]),curr,t};
+}
+function cfCopiarPesos(){
+  const c=cfCalc(),r=cfObjetivoAlloc(c.dcaMes);
+  if(!r||!(c.dcaMes>0)){toast('Nada que copiar todavía');return;}
+  cf.activos=r.keys.filter(u=>r.alloc[u]>0.005).map(u=>({n:u,w:Math.max(1,Math.round(r.alloc[u]/c.dcaMes*100))}));
+  cf.modo='manual';
+  cfSave();renderCF();toast('Pesos copiados al modo manual ✓');
 }
 
 function cfChart(c){
