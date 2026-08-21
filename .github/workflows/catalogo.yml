@@ -1,0 +1,43 @@
+name: Precios del catálogo (diario)
+
+# Cierre diario de los ~500 activos del catálogo. Es la red de seguridad para
+# los activos que NO están en simbolos.json ni en el secret: sin esto, añadir
+# una posición nueva en la app la dejaba sin precio, porque el navegador no
+# puede consultar Yahoo por su cuenta (no hay cabecera CORS y los proxies
+# gratuitos están caídos o son de pago).
+#
+# Va en su propio workflow y no dentro de «Actualizar precios» porque son 500+
+# símbolos (4-6 min) y aquél se ejecuta cada 15 minutos.
+
+on:
+  schedule:
+    - cron: "40 5 * * *"    # 07:40 en Madrid (verano); antes de que abra Europa
+  workflow_dispatch:         # botón manual en la pestaña Actions
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catalogo
+  cancel-in-progress: false
+
+jobs:
+  catalogo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Descargar cierres del catálogo
+        run: python update_catalogo.py
+
+      - name: Publicar catalogo-precios.json si cambió
+        run: |
+          git config user.name "precios-bot"
+          git config user.email "precios-bot@users.noreply.github.com"
+          git add catalogo-precios.json
+          git diff --cached --quiet && echo "Sin cambios" || (git commit -m "catálogo $(date -u +'%Y-%m-%d')" && git push)

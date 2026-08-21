@@ -12,6 +12,7 @@
  {"sym": "XETH.DE",       "isin": "CH1315732268", "ticker": "ETHE", "nombre": "Xtrackers Galaxy Physical Ethereum"},
  {"sym": "GLDA.DE",       "isin": "FR0013416716", "ticker": "GLDA", "nombre": "Amundi Physical Gold ETC C"},
  {"sym": "PHAG.MI",       "isin": "JE00B1VS3333", "ticker": "PHAG", "nombre": "WisdomTree Physical Silver"},
+ {"sym": "0P00000JGA.F", "isin": "ES0152769032", "nombre": "ING Fondo Naranja S&P 500 FI"},
  {"sym": "MSTR",          "ticker": "MSTR", "nombre": "Strategy Inc"},
  {"sym": "AMZN",          "ticker": "AMZN", "nombre": "Amazon"},
  {"sym": "CABK.MC",       "ticker": "48CA", "nombre": "CaixaBank"},

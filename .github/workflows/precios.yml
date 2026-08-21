@@ -23,6 +23,10 @@ jobs:
           python-version: "3.12"
 
       - name: Descargar precios
+        # La cartera real llega por el secret: así toda posición con precio
+        # automático entra en el feed sin tener que editar simbolos.json.
+        env:
+          POSICIONES_JSON: ${{ secrets.POSICIONES_JSON }}
         run: python update_precios.py
 
       - name: Publicar precios.json y benchmark.json si cambiaron

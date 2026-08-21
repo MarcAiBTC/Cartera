@@ -5,7 +5,16 @@ Fuentes: Yahoo Finance (chart v8), CoinGecko (cripto), Frankfurter/BCE (divisas)
 Se ejecuta desde GitHub Actions; no necesita claves ni servicios de pago.
 Si un símbolo falla, conserva su último precio conocido del precios.json anterior.
 """
-import json, time, urllib.request, urllib.parse, datetime, pathlib, sys
+import json, os, time, urllib.request, urllib.parse, datetime, pathlib, sys
+
+# Ids de CoinGecko de las criptos que la app sabe seguir. Los mismos que en
+# index.html: si se añade una allí, hay que añadirla aquí para que entre al feed.
+CG_IDS = {
+    "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana", "BNB": "binancecoin",
+    "ADA": "cardano", "XRP": "ripple", "DOT": "polkadot", "AVAX": "avalanche-2",
+    "LINK": "chainlink", "DOGE": "dogecoin", "LTC": "litecoin", "UNI": "uniswap",
+    "ATOM": "cosmos", "MATIC": "matic-network", "NEAR": "near",
+}
 
 ROOT = pathlib.Path(__file__).resolve().parent
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
@@ -72,7 +81,7 @@ def fx_to_eur(cur):
         return fx_to_eur("GBP") / 100.0
     if cur not in FX:
         try:
-            d = get_json(f"https://api.frankfurter.app/latest?from={cur}&to=EUR")
+            d = get_json(f"https://api.frankfurter.dev/v1/latest?base={cur}&symbols=EUR")
             FX[cur] = float(d["rates"]["EUR"])
         except Exception:
             p = yf_quote(f"EUR{cur}=X")[0]   # respaldo: cruce de Yahoo (divisa por 1 EUR)
@@ -127,8 +136,8 @@ def fx_series(base="USD", quote="EUR", dias=760):
     """Serie diaria de tipos de cambio del BCE vía Frankfurter: {fecha: tipo}."""
     hoy = datetime.date.today()
     desde = hoy - datetime.timedelta(days=dias)
-    url = (f"https://api.frankfurter.app/{desde.isoformat()}..{hoy.isoformat()}"
-           f"?from={base}&to={quote}")
+    url = (f"https://api.frankfurter.dev/v1/{desde.isoformat()}..{hoy.isoformat()}"
+           f"?base={base}&symbols={quote}")
     d = get_json(url)
     return {f: v.get(quote) for f, v in (d.get("rates") or {}).items() if v.get(quote)}
 
@@ -170,8 +179,73 @@ def escribir_benchmark():
           f"({dias[0]} → {dias[-1]})")
 
 
+def simbolos_de_posiciones():
+    """Símbolos que hacen falta según la cartera real (secret POSICIONES_JSON).
+
+    simbolos.json es la lista fija que se mantiene a mano. El problema es que
+    cada posición nueva que se añadía en la app quedaba fuera del feed hasta que
+    alguien se acordaba de editar este repositorio, y mientras tanto su precio
+    dependía de los proxies CORS del navegador (más lentos y menos fiables).
+    Leyendo el secret, cualquier posición con símbolo Yahoo, ISIN o ticker entra
+    en el feed en la siguiente pasada, sin tocar nada.
+    """
+    crudo = os.environ.get("POSICIONES_JSON", "").strip()
+    if not crudo:
+        return []
+    try:
+        datos = json.loads(crudo)
+    except Exception as e:
+        print(f"  ⚠ POSICIONES_JSON ilegible: {e}")
+        return []
+    activos = datos.get("assets") if isinstance(datos, dict) else datos
+    if not isinstance(activos, list):
+        return []
+    fuera = []
+    for a in activos:
+        if not isinstance(a, dict) or a.get("cat") == "liquidez":
+            continue
+        if a.get("mode") != "auto":
+            continue
+        sym = (a.get("yfSym") or "").strip()
+        isin = (a.get("isin") or "").strip().upper()
+        ticker = (a.get("ticker") or "").strip().upper()
+        if not (sym or isin or ticker):
+            continue
+        e = {"sym": sym, "nombre": a.get("name") or sym or isin or ticker}
+        if isin:
+            e["isin"] = isin
+        if ticker:
+            e["ticker"] = ticker
+        # La cripto va por CoinGecko: su ticker NO es un símbolo de Yahoo
+        # ("BTC" en Yahoo es un ETF de Grayscale y daría un precio falso).
+        if ticker in CG_IDS and not sym and not isin:
+            e["cg"] = CG_IDS[ticker]
+            e["sym"] = ticker
+        fuera.append(e)
+    return fuera
+
+
+def fusionar(base, extra):
+    """Une las dos listas sin duplicar: manda simbolos.json, que está curado."""
+    vistos = set()
+    for s in base:
+        for k in (s.get("sym"), s.get("isin"), s.get("ticker")):
+            if k:
+                vistos.add(k.upper())
+    salida = list(base)
+    for s in extra:
+        claves = [k.upper() for k in (s.get("sym"), s.get("isin"), s.get("ticker")) if k]
+        if any(k in vistos for k in claves):
+            continue
+        vistos.update(claves)
+        salida.append(s)
+        print(f"  + de la cartera: {s.get('nombre')} ({s.get('sym') or s.get('isin') or s.get('ticker')})")
+    return salida
+
+
 def main():
     simbolos = json.loads((ROOT / "simbolos.json").read_text())
+    simbolos = fusionar(simbolos, simbolos_de_posiciones())
     out_path = ROOT / "precios.json"
     previo, resueltos = {}, {}
     if out_path.exists():
