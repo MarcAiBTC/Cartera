@@ -317,6 +317,8 @@ td{padding:11px 14px;vertical-align:middle}
 .an-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}
 .an-title{font-size:14px;font-weight:700;letter-spacing:-.2px;color:var(--fg0)}
 .an-sub2{font-size:11.5px;color:var(--fg2);font-weight:500;line-height:1.55;margin-top:4px;max-width:640px}
+.an-nota{font-size:11px;color:#b97f14;font-weight:600;line-height:1.5;margin-top:6px;max-width:640px}
+.an-nota:empty{display:none}
 .an-snap{flex-shrink:0;padding:6px 12px;font-size:11.5px}
 .an-canvas{position:relative}
 .an-h320{height:320px}
@@ -781,7 +783,8 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         <div class="an-head">
           <div>
             <div class="an-title">Tu rentabilidad frente al S&amp;P 500</div>
-            <div class="an-sub2">Sin contar tus aportaciones: solo lo que el mercado hace con tu dinero. Las dos líneas salen de 100 el mismo día, así que lo que importa es la distancia entre ellas.</div>
+            <div class="an-sub2">Mide <b>solo el dinero invertido</b>, sin la liquidez, y descuenta tus aportaciones: es lo que el mercado ha hecho con tu dinero. Las dos líneas salen de cero el mismo día, así que lo que importa es la distancia entre ellas.</div>
+            <div class="an-nota" id="twr-nota"></div>
           </div>
         </div>
         <div class="an-leg" id="twr-leg"></div>
@@ -1339,6 +1342,10 @@ function calibrarPorValor(a,nav){
   a.costUnit=+(parts>0?coste/parts:0).toFixed(6);
   a.unit='part.';
   a.calibradoA=nav;
+  // Cantidad y precio se actualizan JUNTOS o la posición queda inconsistente.
+  a.mp=nav;
+  a.mpT=Date.now();
+  a.pxOk=true;
   delete a.calibPend;
   calibradas.push(a.name+': '+fn(a.qty,4)+' part. a '+fe(nav,4));
   return true;
@@ -2347,24 +2354,63 @@ const aportadoHoy = () => tc()-realizadoTotal();
 const gananciaTotal = () => (tv()-tc())+realizadoTotal();
 
 // Serie de días guardados, ordenada y con el aportado ya corregido.
+// Un punto de la serie. valInv/apInv son el patrimonio y el aportado SIN la
+// liquidez; solo existen si ese día se apuntó la liquidez (los días anteriores
+// a agosto de 2026 no la tienen).
+function puntoEvo(x){
+  const val=x.val||0, ap=aportadoEn(x);
+  const liq=x.liq!=null?+x.liq:null;
+  return {ts:x.ts,val,ap,liq,
+          valInv:liq!=null?val-liq:null,
+          apInv :liq!=null?ap-liq:null};
+}
 function serieEvo(){
-  return [...snaps].sort((a,b)=>a.ts-b.ts).map(x=>({ts:x.ts,val:x.val||0,ap:aportadoEn(x)}));
+  const s=[...snaps].sort((a,b)=>a.ts-b.ts).map(puntoEvo);
+  // Cerrar SIEMPRE con el valor de ahora mismo. El último día guardado puede ser
+  // de hace semanas, y dejar el gráfico ahí hacía que no se viera la subida más
+  // reciente mientras el resto de la pantalla sí la enseñaba: parecía un error
+  // de cálculo cuando en realidad era un gráfico caducado.
+  const t=tv();
+  const hoy=new Date().toDateString();
+  if(t>0&&(!s.length||new Date(s[s.length-1].ts).toDateString()!==hoy)){
+    const liq=liquidezHoy();
+    s.push({ts:Date.now(),val:t,ap:aportadoHoy(),liq,
+            valInv:t-liq,apInv:aportadoHoy()-liq,vivo:true});
+  }
+  return s;
 }
 
 // TWR encadenado (Dietz simple) usando como flujo la aportación externa real.
+//
+// Se mide SOBRE LO INVERTIDO, no sobre el patrimonio. La liquidez ni gana ni
+// pierde (su valor es su coste), así que no cambia los euros ganados: lo único
+// que hace es agrandar el denominador y acercar el porcentaje a cero. Con un
+// tercio de la cartera en efectivo, medir sobre el total escondía la mitad del
+// movimiento y hacía que la comparación con el S&P 500 —que es 100% mercado—
+// no fuera comparable.
+//
+// Los días guardados antes de agosto de 2026 no apuntaron la liquidez. Para
+// esos tramos se usa el patrimonio total como base y se avisa: preferimos un
+// dato peor y señalado antes que uno inventado. Devuelve también desde cuándo
+// la medición es ya solo sobre lo invertido.
 function twrSeries(){
   const s=serieEvo();
   if(s.length<2)return null;
-  let idx=100;
+  let idx=100,invDesde=null,huboTotal=false;
   const pts=[{ts:s[0].ts,idx}];
   for(let i=1;i<s.length;i++){
-    const f=s[i].ap-s[i-1].ap;
-    const base=s[i-1].val+f/2;
-    const r=base>0?(s[i].val-s[i-1].val-f)/base:0;
+    const a=s[i-1],b=s[i];
+    const sobreInv=a.valInv!=null&&b.valInv!=null;
+    const f    = sobreInv? b.apInv-a.apInv : b.ap-a.ap;
+    const v0   = sobreInv? a.valInv        : a.val;
+    const v1   = sobreInv? b.valInv        : b.val;
+    const base = v0+f/2;
+    const r    = base>0?(v1-v0-f)/base:0;
+    if(sobreInv){if(invDesde==null)invDesde=a.ts;}else{huboTotal=true;invDesde=null;}
     idx*=1+r;
-    pts.push({ts:s[i].ts,idx});
+    pts.push({ts:b.ts,idx});
   }
-  return pts;
+  return {pts,invDesde,huboTotal};
 }
 function twrMaxDD(pts){
   let peak=-Infinity,mdd=0;
@@ -2417,10 +2463,13 @@ function renderAnPatrimonio(){
   if(s.length<2){cv.parentElement.style.display='none';nd.style.display='block';leg.innerHTML='';return;}
   cv.parentElement.style.display='block';nd.style.display='none';
 
-  const fin=s[s.length-1],dif=fin.val-fin.ap;
+  const fin=s[s.length-1],ini=s[0];
+  const dif=fin.val-fin.ap,dif0=ini.val-ini.ap,delta=dif-dif0;
   leg.innerHTML='<span class="lgk"><i style="background:#6d7df6"></i>Patrimonio</span>'
     +'<span class="lgk"><i style="background:#9d97b8"></i>Dinero aportado</span>'
-    +'<span class="lgk lgk-num '+(dif>=0?'up-c':'dn-c')+'">'+(dif>=0?'+':'')+fe(dif,0)+' de diferencia hoy</span>';
+    +'<span class="lgk lgk-num">Ganancia <b class="'+(dif0>=0?'up-c':'dn-c')+'">'+(dif0>=0?'+':'')+fe(dif0,0)+'</b>'
+      +' <span style="color:var(--fg3)">al empezar →</span> <b class="'+(dif>=0?'up-c':'dn-c')+'">'+(dif>=0?'+':'')+fe(dif,0)+'</b>'
+      +' <span style="color:var(--fg3)">hoy ('+(delta>=0?'+':'')+fe(delta,0)+')</span></span>';
 
   const ctx=cv.getContext('2d');
   chartInstances['an-patrimonio']=new Chart(ctx,{
@@ -2448,7 +2497,8 @@ function renderTWR(){
   const wrap=el('twr-chart-wrap'),no=el('twr-nodata');
   if(!wrap)return;
   if(chartInstances['evo-twr'])chartInstances['evo-twr'].destroy();
-  const tw=twrSeries();
+  const twr=twrSeries();
+  const tw=twr&&twr.pts;
   const leg=el('twr-leg');
   if(!tw){wrap.style.display='none';no.style.display='block';if(leg)leg.innerHTML='';return;}
   wrap.style.display='block';no.style.display='none';
@@ -2464,6 +2514,17 @@ function renderTWR(){
   }
   const dif=bTot!=null?twrTot-bTot:null;
 
+  const nota=el('twr-nota');
+  if(nota){
+    // El aviso deja de tener sentido en cuanto todo el tramo lleva liquidez
+    // apuntada, así que se degrada a una nota informativa en vez de quedarse
+    // como advertencia para siempre.
+    if(twr.huboTotal&&twr.invDesde)
+      nota.innerHTML='Solo lo invertido desde el '+fd(twr.invDesde)+'. Antes de esa fecha va sobre el patrimonio entero: la app todavía no anotaba cuánta liquidez tenías cada día, y eso suaviza el porcentaje.';
+    else if(twr.huboTotal)
+      nota.innerHTML='Este tramo va sobre el patrimonio entero, liquidez incluida: los días guardados hasta ahora no anotaban cuánto era efectivo. Con la liquidez fuera el porcentaje sería mayor, para bien o para mal. Se corrige solo según se guarden días nuevos.';
+    else nota.innerHTML='';
+  }
   if(leg)leg.innerHTML=
      '<span class="lgk"><i style="background:'+(twrTot>=0?'#0ea97d':'#f0537c')+'"></i>Tu cartera <b class="'+(twrTot>=0?'up-c':'dn-c')+'">'+fp(twrTot)+'</b></span>'
     +(bTot!=null
@@ -2563,8 +2624,8 @@ function renderRiskG(t){
   const conVol=items.filter(x=>x.vol!=null);
   const volPond=conVol.length?conVol.reduce((s,x)=>s+x.vol*x.v,0)/conVol.reduce((s,x)=>s+x.v,0):null;
   const volCob=t>0?conVol.reduce((s,x)=>s+x.v,0)/t*100:0;
-  const tw=twrSeries();
-  const mdd=tw?twrMaxDD(tw):null;
+  const twr=twrSeries();
+  const mdd=twr?twrMaxDD(twr.pts):null;
   tiles.innerHTML=[
     ['Concentración top 3',top3.toFixed(0)+'%','peso de los 3 mayores subyacentes',top3>60?'dn':top3>40?'':'up'],
     ['Mayor exposición',uk[0]?uk[0]:'—',uk[0]?(unds[uk[0]]/t*100).toFixed(0)+'% de la cartera':'',''],
@@ -2632,9 +2693,11 @@ function renderTreemap(){
 addEventListener('resize',()=>{if(curPage==='graficos')renderTreemap();});
 
 // ── EVOLUTION ─────────────────────────────────────────────────────────────────
+const liquidezHoy = ()=>assets.filter(a=>a.cat==='liquidez').reduce((s,a)=>s+(vl(a)||0),0);
+
 function saveSnap(){
   const t=tv();if(!t){toast('Sin valor');return;}
-  snaps.push({id:Date.now(),ts:Date.now(),val:t,cost:tc()});
+  snaps.push({id:Date.now(),ts:Date.now(),val:t,cost:tc(),liq:liquidezHoy()});
   svSt();toast('Día guardado · '+fe(t));
   if(curPage==='analisis')renderAnalisis();
   const sv=el('snap-now-val');if(sv)sv.textContent=fe(t,0);
@@ -2647,7 +2710,7 @@ function autoSnapDaily(){
   const t=tv();if(!(t>0))return;
   const hoy=new Date().toDateString();
   if(snaps.some(s=>new Date(s.ts).toDateString()===hoy))return;
-  snaps.push({id:Date.now(),ts:Date.now(),val:t,cost:tc(),auto:true});
+  snaps.push({id:Date.now(),ts:Date.now(),val:t,cost:tc(),liq:liquidezHoy(),auto:true});
   svSt();
   if(curPage==='analisis')renderAnalisis();
 }
@@ -3241,6 +3304,14 @@ function autoUpgradeAssets(){
   let n=0;
   for(const a of assets){
     if(a.cat==='liquidez')continue;
+    // Rescate de una posición que se quedó a medio calibrar (cantidad en
+    // participaciones pero precio con el saldo entero): se veía como un valor
+    // varias veces mayor del real. Se devuelve el precio al valor liquidativo
+    // con el que se calibró; el siguiente refresco pondrá el de hoy.
+    if(a.calibradoA>0&&a.mp>a.calibradoA*3){
+      console.warn('[Cartera] posición a medio calibrar reparada:',a.name,a.mp,'→',a.calibradoA);
+      a.mp=a.calibradoA;a.pxOk=true;n++;
+    }
     // Migración: versiones previas guardaban el id del feed (BTC/ETH) como símbolo
     // Yahoo; en Yahoo son otros instrumentos y daban precios falsos.
     if(a.yfSym&&CG[up(a.yfSym)])delete a.yfSym;

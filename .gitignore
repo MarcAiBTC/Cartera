@@ -1,2 +1,4 @@
 informe.html
 .claude/
+__pycache__/
+*.pyc
