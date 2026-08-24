@@ -4728,8 +4728,11 @@ async function pubGH(ruta,opts){
 // y la subida choca con un 409. Con no-store y un parámetro que cambia siempre se
 // lee el sha de verdad.
 async function pubSha(ruta){
-  const r=await pubGH(ruta+'?ref='+PUB_RAMA+'&t='+Date.now(),
-    {cache:'no-store',headers:{'Cache-Control':'no-cache','Pragma':'no-cache'}});
+  // Sin cabeceras propias: GitHub solo admite en cross-origin las de su
+  // Access-Control-Allow-Headers, y Cache-Control no está en la lista; añadirla
+  // tumba el preflight y fetch falla antes de salir. cache:'no-store' es opción
+  // de fetch, no cabecera, así que evita la caché sin tocar el CORS.
+  const r=await pubGH(ruta+'?ref='+PUB_RAMA+'&t='+Date.now(),{cache:'no-store'});
   if(r.status===404)return null;
   if(!r.ok)throw new Error('GitHub '+r.status+' al leer el fichero: '+(await r.text()).slice(0,180));
   return (await r.json()).sha||null;
