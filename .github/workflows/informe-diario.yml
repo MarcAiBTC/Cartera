@@ -81,11 +81,9 @@ jobs:
           path: .informe-enviado
           key: informe-enviado-${{ steps.marca.outputs.dia }}-${{ github.run_id }}
 
-      - name: Guardar copia de los informes
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: informes-html
-          path: informe-*.html
-          if-no-files-found: ignore
-          retention-days: 7
+      # Aquí había un upload-artifact con los informe-*.html. Se quitó a
+      # propósito: ese HTML es la cartera YA DESCIFRADA, y en un repositorio
+      # público cualquiera puede descargar los artefactos de una ejecución.
+      # Subirlo anulaba el cifrado con el que la app publica los datos.
+      # Para revisar el HTML, ejecuta el script en tu ordenador:
+      #   CARTERA_PASS=... DRY_RUN=1 node scripts/informe_diario.mjs

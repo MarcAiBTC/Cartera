@@ -350,9 +350,10 @@ for (const perfil of PERFILES) {
   if (!carga) { console.log(`· ${perfil.nombre}: sin cartera publicada todavía (datos/cartera-${perfil.id}.enc.json no existe). Se salta.`); continue; }
   if (!(carga.datos.assets || []).length) { console.log(`· ${perfil.nombre}: la cartera publicada no tiene posiciones. Se salta.`); continue; }
 
-  const { asunto, html, resumen } = await construirInforme(perfil, carga);
+  const { asunto, html } = await construirInforme(perfil, carga);
   writeFileSync(`informe-${perfil.id}.html`, html);
-  console.log(`✓ ${perfil.nombre}: informe generado (${resumen}) desde ${carga.origen}.`);
+  // Sin cifras: el log de Actions de un repo público lo lee cualquiera sin cuenta.
+  console.log(`✓ ${perfil.nombre}: informe generado desde ${carga.origen}.`);
 
   if (process.env.DRY_RUN === '1') { console.log(`  DRY_RUN=1: no se envía. Revisa informe-${perfil.id}.html.`); continue; }
   if (!perfil.destino) { console.error(`✗ ${perfil.nombre}: falta el secret MAIL_${perfil.id.toUpperCase()}, no hay a quién escribir.`); fallos++; continue; }
