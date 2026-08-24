@@ -6,7 +6,7 @@
  {"sym": "0P0001CLDK.F",  "isin": "IE00BYX5NX33", "nombre": "Fidelity MSCI World P-Acc-EUR"},
  {"sym": "0P0000TOUY.F",  "isin": "LU0625737910", "nombre": "Pictet China Index P EUR"},
  {"sym": "0P00000F24.F",  "isin": "FR0000447823", "nombre": "AXA Tresor Court Terme C"},
- {"sym": "FBTC.SW",       "isin": "XS2434891219", "ticker": "FBTC", "nombre": "Fidelity Physical Bitcoin ETP"},
+ {"sym": "FBTC.L",        "isin": "XS2434891219", "ticker": "FBTC", "nombre": "Fidelity Physical Bitcoin ETP"},
  {"sym": "GBSE.MI",       "isin": "JE00B8DFY052", "ticker": "WGLD", "nombre": "WisdomTree Physical Gold EUR Hedged"},
  {"sym": "IGLN.L",        "isin": "IE00B4ND3602", "ticker": "IGLN", "nombre": "iShares Physical Gold ETC"},
  {"sym": "XETH.DE",       "isin": "CH1315732268", "ticker": "ETHE", "nombre": "Xtrackers Galaxy Physical Ethereum"},

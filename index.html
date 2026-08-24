@@ -1510,12 +1510,14 @@ const CG={BTC:'bitcoin',ETH:'ethereum',SOL:'solana',BNB:'binancecoin',ADA:'carda
 // ── MOTOR DE PRECIOS v5 ───────────────────────────────────────────────────────
 // Tickers con símbolo Yahoo directo (sin resolución)
 const YF_DIRECT={MSTR:'MSTR',AMZN:'AMZN',XAU:'GC=F',GLD:'GLD',CABK:'CABK.MC','48CA':'CABK.MC'};
+// Símbolos que hay que dejar de usar: se borran de las posiciones ya guardadas.
+const YF_RETIRADOS={'FBTC.SW':1,'FBTC.DE':1};
 // Instrumentos verificados (jun-2026): ISIN + símbolo Yahoo. keepManual: no pasar a auto.
 const ISIN_RE=/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
 const SEED=[
   {match:a=>up(a.ticker)==='WGLD'||/wisdomtree|wt .*gold.*h(e)?dg/i.test(a.name), isin:'JE00B8DFY052', sym:'GBSE.MI'},   // WisdomTree Physical Gold EUR Daily Hedged
   {match:a=>up(a.ticker)==='IGLN'||/ishares.*physical gold/i.test(a.name),        isin:'IE00B4ND3602', sym:'IGLN.L'},    // iShares Physical Gold ETC (USD)
-  {match:a=>up(a.ticker)==='FBTC'||/fidelity.*physical bitcoin/i.test(a.name),    isin:'XS2434891219', sym:'FBTC.DE'},   // Fidelity Physical Bitcoin ETP
+  {match:a=>up(a.ticker)==='FBTC'||/fidelity.*physical bitcoin/i.test(a.name),    isin:'XS2434891219', sym:'FBTC.L'},    // Fidelity Physical Bitcoin ETP (Londres: ver YF_RETIRADOS)
   {match:a=>up(a.ticker)==='ETHE'||/galaxy.*ethereum/i.test(a.name),              isin:'CH1315732268', sym:'XETH.DE'},   // Xtrackers Galaxy Physical Ethereum ETC
   {match:a=>up(a.ticker)==='GLDA'||/amundi.*physical gold/i.test(a.name),         isin:'FR0013416716', sym:'GLDA.DE'},   // Amundi Physical Gold ETC C
   {match:a=>up(a.ticker)==='PHAG'||/physical silver/i.test(a.name),               isin:'JE00B1VS3333', sym:'PHAG.MI'},   // WisdomTree Physical Silver
@@ -2034,7 +2036,7 @@ const CATALOGO=[
   {s:"",t:"ATOM",n:"Cosmos",c:"cripto",u:"Cosmos",un:"ATOM"},
   {s:"",t:"DOGE",n:"Dogecoin",c:"cripto",u:"Dogecoin",un:"DOGE"},
   {s:"",t:"ETH",n:"Ethereum",c:"cripto",u:"Ethereum",un:"ETH"},
-  {s:"FBTC.SW",n:"Fidelity Physical Bitcoin ETP",c:"cripto",u:"Bitcoin",i:"XS2434891219",un:"títulos"},
+  {s:"FBTC.L",n:"Fidelity Physical Bitcoin ETP",c:"cripto",u:"Bitcoin",i:"XS2434891219",un:"títulos"},
   {s:"FBTC",n:"Fidelity Wise Origin Bitcoin",c:"cripto",u:"Bitcoin",un:"títulos"},
   {s:"GBTC",n:"Grayscale Bitcoin Trust",c:"cripto",u:"Bitcoin",un:"títulos"},
   {s:"IBIT",n:"iShares Bitcoin Trust",c:"cripto",u:"Bitcoin",un:"títulos"},
@@ -2053,6 +2055,7 @@ const CATALOGO=[
   {s:"LYP6.DE",n:"Amundi Stoxx Europe 600 (Xetra)",c:"fondo",u:"Europa",i:"LU0908500753",un:"títulos"},
   {s:"ARKK",n:"ARK Innovation",c:"fondo",u:"Innovación",un:"títulos"},
   {s:"0P00000F24.F",n:"AXA Trésor Court Terme",c:"fondo",u:"Monetario",i:"FR0000447823",un:"part."},
+  {s:"0P0001CJGN.F",n:"Fidelity MSCI Europe Index",c:"fondo",u:"Europa",i:"IE00BYX5MD61",un:"part."},
   {s:"0P0001CLDK.F",n:"Fidelity MSCI World Index",c:"fondo",u:"MSCI World",i:"IE00BYX5NX33",un:"part."},
   {s:"URNU.DE",n:"Global X Uranium",c:"fondo",u:"Nuclear y uranio",i:"IE000NDWFGA5",un:"títulos"},
   {s:"URA",n:"Global X Uranium (US)",c:"fondo",u:"Nuclear y uranio",un:"títulos"},
@@ -2115,6 +2118,7 @@ const CATALOGO=[
   {s:"XLV",n:"SPDR Salud (XLV)",c:"fondo",u:"Salud",un:"títulos"},
   {s:"XLK",n:"SPDR Tecnología (XLK)",c:"fondo",u:"Tecnología",un:"títulos"},
   {s:"XLU",n:"SPDR Utilities (XLU)",c:"fondo",u:"Utilities",un:"títulos"},
+  {s:"LU1815002040.LU",n:"UBS MSCI China All Shares",c:"fondo",u:"China",i:"LU1815002040",un:"part."},
   {s:"SMH",n:"VanEck Semiconductor (US)",c:"fondo",u:"Semiconductores",un:"títulos"},
   {s:"VVSM.DE",n:"VanEck Semiconductor UCITS",c:"fondo",u:"Semiconductores",i:"IE00BMC38736",un:"títulos"},
   {s:"SMH.L",n:"VanEck Semiconductor UCITS (LSE)",c:"fondo",u:"Semiconductores",i:"IE00BMC38736",un:"títulos",cy:"USD"},
@@ -2244,6 +2248,9 @@ let rendim = Array.isArray(st.rendim) ? st.rendim : [];
 let bandMode = st.bandMode==='broker' ? 'broker' : 'clase';
 
 let lpx={},lpxPrev={},lpxSpark={},wlpx={},wlpxNat={},pxStat={},fxCache={EUR:1},fxPending={};
+// Cierres descartados por prevFiable(): sin ellos no hay variación del día, y el
+// activo queda fuera del «Hoy» de la cartera en vez de contaminarlo.
+let prevDudoso={};
 // Hora exacta y fuente de cada precio en vivo. Antes sólo se sabía «hay precio»;
 // ahora la tabla puede decir de dónde salió y de qué minuto es, que es la
 // diferencia entre fiarte de una cifra y tener que ir a comprobarla fuera.
@@ -2296,6 +2303,29 @@ const enMercado = a=>a.cat!=="liquidez";
 const tvInv = ()=>assets.filter(enMercado).reduce((s,a)=>s+(vl(a)||0),0);
 const tcInv = ()=>assets.filter(enMercado).reduce((s,a)=>s+cs(a),0);
 const und = a=>a.cat==='liquidez'?'Liquidez':(a.underlying||UND_MAP[a.id]||a.name);
+// Guardarraíl del cierre anterior. El precio de hoy y el cierre de ayer tienen
+// que salir de la misma serie. Cuando no es así —en FBTC.SW Yahoo servía el
+// histórico de la clase en dólares junto a la cotización en francos— la
+// variación del día sale de dos dígitos sin que el activo se haya movido.
+//
+// Mirando solo el número no se puede distinguir un desplome real de un dato
+// malo, así que se compara con la MEDIANA de las últimas sesiones, que aguanta
+// varios valores estropeados sin moverse. Solo se descarta el cierre cuando es
+// él el que se sale de su propia serie y el precio de hoy, en cambio, encaja:
+// en un subidón o un desplome de verdad los dos se alejan a la vez, y entonces
+// no salta. Es a propósito conservador: preferimos no enseñar la variación de
+// un día a enseñar una inventada, pero nunca escondemos un movimiento real.
+const PREV_FUERA =0.12;   // el cierre se desvía más de un 12% de la mediana…
+const PREV_DENTRO=0.08;   // …mientras el precio de hoy se queda dentro del 8%
+function prevFiable(prev,actual,spark){
+  if(!(prev>0)||!(actual>0))return false;
+  if(!Array.isArray(spark))return true;
+  const s=spark.slice(0,-1).filter(x=>x>0).sort((a,b)=>a-b);   // sin el de hoy
+  if(s.length<6)return true;                                   // serie muy corta
+  const m=s.length>>1, med=s.length%2?s[m]:(s[m-1]+s[m])/2;
+  if(!(med>0))return true;
+  return !(Math.abs(prev/med-1)>PREV_FUERA&&Math.abs(actual/med-1)<PREV_DENTRO);
+}
 // Cierre anterior (EUR) por activo: para variación intradía. null si no hay dato.
 const pxPrev = a=>{
   if(a.cat==='liquidez')return (a.mp??1)*ccyRate(a);   // liquidez no se mueve
@@ -3639,9 +3669,15 @@ async function loadFeed(){
           const sp2=pe.spark[pe.spark.length-2];
           if(sp2>0)prev=sp2;
         }
+        if(prev>0&&!prevFiable(prev,eur,pe.spark)){
+          console.warn('[Cartera] cierre anterior descartado por incoherente:',
+            a.name,'('+sym+')',prev.toFixed(4),'€ frente a',eur.toFixed(4),'€ de hoy');
+          prevDudoso['#'+a.id]=prev;prev=null;
+        }
         if(prev>0)lpxPrev['#'+a.id]=prev;
         if(Array.isArray(pe.spark)&&pe.spark.length>1)lpxSpark['#'+a.id]=pe.spark;
-        pxDiag[a.name]={ok:eur.toFixed(4)+' € · feed ('+sym+', '+new Date(ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})+')'};
+        pxDiag[a.name]={ok:eur.toFixed(4)+' € · feed ('+sym+', '+new Date(ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})+')'
+          +(prevDudoso['#'+a.id]?' · sin variación del día: el cierre anterior que da el feed ('+prevDudoso['#'+a.id].toFixed(4)+' €) no cuadra con su propia serie':'')};
         n++;
       }
       for(const w of wl){                    // watchlist también desde el feed
@@ -3815,6 +3851,12 @@ function autoUpgradeAssets(){
     // Migración: versiones previas guardaban el id del feed (BTC/ETH) como símbolo
     // Yahoo; en Yahoo son otros instrumentos y daban precios falsos.
     if(a.yfSym&&CG[up(a.yfSym)])delete a.yfSym;
+    // Migración: símbolos retirados por dar mal el cierre anterior. En FBTC.SW
+    // Yahoo mezcla el histórico de la clase en dólares con la cotización en
+    // francos; convertido a euros con el cambio del franco, salía una variación
+    // diaria de dos dígitos que nunca ocurrió. FBTC.DE está deslistado. Se olvida
+    // el símbolo guardado para que se resuelva otra vez contra el catálogo.
+    if(a.yfSym&&YF_RETIRADOS[up(a.yfSym)])delete a.yfSym;
     let keep=false;
     for(const s of SEED){
       if(s.match(a)){
