@@ -4722,26 +4722,36 @@ async function pubGH(ruta,opts){
     },(opts||{}).headers)}));
   return r;
 }
+// GitHub contesta a este GET con «Cache-Control: private, max-age=60», así que
+// el navegador da por bueno el sha de hace hasta un minuto sin llegar a preguntar.
+// Al perfil que se publica cada pocos segundos eso le devuelve un sha ya caducado
+// y la subida choca con un 409. Con no-store y un parámetro que cambia siempre se
+// lee el sha de verdad.
 async function pubSha(ruta){
-  const r=await pubGH(ruta+'?ref='+PUB_RAMA,{});
+  const r=await pubGH(ruta+'?ref='+PUB_RAMA+'&t='+Date.now(),
+    {cache:'no-store',headers:{'Cache-Control':'no-cache','Pragma':'no-cache'}});
   if(r.status===404)return null;
   if(!r.ok)throw new Error('GitHub '+r.status+' al leer el fichero: '+(await r.text()).slice(0,180));
   return (await r.json()).sha||null;
 }
 
-// El repo recibe commits automáticos de otros workflows (precios cada 15 min),
-// así que un 409 por sha caducado es normal: se relee y se reintenta una vez.
+// El repo recibe commits automáticos de otros workflows (precios cada 15 min) y
+// del otro perfil, así que un 409 por sha caducado es normal: se relee y se
+// reintenta, dejando un respiro entre intentos por si GitHub todavía está
+// propagando el commit que va por delante.
 async function pubSubir(ruta,contenido,mensaje){
-  for(let intento=0;intento<2;intento++){
+  for(let intento=0;intento<4;intento++){
+    if(intento)await new Promise(r=>setTimeout(r,400*intento));
     const sha=await pubSha(ruta);
     const cuerpo={message:mensaje,content:pubB64(pubBytes(contenido)),branch:PUB_RAMA};
     if(sha)cuerpo.sha=sha;
     const r=await pubGH(ruta,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cuerpo)});
     if(r.ok)return;
-    if(r.status===409&&intento===0)continue;
     const txt=(await r.text()).slice(0,220);
     if(r.status===401)throw new Error('El token no vale (401). Vuelve a generarlo y pégalo otra vez.');
     if(r.status===403||r.status===404)throw new Error('El token no tiene permiso de escritura sobre '+PUB_REPO+' (Contents: Read and write).');
+    if(r.status===409&&intento<3)continue;
+    if(r.status===409)throw new Error('GitHub sigue con 409 tras 4 intentos: hay otra pestaña o dispositivo escribiendo el mismo fichero. Se reintenta solo en la siguiente publicación.');
     throw new Error('GitHub '+r.status+': '+txt);
   }
 }
