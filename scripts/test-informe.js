@@ -127,8 +127,10 @@ const TOTAL_LETI = 800 + 1150;
   console.log('\n7 · El script del informe descifra lo que subió la app');
   const dirDatos = path.join(RAIZ, 'datos');
   const escritos = [];
+  const previos = new Map(); // carteras reales que el fixture va a pisar
   for (const [ruta, contenido] of Object.entries(subidas)) {
     const destino = path.join(RAIZ, ruta);
+    if (fs.existsSync(destino)) previos.set(destino, fs.readFileSync(destino));
     fs.writeFileSync(destino, contenido);
     escritos.push(destino);
   }
@@ -169,7 +171,12 @@ const TOTAL_LETI = 800 + 1150;
   eq(/no abre el fichero/.test(malo), true, 'avisa de que la contraseña no abre el fichero');
   eq(/informe generado/.test(malo), false, 'y no genera ningún informe');
 
-  for (const f of escritos) fs.unlinkSync(f);
+  // Las carteras de verdad no son basura del test: si el fixture pisó una que ya
+  // existía, se devuelve tal cual estaba. Solo se borra lo que no había antes.
+  for (const f of escritos) {
+    if (previos.has(f)) fs.writeFileSync(f, previos.get(f));
+    else fs.unlinkSync(f);
+  }
   for (const f of ['informe-marc.html', 'informe-leti.html']) {
     const p = path.join(RAIZ, f); if (fs.existsSync(p)) fs.unlinkSync(p);
   }

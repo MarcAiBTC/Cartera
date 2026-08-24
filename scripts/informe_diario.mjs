@@ -117,14 +117,33 @@ async function descifrar(sobre, pass) {
   return JSON.parse(new TextDecoder().decode(pt));
 }
 
+// La app guarda la contraseña tal cual se escribió (no hace .trim()) y GitHub
+// conserva los espacios al pegar un secret, así que un espacio invisible en
+// cualquiera de los dos lados rompía el descifrado sin dar ninguna pista.
+// Se prueban las variantes razonables de la MISMA contraseña — no se prueba
+// ninguna otra, así que esto no debilita el cifrado — y se avisa si hizo falta
+// una distinta de la literal, para poder corregir el secret con calma.
+function variantesPass(p) {
+  const v = [];
+  for (const s of [p, p.trim()]) for (const f of [null, 'NFC', 'NFD']) {
+    const n = f ? s.normalize(f) : s;
+    if (!v.includes(n)) v.push(n);
+  }
+  return v;
+}
+
 async function cargarCartera(perfil) {
   const ruta = new URL(`../datos/cartera-${perfil}.enc.json`, import.meta.url);
   if (existsSync(ruta)) {
     if (!process.env.CARTERA_PASS) throw new Error('hay fichero cifrado pero falta el secret CARTERA_PASS');
     const sobre = JSON.parse(readFileSync(ruta, 'utf8'));
-    let datos;
-    try { datos = await descifrar(sobre, process.env.CARTERA_PASS); }
-    catch { throw new Error('CARTERA_PASS no abre el fichero (¿cambiaste la contraseña en la app y no en el secret?)'); }
+    const variantes = variantesPass(process.env.CARTERA_PASS);
+    let datos, abierto = false, usada = 0;
+    for (let i = 0; i < variantes.length && !abierto; i++) {
+      try { datos = await descifrar(sobre, variantes[i]); abierto = true; usada = i; } catch { /* probamos la siguiente */ }
+    }
+    if (!abierto) throw new Error('CARTERA_PASS no abre el fichero (¿cambiaste la contraseña en la app y no en el secret?)');
+    if (usada > 0) console.log('  ⚠ CARTERA_PASS solo abrió el fichero tras limpiar espacios o normalizar acentos. Funciona, pero conviene corregir el secret.');
     return { datos, publicado: Date.parse(sobre.actualizado) || null, origen: 'app' };
   }
   // Respaldo del método antiguo, solo para Marc: el secret que se pegaba a mano.
