@@ -1,4 +1,6 @@
 informe.html
+informe-*.html
+.informe-enviado/
 .claude/
 __pycache__/
 *.pyc

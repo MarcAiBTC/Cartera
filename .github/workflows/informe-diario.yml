@@ -1,9 +1,14 @@
 name: Informe diario por correo
 
-# El cron de GitHub va en UTC, no ajusta el horario de verano y, sobre todo,
-# suele dispararse con 30 min – 2 h de retraso. Por eso se programan varios
-# disparos de respaldo y el script acepta la franja 22:00–23:59 en Europe/Madrid.
-# Una cache con la fecha del día evita que los respaldos envíen el correo dos veces.
+# Un correo por perfil: la cartera de Marc a su dirección y la de Leti a la suya.
+# Las posiciones salen de datos/cartera-<perfil>.enc.json, que publica la propia
+# app cifrado cada vez que se toca algo; el workflow las descifra con CARTERA_PASS.
+#
+# El cron de GitHub va en UTC, no ajusta el horario de verano y suele dispararse
+# con 30 min – 2 h de retraso. Por eso se programan varios disparos de respaldo y
+# el script acepta la franja 22:00–23:59 en Europe/Madrid. Una marca por perfil y
+# día (cacheada entre ejecuciones) evita que los respaldos repitan un correo ya
+# enviado, sin bloquear el que todavía no salió.
 on:
   schedule:
     - cron: '5 20 * * 1-5'    # 22:05 Madrid en verano (CEST)
@@ -14,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Solo generar el informe (no enviar correo)'
+        description: 'Solo generar los informes (no enviar correo)'
         type: boolean
         default: false
 
@@ -29,43 +34,58 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Único paquete que hace falta: el SMTP de Gmail es lo que permite escribir
+      # a una dirección que no sea la del dueño de la cuenta de Resend.
+      - name: Instalar nodemailer
+        run: npm install --no-save --no-audit --no-fund nodemailer@6
+
       - name: Fecha del día en Madrid
         id: marca
         run: echo "dia=$(TZ=Europe/Madrid date +%F)" >> "$GITHUB_OUTPUT"
 
-      - name: ¿Ya se envió el informe de hoy?
-        id: dedupe
-        if: github.event_name == 'schedule'
+      - name: Recuperar qué informes ya se enviaron hoy
         uses: actions/cache/restore@v4
         with:
           path: .informe-enviado
-          key: informe-enviado-${{ steps.marca.outputs.dia }}
+          key: informe-enviado-${{ steps.marca.outputs.dia }}-
+          restore-keys: informe-enviado-${{ steps.marca.outputs.dia }}-
 
-      - name: Generar y enviar el informe
-        id: envio
-        if: github.event_name == 'workflow_dispatch' || steps.dedupe.outputs.cache-hit != 'true'
+      - name: Generar y enviar los informes
         env:
-          POSICIONES_JSON: ${{ secrets.POSICIONES_JSON }}
+          # Descifra los ficheros que publica la app
+          CARTERA_PASS: ${{ secrets.CARTERA_PASS }}
+          # Destinatarios (no van en el código: el repo es público)
+          MAIL_MARC: ${{ secrets.MAIL_MARC }}
+          MAIL_LETI: ${{ secrets.MAIL_LETI }}
+          # Envío por SMTP de Gmail con contraseña de aplicación
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          # Respaldos: transporte antiguo y posiciones pegadas a mano
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          POSICIONES_JSON: ${{ secrets.POSICIONES_JSON }}
           # Un disparo manual salta el control de la franja horaria
           FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
           DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '1' || '' }}
-        run: |
-          node scripts/informe_diario.mjs
-          if [ -f .informe-enviado ]; then echo "enviado=1" >> "$GITHUB_OUTPUT"; fi
+        run: node scripts/informe_diario.mjs
 
-      - name: Marcar el día como enviado (evita duplicados de los respaldos)
-        if: github.event_name == 'schedule' && steps.envio.outputs.enviado == '1'
+      # La clave lleva el run_id porque una clave de caché no se puede
+      # sobrescribir: se guarda una nueva y restore-keys coge siempre la última.
+      - name: Anotar los informes enviados
+        if: always() && github.event_name == 'schedule'
         uses: actions/cache/save@v4
         with:
           path: .informe-enviado
-          key: informe-enviado-${{ steps.marca.outputs.dia }}
+          key: informe-enviado-${{ steps.marca.outputs.dia }}-${{ github.run_id }}
 
-      - name: Guardar copia del informe
+      - name: Guardar copia de los informes
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: informe-html
-          path: informe.html
+          name: informes-html
+          path: informe-*.html
           if-no-files-found: ignore
           retention-days: 7

@@ -128,11 +128,30 @@ button:focus:not(:focus-visible){outline:none}
 .band:hover{background:var(--bg2)}
 .band.on{background:var(--bg2)}
 .band-dot{width:11px;height:11px;border-radius:4px;flex-shrink:0}
-.band-name{font-size:14px;font-weight:700;color:var(--fg0);width:104px;flex-shrink:0}
+.band-name{font-size:14px;font-weight:700;color:var(--fg0);width:122px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Selector de agrupación de las bandas: reutiliza el segmentado de Objetivo. */
+.bands-head{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:0 24px 9px}
+.bands-head-lbl{font-size:11px;font-weight:600;color:var(--fg3)}
+/* Aviso de intereses devengados sin apuntar. Solo aparece cuando ya hay algo
+   que apuntar; si no, sería una barra permanente que se deja de leer. */
+#h-aviso{display:flex;flex-wrap:wrap;gap:10px;margin:0 24px}
+#h-aviso:not(:empty){margin-bottom:14px}
+.aviso{display:flex;align-items:center;gap:9px;flex:1 1 380px;padding:10px 15px;
+  background:linear-gradient(90deg,var(--up-bg),var(--bg1) 65%);border:1px solid var(--line2);border-radius:14px;
+  font-family:var(--sans);font-size:12.5px;color:var(--fg1);text-align:left;cursor:pointer;
+  transition:box-shadow .15s,border-color .15s}
+
+.aviso:hover{box-shadow:var(--elev1);border-color:var(--line3)}
+.aviso b{color:var(--fg0);font-weight:700}
+.aviso-ic{width:9px;height:9px;border-radius:3px;background:var(--up);flex-shrink:0}
+.aviso-eur{color:#0b7c5c;font-weight:700;font-family:var(--disp)}
+.aviso-cta{margin-left:auto;font-weight:700;color:var(--blue);white-space:nowrap}
 .band-val{font-family:var(--disp);font-size:21px;font-weight:700;letter-spacing:-.5px;color:var(--fg0);width:132px;text-align:right;flex-shrink:0}
 .band-pct{font-size:13px;font-weight:600;color:var(--fg2);width:56px;text-align:right;flex-shrink:0}
 .band-bar{flex:1;height:8px;background:var(--bg2);border-radius:99px;overflow:hidden;margin:0 8px;min-width:40px}
-.band-fill{height:100%;border-radius:99px;transition:width .5s ease}
+/* display:block es imprescindible: como span en línea el ancho no se aplicaba y
+   la barra de peso salía siempre vacía. */
+.band-fill{display:block;height:100%;border-radius:99px;transition:width .5s ease}
 .band-pnl{font-size:13px;font-weight:700;width:134px;text-align:right;flex-shrink:0;white-space:nowrap}
 .band-ct{font-size:10px;color:var(--fg3);font-weight:600;width:24px;text-align:right;flex-shrink:0}
 .band-chev{display:flex;align-items:center;color:var(--fg3);flex-shrink:0;transition:transform .18s}
@@ -308,7 +327,11 @@ td{padding:11px 14px;vertical-align:middle}
 .an-big{font-family:var(--disp);font-size:40px;font-weight:700;letter-spacing:-1.4px;line-height:1;color:var(--fg0)}
 .an-sub{font-size:12.5px;color:var(--fg2);font-weight:500;margin-top:9px}
 .an-sub strong{color:var(--fg0);font-weight:700}
-.an-hero-side{display:grid;grid-template-columns:repeat(4,minmax(78px,1fr));gap:18px}
+/* Equivalente anual: va en gris al lado del acumulado, nunca compitiendo con él.
+   Es contexto para comparar (¿mejor que el 2,15% del efectivo?), no el titular. */
+.an-anual{display:inline-block;margin-left:7px;padding:1px 8px;border-radius:99px;background:var(--bg3);
+  color:var(--fg2);font-size:11.5px;font-weight:700;font-family:var(--disp);letter-spacing:-.2px;cursor:default}
+.an-hero-side{display:grid;grid-template-columns:repeat(4,minmax(72px,1fr));gap:15px}
 .an-cell-l{font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--fg3);margin-bottom:5px;white-space:nowrap}
 .an-cell-v{font-family:var(--disp);font-size:16px;font-weight:700;letter-spacing:-.3px;color:var(--fg0);white-space:nowrap}
 
@@ -459,7 +482,7 @@ td{padding:11px 14px;vertical-align:middle}
 
 /* Una fila por subyacente. El orden de columnas sigue la pregunta natural:
    qué es → cómo está → cuánto quiero → cuánto me desvío → qué hago. */
-.tg-row{display:grid;grid-template-columns:10px minmax(96px,1.4fr) minmax(120px,1.6fr) 58px 74px 60px 122px;align-items:center;gap:11px;padding:9px 16px;border-bottom:1px solid var(--line)}
+.tg-row{display:grid;grid-template-columns:10px minmax(96px,1.4fr) minmax(120px,1.6fr) 58px 74px 60px 122px 22px;align-items:center;gap:11px;padding:9px 16px;border-bottom:1px solid var(--line)}
 .tg-row>*{min-width:0}
 .tg-row:last-child{border-bottom:none}
 .tg-row.tg-head{background:var(--bg2);padding:7px 16px;border-bottom:1px solid var(--line)}
@@ -491,6 +514,42 @@ td{padding:11px 14px;vertical-align:middle}
 .action-buy{background:var(--up-bg);color:#0b7c5c}
 .action-sell{background:var(--dn-bg);color:#c72e5c}
 .action-ok{background:var(--bg3);color:var(--fg2)}
+/* Quitar una fila del reparto es una acción rara: se mantiene discreta hasta
+   que pasas por encima, para no competir con el input del objetivo. */
+.tg-x{width:20px;height:20px;padding:0;display:flex;align-items:center;justify-content:center;border:0;background:transparent;color:var(--fg3);border-radius:6px;cursor:pointer;opacity:0;transition:opacity .12s,color .12s,background .12s}
+.tg-x svg{width:11px;height:11px}
+.tg-row:hover .tg-x,.tg-x:focus-visible{opacity:1}
+.tg-x:hover{background:var(--dn-bg);color:#c72e5c}
+@media(hover:none){.tg-x{opacity:.5}}
+/* Lo que has sacado del reparto. No cuenta en los porcentajes —por eso la tabla
+   sigue sumando 100— así que se dice en euros y con un botón para devolverlo. */
+.tg-out{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid var(--line);background:var(--bg2)}
+.tg-out-l{font-size:9px;font-weight:700;color:var(--fg3);text-transform:uppercase;letter-spacing:.5px}
+.tg-chip{display:inline-flex;align-items:center;gap:7px;padding:3px 5px 3px 10px;border-radius:99px;border:1px solid var(--line2);background:var(--bg1);font-size:11px;font-weight:600;color:var(--fg1)}
+.tg-chip b{font-family:var(--disp);font-weight:700;color:var(--fg0)}
+.tg-chip button{border:0;background:transparent;color:var(--fg3);cursor:pointer;font-size:10px;font-weight:700;padding:2px 6px;border-radius:99px;font-family:var(--sans)}
+.tg-chip button:hover{color:var(--blue);background:var(--bg2)}
+.tg-out-n{font-size:10.5px;color:var(--fg3);font-weight:600;margin-left:auto}
+
+/* ── PUBLICADOR DEL INFORME ──
+   Un punto en la cabecera dice de un vistazo si el correo de esta noche va a
+   contar tu cartera de verdad: gris = sin conectar, ámbar = cambios sin subir,
+   verde = al día, rojo = falló la última subida. */
+.pub-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;flex:none}
+.pub-dot.off{background:var(--fg3);opacity:.5}
+.pub-dot.ok{background:var(--up)}
+.pub-dot.wait{background:#e0a020}
+.pub-dot.err{background:var(--dn)}
+.pub-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.pub-row:last-child{border-bottom:none}
+.pub-nom{font-size:12.5px;font-weight:700;color:var(--fg0);min-width:96px}
+.pub-nom em{font-style:normal;font-weight:500;font-size:10.5px;color:var(--fg3)}
+.pub-when{font-size:11px;color:var(--fg2);margin-left:auto;text-align:right}
+.pub-row button[disabled]{opacity:.4;cursor:default}
+.pub-err{margin-top:10px;padding:8px 11px;border-radius:10px;background:var(--dn-bg);color:#c72e5c;font-size:11px;font-weight:600;line-height:1.5;word-break:break-word}
+.pub-pasos{margin:0;padding-left:17px;font-size:11.5px;color:var(--fg2);line-height:1.75}
+.pub-pasos code{background:var(--bg2);border:1px solid var(--line2);border-radius:5px;padding:0 4px;font-size:10.5px}
+@media(max-width:860px){.tg-out-n{margin-left:0}}
 
 /* Bloque de aportación: la pregunta práctica («tengo 300 €, ¿dónde los meto?»)
    se responde sin vender nada, cubriendo primero lo que va por debajo. */
@@ -507,7 +566,8 @@ td{padding:11px 14px;vertical-align:middle}
 .tg-apw{font-size:11px;color:var(--fg3);text-align:right;font-family:var(--disp)}
 .tg-empty{padding:26px 16px;text-align:center;color:var(--fg3);font-size:11.5px;line-height:1.8}
 @media(max-width:860px){
-  .tg-row{grid-template-columns:10px minmax(0,1fr) 48px 64px 42px minmax(0,96px);gap:7px;padding:9px 12px}
+  .tg-row{grid-template-columns:10px minmax(0,1fr) 48px 64px minmax(0,96px) 20px;gap:7px;padding:9px 12px}
+  .tg-dev,.tg-hdev{display:none}
   .tg-row .action-tag{font-size:8.5px;padding:3px 6px;white-space:normal}
   .tg-name em{display:none}
   .tg-aprow{grid-template-columns:10px minmax(0,1fr) 74px 62px;gap:8px;padding:8px 12px}
@@ -647,9 +707,9 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         <svg fill="none" stroke="currentColor" viewBox="0 0 16 16" width="11" height="11" stroke-width="1.5" stroke-linecap="round"><path d="M3 12h10M8 3v7M5 7l3 3 3-3"/></svg>
         Guardar cartera (.json)
       </button>
-      <button class="btn btn-ghost" onclick="copySecretJSON()" style="padding:4px 10px;font-size:11px" title="Copia el JSON de posiciones para pegarlo en GitHub → Settings → Secrets → Actions → POSICIONES_JSON. Así el informe diario por correo usa tu cartera actualizada.">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 16 16" width="11" height="11" stroke-width="1.5" stroke-linecap="round"><rect x="5" y="5" width="8" height="8" rx="1"/><path d="M3 11V3h8"/></svg>
-        Copiar secret informe
+      <button class="btn btn-ghost" id="pub-btn" onclick="openPubModal()" style="padding:4px 10px;font-size:11px">
+        <span class="pub-dot off" id="pub-dot"></span>
+        Informe diario
       </button>
     </div>
   </div>
@@ -735,9 +795,20 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         <div class="hero-meta-item">
           <span class="hero-meta-val" id="h-liq">—</span>
           <span class="hero-meta-lbl">líquido, listo para invertir</span>
+          <!-- Solo aparece si alguna cuenta de liquidez tiene TAE apuntada: el
+               efectivo remunerado deja de parecer dinero parado. -->
+          <span class="hero-meta-badge up" id="h-liqapr" style="display:none">—</span>
         </div>
         <div class="hero-sep"></div>
         <div class="hero-note" id="h-note">—</div>
+      </div>
+    </div>
+    <div id="h-aviso"></div>
+    <div class="bands-head">
+      <span class="bands-head-lbl">Agrupar</span>
+      <div class="tg-seg" role="group" aria-label="Cómo agrupar las posiciones">
+        <button class="tgb on" id="bm-clase" onclick="setBandMode('clase')" title="Agrupa por tipo de activo: fondos, liquidez, metales, acciones y cripto.">Por clase</button>
+        <button class="tgb" id="bm-broker" onclick="setBandMode('broker')" title="Agrupa por dónde está el dinero: MyInvestor, Trade Republic, Revolut…">Por broker</button>
       </div>
     </div>
     <div class="bands" id="h-bands"></div>
@@ -850,6 +921,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
           <button class="tgb" id="tgb-inv" onclick="tgSetBase('inv')" title="Los pesos se miden solo sobre el dinero en mercado; la liquidez queda fuera del reparto.">Solo invertido</button>
         </div>
         <div class="tg-tools">
+          <button class="tgt" onclick="openTgModal()" title="Añade a la lista un activo que todavía no tienes, para reservarle un porcentaje del objetivo.">+ Añadir activo</button>
           <button class="tgt" onclick="tgCopiarActual()" title="Pone como objetivo el reparto que tienes hoy. Buen punto de partida para retocar desde ahí.">Copiar actual</button>
           <button class="tgt" onclick="tgIgualar()" title="Reparte 100% a partes iguales entre los activos listados.">Repartir igual</button>
           <button class="tgt" onclick="tgNormalizar()" title="Escala los objetivos que ya tienes para que sumen exactamente 100%, respetando sus proporciones.">Normalizar a 100%</button>
@@ -871,10 +943,12 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
           <div class="tg-h tg-hbar">Actual vs objetivo</div>
           <div class="tg-h r">Actual</div>
           <div class="tg-h r">Objetivo</div>
-          <div class="tg-h r">Desvío</div>
+          <div class="tg-h r tg-hdev">Desvío</div>
           <div class="tg-h r">Acción</div>
+          <div></div>
         </div>
         <div id="tg-rows"></div>
+        <div id="tg-fuera"></div>
       </div>
 
       <div class="tg-panel">
@@ -918,6 +992,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         <div><div class="hstat-lbl">Ganadoras</div><div class="hstat-val up" id="h-wins">0</div></div>
         <div><div class="hstat-lbl">Perdedoras</div><div class="hstat-val dn" id="h-losses">0</div></div>
         <div><div class="hstat-lbl">Aportado este año</div><div class="hstat-val" id="h-aport-yr">—</div></div>
+        <div><div class="hstat-lbl">Cobrado este año</div><div class="hstat-val up" id="h-rend-yr">—</div></div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost" onclick="exportXLSX()" style="padding:5px 11px;font-size:11px">
@@ -951,6 +1026,19 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
       <table>
         <thead><tr><th>Fecha</th><th>Activo</th><th class="r">Cantidad</th><th class="r">Precio/u</th><th class="r">Importe (€)</th><th></th></tr></thead>
         <tbody id="aport-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Intereses y dividendos: el tercer tipo de movimiento. Sin él, un cobro
+         en cuenta se lee como una aportación tuya y la ganancia no se entera. -->
+    <div class="sec-head" style="border-top:1px solid var(--line)">
+      <span class="sec-title">Intereses y dividendos cobrados</span>
+      <button class="btn btn-ghost" onclick="openRendModal()" style="padding:4px 10px;font-size:11px">+ Apuntar cobro</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Concepto</th><th>Cuenta o activo</th><th class="r">Importe (€)</th><th></th></tr></thead>
+        <tbody id="rend-tbody"></tbody>
       </table>
     </div>
   </div>
@@ -1120,6 +1208,14 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
       </div>
     </div>
     <div class="fhint" style="margin-top:3px">Si compraste en dólares elige USD: el coste y el precio manual se convierten a € en el total de la cartera (los precios automáticos ya llegan en €).</div>
+    <!-- Solo para liquidez: la remuneración de la cuenta. No mueve el saldo por
+         su cuenta (eso lo hace el banco cuando paga); sirve para estimar cuánto
+         renta y para proponer el importe al apuntar el cobro. -->
+    <div class="field" id="a-apr-wrap" style="display:none;margin-top:11px">
+      <label class="fl">Remuneración de la cuenta <em>· % TAE</em></label>
+      <input class="fi" id="a-apr" type="number" step="any" min="0" placeholder="2.15">
+      <div class="fhint">Trade Republic 2,15%, MyInvestor, Revolut… Con esto la app te dice cuánto renta tu efectivo. Cuando el banco te pague los intereses, apúntalos en Historial → «Apuntar cobro»: así cuentan como ganancia y no como dinero aportado por ti.</div>
+    </div>
     <div class="field" style="margin-top:11px"><label class="fl">Subyacente <em>· agrupa en exposición real</em></label><input class="fi" id="a-underlying" placeholder="Oro · S&P 500 · Bitcoin · (vacío = nombre)"></div>
     <div class="cp-row"><span class="cp-lbl">Coste total</span><span class="cp-val" id="a-cprev">—</span></div>
     <div class="ma"><button class="mc" onclick="closeAModal()">Cancelar</button><button class="ms" onclick="saveAsset()">Guardar</button></div>
@@ -1138,23 +1234,57 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
 </div>
 </div>
 
+<!-- COBRO MODAL (intereses de cuentas remuneradas · dividendos) -->
+<div class="veil" id="ov-r">
+<div class="modal modal-sm">
+  <div class="mh"><span class="mt">Apuntar cobro</span><button class="mx" onclick="closeRendModal()"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-width="2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <div class="mb">
+    <div class="field"><label class="fl">Concepto</label>
+      <select class="fi" id="r-kind" onchange="rendPrefill()">
+        <option value="interes">Intereses de cuenta remunerada</option>
+        <option value="dividendo">Dividendo o cupón</option>
+      </select>
+    </div>
+    <div class="field"><label class="fl">Cuenta o activo que lo paga</label><select class="fi" id="r-asset" onchange="rendPrefill()"></select></div>
+    <div class="frow">
+      <div class="field" style="margin:0"><label class="fl">Fecha del cobro</label><input class="fi" id="r-date" type="date"></div>
+      <div class="field" style="margin:0"><label class="fl">Importe <em>(€ netos)</em></label><input class="fi" id="r-eur" type="number" step="any" placeholder="2.75"></div>
+    </div>
+    <div class="fhint" id="r-hint" style="margin-top:6px"></div>
+    <div class="field" style="margin-top:12px">
+      <label class="fchk"><input type="checkbox" id="r-add" checked> Sumar el importe al saldo de la cuenta</label>
+      <div class="fhint">Déjalo marcado si el saldo que tienes apuntado en la app todavía no incluye este cobro. Quítalo si ya lo actualizaste a mano.</div>
+    </div>
+    <div class="ma"><button class="mc" onclick="closeRendModal()">Cancelar</button><button class="ms" onclick="saveRend()">Guardar</button></div>
+  </div>
+</div>
+</div>
+
 <!-- BUY MODAL (aportación DCA) -->
 <div class="veil" id="ov-b">
 <div class="modal">
   <div class="mh"><span class="mt">Registrar compra</span><button class="mx" onclick="closeBuyModal()"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-width="2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
   <div class="mb">
     <div class="field"><label class="fl">Activo</label>
-      <select class="fi" id="b-asset" onchange="updBuyP()"></select>
+      <select class="fi" id="b-asset" onchange="llenarPago();updBuyP()"></select>
+
     </div>
     <div class="frow">
       <div class="field" style="margin:0"><label class="fl">Cantidad comprada</label><input class="fi" id="b-qty" type="number" step="any" min="0" oninput="updBuyP()"></div>
       <div class="field" style="margin:0"><label class="fl" id="b-price-l">Precio por unidad</label><input class="fi" id="b-price" type="number" step="any" min="0" oninput="updBuyP()"></div>
     </div>
     <div class="field" style="margin-top:11px"><label class="fl">Fecha</label><input class="fi" id="b-date" type="date"></div>
+    <!-- De dónde sale el dinero. Sin esta pregunta la compra subía el coste de la
+         posición sin bajar el saldo, y el «dinero aportado» crecía por un dinero
+         que ya estaba contado dentro de la cartera. -->
+    <div class="field" style="margin-top:11px"><label class="fl">Pagado con</label>
+      <select class="fi" id="b-pago" onchange="updBuyP()"></select>
+      <div class="fhint" id="b-pago-hint"></div>
+    </div>
     <div class="cp-row"><span class="cp-lbl">Importe de la compra</span><span class="cp-val" id="b-total">—</span></div>
     <div class="cp-row" style="margin-top:8px"><span class="cp-lbl">Nuevo precio medio</span><span class="cp-val" id="b-avg">—</span></div>
     <div class="cp-row" style="margin-top:8px"><span class="cp-lbl">Posición resultante</span><span class="cp-val" id="b-after" style="font-size:12px">—</span></div>
-    <div class="fhint" style="margin-top:8px">La compra actualiza cantidad y precio medio de la posición, y queda registrada en Historial → Aportaciones (alimenta la rentabilidad real TWR).</div>
+    <div class="fhint" style="margin-top:8px">La compra actualiza cantidad y precio medio de la posición, descuenta el importe de la cuenta con la que pagas y queda registrada en Historial → Aportaciones.</div>
     <div class="ma"><button class="mc" onclick="closeBuyModal()">Cancelar</button><button class="ms" onclick="saveBuy()">Registrar compra</button></div>
   </div>
 </div>
@@ -1191,6 +1321,75 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
     <div class="fhint" style="margin-top:2px">Pon el ticker y el precio se actualiza solo (cripto: BTC, ETH… · acciones/ETPs de Yahoo: AAPL, NESN.SW…). El objetivo y el precio manual van en la divisa elegida; el manual solo se usa como respaldo si el ticker no cotiza.</div>
     <div class="field" style="margin-top:11px"><label class="fl">Notas / tesis</label><textarea class="fta" id="w-notes" placeholder="Por qué me interesa, niveles clave, catalizadores…"></textarea></div>
     <div class="ma"><button class="mc" onclick="closeWModal()">Cancelar</button><button class="ms" onclick="saveWL()">Guardar</button></div>
+  </div>
+</div>
+</div>
+
+
+<!-- MODAL: AÑADIR ACTIVO AL OBJETIVO
+     Lo que se añade es el SUBYACENTE (Oro, Bitcoin, S&P 500…), no el producto
+     concreto: así el objetivo sobrevive a cambiar de ETF o de broker. -->
+<div class="veil" id="ov-tg">
+<div class="modal">
+  <div class="mh"><span class="mt">Añadir activo al objetivo</span><button class="mx" onclick="closeTgModal()"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-width="2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <div class="mb">
+    <div class="field" style="margin:0 0 12px">
+      <label class="fl" for="t-search">Buscar activo <em>· del mismo catálogo</em></label>
+      <div class="cat-search">
+        <input class="fi" id="t-search" placeholder="Oro · Bitcoin · iShares Core MSCI World…" autocomplete="off" oninput="catSearch(this.value,'t')" onfocus="catSearch(this.value,'t')" onkeydown="catKey(event,'t')">
+        <div class="cat-results" id="t-results"></div>
+      </div>
+      <div class="fhint">Elegir del catálogo rellena el subyacente. No hace falta que lo tengas en cartera: entra en la tabla con 0% para que le pongas el porcentaje que quieras.</div>
+    </div>
+    <div class="field" style="margin:0"><label class="fl" for="t-und">Subyacente</label><input class="fi" id="t-und" placeholder="Oro, Bitcoin, S&amp;P 500…" autocomplete="off"></div>
+    <div class="fhint" style="margin-top:2px">Puedes escribirlo a mano si no está en el catálogo. Si más adelante compras una posición con ese mismo subyacente, se enlaza sola con esta fila.</div>
+    <div class="ma"><button class="mc" onclick="closeTgModal()">Cancelar</button><button class="ms" onclick="saveTgUnd()">Añadir</button></div>
+  </div>
+</div>
+</div>
+
+
+<!-- MODAL: INFORME DIARIO
+     Conecta la app con el workflow que manda el correo. Lo que se sube al repo
+     va cifrado; el token y la contraseña se quedan en este navegador. -->
+<div class="veil" id="ov-pub">
+<div class="modal">
+  <div class="mh"><span class="mt">Informe diario por correo</span><button class="mx" onclick="closePubModal()"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-width="2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+  <div class="mb">
+    <div class="fhint" style="margin:0 0 12px">
+      El informe se genera en GitHub, que no puede leer este navegador. La app le deja tu cartera
+      <b>cifrada</b> en el repositorio cada vez que cambias algo, y el correo la abre con la contraseña.
+      Ni el token ni la contraseña salen de aquí.
+    </div>
+
+    <div class="field" style="margin:0 0 11px">
+      <label class="fl" for="pub-token">Token de GitHub <em>· fine-grained, permiso Contents: Read and write</em></label>
+      <input class="fi" id="pub-token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+    </div>
+    <div class="field" style="margin:0 0 4px">
+      <label class="fl" for="pub-pass">Contraseña de cifrado <em>· la misma que el secret CARTERA_PASS</em></label>
+      <input class="fi" id="pub-pass" type="password" autocomplete="off" spellcheck="false" placeholder="una frase larga que no uses en otro sitio">
+    </div>
+    <div class="fhint" style="margin-bottom:12px">Si la cambias aquí, cámbiala también en GitHub → Settings → Secrets → <code>CARTERA_PASS</code>, o el informe no podrá abrir el fichero.</div>
+
+    <div class="tg-ptitle" style="margin-bottom:2px">Estado de cada cartera</div>
+    <div id="pub-perfiles"></div>
+    <div id="pub-error"></div>
+
+    <details style="margin-top:13px">
+      <summary style="font-size:11.5px;color:var(--fg2);cursor:pointer;font-weight:600">Cómo se saca el token (una sola vez)</summary>
+      <ol class="pub-pasos" style="margin-top:8px">
+        <li>GitHub → Settings → Developer settings → <b>Personal access tokens</b> → Fine-grained tokens.</li>
+        <li>Repository access: <b>Only select repositories</b> → <code>MarcAiBTC/Cartera</code>.</li>
+        <li>Permissions → Repository permissions → <b>Contents: Read and write</b>. Nada más.</li>
+        <li>Copia el token y pégalo arriba. Solo puede escribir en este repositorio.</li>
+      </ol>
+    </details>
+
+    <div class="ma">
+      <button class="mc" onclick="copySecretJSON()" title="Método antiguo: copia el JSON en claro para pegarlo a mano en el secret POSICIONES_JSON.">Copiar JSON a mano</button>
+      <button class="ms" onclick="pubGuardarAjustes()">Guardar</button>
+    </div>
   </div>
 </div>
 </div>
@@ -1298,6 +1497,14 @@ const CC={
 };
 const CL={fondo:'Fondo',cripto:'Cripto',metal:'Metal',accion:'Acción',liquidez:'Liquidez'};
 const CI={fondo:'ETF',cripto:'₿',metal:'Au',accion:'STK',liquidez:'€'};
+// Una categoría fuera de esas cinco —un backup antiguo, un JSON editado a mano,
+// un import de otra herramienta— no debe tumbar la pantalla. Leer CC[cat].s con
+// un cat:'etp' lanzaba un TypeError dentro de render() y dejaba Inicio EN BLANCO,
+// sin mensaje y sin forma de llegar a la posición para corregirla. Se pinta en
+// gris neutro y se enseña el nombre tal cual: no sabemos qué es, y eso es lo que
+// hay que decir.
+const catCC = c=>CC[c]||CC.liquidez;
+const catCL = c=>CL[c]||c||'Otros';
 const CG={BTC:'bitcoin',ETH:'ethereum',SOL:'solana',BNB:'binancecoin',ADA:'cardano',XRP:'ripple',DOT:'polkadot',AVAX:'avalanche-2',LINK:'chainlink',DOGE:'dogecoin',LTC:'litecoin',UNI:'uniswap',ATOM:'cosmos',MATIC:'matic-network',NEAR:'near'};
 
 // ── MOTOR DE PRECIOS v5 ───────────────────────────────────────────────────────
@@ -1992,7 +2199,12 @@ const DEF=[
 ];
 
 function ldSt(){try{return JSON.parse(localStorage.getItem(SK))||{};}catch(e){return{};}}
-function svSt(){localStorage.setItem(SK,JSON.stringify({assets,snaps,wl,targets,trades,aports,fx:fxRates,tgBase,tgAporte}));}
+function svSt(){
+  localStorage.setItem(SK,JSON.stringify({assets,snaps,wl,targets,tgExtra,tgFuera,trades,aports,rendim,fx:fxRates,tgBase,tgAporte,bandMode}));
+  // Todo lo que se guarda aquí acaba en el informe de esta noche. pubTocado()
+  // solo marca; publicar de verdad espera a que dejes de teclear.
+  if(typeof pubTocado==='function')pubTocado();
+}
 let st=ldSt();
 // Tipos de cambio (EUR por 1 unidad de divisa) para posiciones compradas en USD…
 // El valor real llega del feed (precios.json) o de Frankfurter; el 0.86 es solo
@@ -2002,6 +2214,13 @@ let assets   = st.assets  || [...DEF];
 let snaps    = st.snaps   || [];
 let wl       = st.wl      || [];
 let targets  = st.targets || {}; // {underlying: pct}
+// La lista de filas de Objetivo ya no sale sólo de lo que tienes hoy: tgExtra
+// son activos que aún no posees pero a los que quieres reservar un porcentaje,
+// y tgFuera los que tienes y prefieres dejar fuera del reparto (una herencia,
+// una posición que no piensas rebalancear). Lo que está fuera tampoco cuenta en
+// la base, así que los porcentajes de la tabla siguen sumando 100 exacto.
+let tgExtra  = Array.isArray(st.tgExtra)?st.tgExtra.filter(x=>typeof x==='string'&&x):[];
+let tgFuera  = Array.isArray(st.tgFuera)?st.tgFuera.filter(x=>typeof x==='string'&&x&&x!=='Liquidez'):[];
 // Base del reparto objetivo ('total' = con liquidez · 'inv' = solo lo invertido)
 // y última aportación tecleada, para no perderla al cambiar de pestaña.
 let tgBase   = st.tgBase==='inv'?'inv':'total';
@@ -2014,6 +2233,15 @@ const DEF_TRADES=[
 let trades = st.trades || [...DEF_TRADES];
 // Aportaciones registradas (compras DCA): alimentan el precio medio y el TWR
 let aports = st.aports || [];
+// Cobros en efectivo que NO son dinero tuyo: intereses de cuentas remuneradas
+// (Trade Republic paga un 2,15% TAE), cupones y dividendos. Sin esta lista la
+// app los confunde con una aportación —el saldo sube, y el «coste» de la
+// liquidez es su propio saldo—, así que la ganancia se quedaba igual mientras
+// el «aportado» crecía solo. Ver rendimHasta().
+let rendim = Array.isArray(st.rendim) ? st.rendim : [];
+// Cómo se agrupan las bandas de Inicio: por clase de activo o por broker. Se
+// guarda porque es una preferencia de lectura, no un filtro de usar y tirar.
+let bandMode = st.bandMode==='broker' ? 'broker' : 'clase';
 
 let lpx={},lpxPrev={},lpxSpark={},wlpx={},wlpxNat={},pxStat={},fxCache={EUR:1},fxPending={};
 // Hora exacta y fuente de cada precio en vivo. Antes sólo se sabía «hay precio»;
@@ -2088,7 +2316,11 @@ const sparkOf = a=>{
 // Variación de la posición en el día: {abs:€, pct:%} o null.
 const dayChg = a=>{const p=px(a),pv=pxPrev(a);if(p==null||pv==null||pv<=0)return null;return{abs:a.qty*(p-pv),pct:(p-pv)/pv*100};};
 // Variación de toda la cartera hoy: {abs, pct} sobre los activos con dato intradía.
-const tDay = ()=>{let abs=0,base=0,has=false;for(const a of assets){const p=px(a),pv=pxPrev(a);if(p==null||pv==null||pv<=0)continue;abs+=a.qty*(p-pv);base+=a.qty*pv;has=true;}return has?{abs,pct:base>0?abs/base*100:0}:null;};
+// La liquidez queda fuera: no se mueve nunca, así que aportaba cero al numerador
+// y un tercio de la cartera al denominador. El % del día salía diluido casi a la
+// mitad frente a lo que de verdad se había movido en mercado. Los euros son los
+// mismos; lo que cambia es sobre qué se miden.
+const tDay = ()=>{let abs=0,base=0,has=false;for(const a of assets){if(a.cat==='liquidez')continue;const p=px(a),pv=pxPrev(a);if(p==null||pv==null||pv<=0)continue;abs+=a.qty*(p-pv);base+=a.qty*pv;has=true;}return has?{abs,pct:base>0?abs/base*100:0}:null;};
 
 // ── FORMAT ────────────────────────────────────────────────────────────────────
 const fe=(n,d=2)=>n==null||isNaN(n)?'—':new Intl.NumberFormat('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d}).format(n)+' €';
@@ -2157,7 +2389,7 @@ function goto(p){
 }
 
 // ── MAIN RENDER ───────────────────────────────────────────────────────────────
-function render(){rHero();rBands();rFeedChip();}
+function render(){rHero();rAviso();rBands();rFeedChip();}
 
 function rFeedChip(){
   const c=el('feed-chip');if(!c)return;
@@ -2186,6 +2418,17 @@ function rHero(){
   eur.textContent=(g>=0?'+':'')+fe(g);
   eur.className='hero-eur '+(g>0?'up-c':g<0?'dn-c':'nu-c');
 
+  // Este número es solo lo NO realizado: lo que ganarías vendiendo hoy. La
+  // ganancia total —con ventas cerradas e intereses cobrados— vive en Análisis,
+  // y sin decirlo aquí las dos cifras parecían contradecirse.
+  const tip='Lo que ganarías o perderías si vendieras hoy todo lo que tienes abierto: '
+    +fe(t,0)+' de valor sobre '+fe(c,0)+' de coste.'
+    +'\n\nNo incluye ni las ventas ya cerradas ('+(realizadoTotal()>=0?'+':'')+fe(realizadoTotal(),0)+')'
+    +' ni los intereses y dividendos cobrados ('+(rendimTotal()>=0?'+':'')+fe(rendimTotal(),0)+').'
+    +'\nLa ganancia total, con todo dentro, es '+(gananciaTotal()>=0?'+':'')+fe(gananciaTotal(),0)+' y está en Análisis.';
+  eur.title=tip;badge.title=tip;
+
+
   // «Hoy» se queda en el héroe: es una sola cifra y es la segunda pregunta que
   // uno se hace al abrir. El detalle día a día por posición vive en las tablas.
   const day=tDay(),dayEl=el('h-daytxt');
@@ -2196,6 +2439,22 @@ function rHero(){
   const liq=assets.filter(a=>a.cat==='liquidez').reduce((s,a)=>s+(vl(a)||0),0);
   el('h-inv').textContent=fe(t-liq,0);
   el('h-liq').textContent=fe(liq,0);
+
+  // Cuentas remuneradas: si alguna liquidez tiene TAE, el efectivo deja de leerse
+  // como dinero parado. Es una estimación de devengo, no un cobro: lo cobrado se
+  // apunta en Historial y solo entonces cuenta como ganancia.
+  const lb=el('h-liqapr');
+  if(lb){
+    const rem=assets.filter(a=>a.cat==='liquidez'&&+a.apr>0);
+    const anual=rentaEfectivoAnual();
+    if(anual>0){
+      lb.style.display='';
+      lb.innerHTML=(rem.length===1?fpc(+rem[0].apr)+' TAE ':'')+'<em>≈ '+fe(anual/12)+'/mes</em>';
+      lb.title=rem.map(a=>a.name+' · '+fpc(+a.apr)+' TAE sobre '+fe(vl(a)||0,0)+' ≈ '+fe((vl(a)||0)*(+a.apr/100)/12)+'/mes').join('\n')
+        +'\n\nEs lo que se devenga al ritmo actual. Cuando el banco te lo pague, apúntalo en Historial → «Apuntar cobro» para que cuente como ganancia y no como aportación.';
+    }else lb.style.display='none';
+  }
+
 
   // Rentabilidad de lo invertido (sin liquidez), pegada a la cifra de invertido.
   const invV=tvInv(),invC=tcInv(),invG=invV-invC,invPct=invC>0?(invG/invC)*100:null;
@@ -2215,8 +2474,50 @@ function rHero(){
   const cats={};for(const a of assets){const v=vl(a);if(!v||v<=0)continue;cats[a.cat]=(cats[a.cat]||0)+v;}
   const ck=Object.keys(cats).sort((x,y)=>cats[y]-cats[x]);
   el('h-comp').innerHTML=(t>0&&ck.length)
-    ? ck.map(k=>`<div class="comp-seg" style="width:${(cats[k]/t*100).toFixed(2)}%;background:${CC[k].s}" title="${CLP[k]||k} · ${fe(cats[k],0)} · ${(cats[k]/t*100).toFixed(1)}%"></div>`).join('')
+    ? ck.map(k=>`<div class="comp-seg" style="width:${(cats[k]/t*100).toFixed(2)}%;background:${catCC(k).s}" title="${CLP[k]||k} · ${fe(cats[k],0)} · ${(cats[k]/t*100).toFixed(1)}%"></div>`).join('')
     : '';
+}
+
+// ── INICIO · AVISO DE INTERESES SIN APUNTAR ───────────────────────────────────
+// Los intereses solo cuentan como ganancia cuando los apuntas, y es justo lo que
+// se olvida: el banco los ingresa sin avisar y el saldo sube sin explicación.
+// Este aviso aparece cuando ya hay un importe que merezca el clic, y desaparece
+// en cuanto lo apuntas. Sin insistencias ni badges permanentes.
+const AVISO_DIAS=35, AVISO_MIN=0.5;
+
+// Desde cuándo se está devengando: el último interés apuntado en esa cuenta o,
+// si nunca has apuntado ninguno, el día que le pusiste la TAE.
+function devengoDesde(a){
+  const ult=rendim.filter(r=>r.assetId===a.id&&r.kind==='interes')
+                  .map(r=>Date.parse(r.date)).filter(isFinite).sort((x,y)=>y-x)[0];
+  if(isFinite(ult))return ult;
+  if(isFinite(+a.aprDesde))return +a.aprDesde;
+  return Date.now()-30*864e5;
+}
+function cobrosPendientes(){
+  const out=[];
+  for(const a of assets){
+    if(a.cat!=='liquidez'||!(+a.apr>0))continue;
+    const dias=Math.round((Date.now()-devengoDesde(a))/864e5);
+    if(dias<AVISO_DIAS)continue;
+    const est=(vl(a)||0)*(+a.apr/100)*Math.min(dias,400)/365;
+    if(est<AVISO_MIN)continue;
+    out.push({a,dias,est});
+  }
+  return out.sort((x,y)=>y.est-x.est);
+}
+function rAviso(){
+  const box=el('h-aviso');if(!box)return;
+  const p=cobrosPendientes();
+  box.innerHTML=p.map(x=>
+    '<button class="aviso" onclick="openRendModal('+x.a.id+')" title="'
+    +esc(x.a.name+' rinde al '+fpc(+x.a.apr)+' TAE y llevas '+x.dias+' días sin apuntar ningún cobro. '
+        +'Hasta que lo apuntes, ese dinero cuenta como aportación tuya y no como ganancia.')+'">'
+    +'<span class="aviso-ic"></span>'
+    +'<span><b>'+esc(x.a.name)+'</b> lleva '+x.dias+' días sin intereses apuntados · '
+    +'<span class="aviso-eur">≈ '+fe(x.est)+'</span> devengados</span>'
+    +'<span class="aviso-cta">Apuntar cobro →</span>'
+    +'</button>').join('');
 }
 
 // ── INICIO · BANDAS POR CLASE ─────────────────────────────────────────────────
@@ -2227,17 +2528,40 @@ let openBand=null;
 
 function toggleBand(k){openBand=openBand===k?null:k;rBands();}
 
+// Por clase responde «¿en qué estoy invertido?»; por broker, «¿dónde está el
+// dinero?». Son la misma tabla leída de dos maneras, así que un interruptor
+// basta: no hacía falta ni una pestaña ni una pantalla nuevas.
+function setBandMode(m){
+  bandMode = m==='broker' ? 'broker' : 'clase';
+  openBand=null;            // las claves de un modo no existen en el otro
+  svSt();rBands();
+}
+
 function rBands(){
   const cont=el('h-bands');if(!cont)return;
+  const porBroker=bandMode==='broker';
+  const bc=el('bm-clase'),bk=el('bm-broker');
+  if(bc)bc.classList.toggle('on',!porBroker);
+  if(bk)bk.classList.toggle('on',porBroker);
   const t=tv();
-  const orden=['fondo','liquidez','metal','accion','cripto'];
-  const grupos=orden
-    .map(k=>({k,items:assets.filter(a=>a.cat===k)}))
+  // Por clase el orden de partida es fijo, para que el ojo encuentre siempre lo
+  // mismo; por broker no hay orden natural, así que ordena el dinero.
+  // Por clase el orden de partida es fijo; cualquier categoría rara que haya en
+  // la cartera se añade al final en vez de desaparecer del listado (el total de
+  // arriba sí la contaba, así que las bandas no cuadraban con él).
+  const CLASES=['fondo','liquidez','metal','accion','cripto'];
+  const claves=porBroker
+    ? [...new Set(assets.map(a=>a.broker||'Otro'))]
+    : [...CLASES,...new Set(assets.map(a=>a.cat).filter(c=>c&&!CLASES.includes(c)))];
+  const grupos=claves
+    .map(k=>({k,items:assets.filter(a=>porBroker?(a.broker||'Otro')===k:a.cat===k)}))
     .filter(gr=>gr.items.length)
     .map(gr=>{
       const v=gr.items.reduce((s,a)=>s+(vl(a)||0),0);
       const c=gr.items.reduce((s,a)=>s+cs(a),0);
-      return{...gr,v,c,g:v-c,pct:t>0?v/t*100:0};
+      return{...gr,v,c,g:v-c,pct:t>0?v/t*100:0,
+             etq:porBroker?gr.k:(CLP[gr.k]||gr.k),
+             col:porBroker?(BD[gr.k]||BD.Otro):catCC(gr.k).s};
     })
     .sort((a,b)=>b.v-a.v);
 
@@ -2246,12 +2570,14 @@ function rBands(){
   const maxPct=Math.max(...grupos.map(gr=>gr.pct))||1;
 
   cont.innerHTML=grupos.map(gr=>{
-    const on=openBand===gr.k,cc=CC[gr.k];
+    const on=openBand===gr.k,cc={s:gr.col};
     const gc=gr.g>0?'up-c':gr.g<0?'dn-c':'nu-c';
     const gp=gr.c>0?(gr.g/gr.c)*100:null;
-    const banda=`<button class="band ${on?'on':''}" onclick="toggleBand('${gr.k}')" aria-expanded="${on}" title="${on?'Ocultar':'Ver'} las posiciones de ${CLP[gr.k]}">
+    // La clave va en data-k y no incrustada en el onclick: los nombres de broker
+    // llevan espacios y podrían llevar comillas.
+    const banda=`<button class="band ${on?'on':''}" data-k="${esc(gr.k)}" onclick="toggleBand(this.dataset.k)" aria-expanded="${on}" title="${on?'Ocultar':'Ver'} las posiciones de ${esc(gr.etq)}">
         <span class="band-dot" style="background:${cc.s}"></span>
-        <span class="band-name">${CLP[gr.k]}</span>
+        <span class="band-name" title="${esc(gr.etq)}">${esc(gr.etq)}</span>
         <span class="band-val">${fe(gr.v,0)}</span>
         <span class="band-pct">${gr.pct.toFixed(1)}%</span>
         <span class="band-bar"><span class="band-fill" style="width:${(gr.pct/maxPct*100).toFixed(1)}%;background:${cc.s};opacity:.55"></span></span>
@@ -2272,6 +2598,13 @@ function rBands(){
   }).join('');
 }
 
+// Etiqueta «2,15% TAE» de una cuenta de liquidez remunerada, o cadena vacía.
+function aprTagHTML(a){
+  if(a.cat!=='liquidez'||!(+a.apr>0))return '';
+  const mes=(vl(a)||0)*(+a.apr/100)/12;
+  return ' · <span class="ccy-tag" title="'+esc('Cuenta remunerada al '+fpc(+a.apr)+' TAE: al saldo de hoy se devengan unos '+fe(mes)+' al mes. Cuando el banco te los pague, apúntalos en Historial → «Apuntar cobro».')+'">'+fpc(+a.apr)+' TAE</span>';
+}
+
 // Devuelve la fila <tr> de una posición. Extraída de la antigua rTable() para
 // poder reutilizarla dentro de cada banda sin duplicar el marcado.
 function rowHTML(a,t){
@@ -2281,11 +2614,14 @@ function rowHTML(a,t){
     const spPct=sp&&sp.length>1&&sp[0]>0?(sp[sp.length-1]-sp[0])/sp[0]*100:null;
     const cu=chartURL(a);
     const esUsd=up(a.ccy||'EUR')==='USD';
-    const cc=CC[a.cat];
+    const cc=catCC(a.cat);
     const st=pxState(a);
     const gc=g==null?'nu-c':g>=0?'up-c':'dn-c';
     const init=(a.ticker||CI[a.cat]||a.name.slice(0,3)).toUpperCase().slice(0,4);
     const br=a.broker||'Otro';
+    // Cuenta remunerada: la TAE se ve en la propia fila, junto al broker, para
+    // que el efectivo no parezca dinero muerto al desplegar la banda.
+    const aprTag=aprTagHTML(a);
     const staleT=a.mpT?`Último precio guardado · ${fd(a.mpT)}`:'Último precio guardado · pendiente de actualizar';
     // Un precio sin hora ni procedencia obliga a comprobarlo fuera. Con ambas,
     // el tooltip resuelve la duda sin salir de la app.
@@ -2307,7 +2643,7 @@ function rowHTML(a,t){
         <div class="sym-ic" style="background:${cc.b};color:${cc.t}">${init}</div>
         <div>
           <div class="sym-name" title="${a.name}">${a.name}</div>
-          <div class="sym-sub"><span style="color:${cc.t};font-weight:700">${CL[a.cat]}</span> · <span class="brdot" style="background:${BD[br]||'#9a94b8'}"></span>${br}${a.ticker?` · ${a.ticker}`:''}${esUsd?` · <span class="ccy-tag" title="Posición en dólares: coste y precio manual en USD, convertidos a € con el cambio del día">USD</span>`:''}</div>
+          <div class="sym-sub"><span style="color:${cc.t};font-weight:700">${catCL(a.cat)}</span> · <span class="brdot" style="background:${BD[br]||'#9a94b8'}"></span>${br}${a.ticker?` · ${a.ticker}`:''}${esUsd?` · <span class="ccy-tag" title="Posición en dólares: coste y precio manual en USD, convertidos a € con el cambio del día">USD</span>`:''}${aprTag}</div>
         </div>
       </div></td>
       <td class="r"><div class="qty-main">${fn(a.qty)}</div><div class="qty-unit">${a.unit}</div></td>
@@ -2340,6 +2676,26 @@ function realizadoHasta(ts){
 }
 const realizadoTotal=()=>realizadoHasta(Date.now());
 
+// Cobros en efectivo acumulados hasta una fecha. Con soloInv=true cuenta solo
+// los que salen de una posición de mercado (dividendos y cupones) y deja fuera
+// los intereses del efectivo: para la rentabilidad de LO INVERTIDO, un interés
+// de la cuenta corriente no es mérito de las inversiones.
+function rendimHasta(ts,soloInv){
+  let s=0;
+  for(const r of rendim){
+    const d=Date.parse(r.date);
+    if(!isFinite(d)||d>ts)continue;
+    if(soloInv&&r.kind==='interes')continue;
+    s+=(+r.eur||0);
+  }
+  return s;
+}
+const rendimTotal=()=>rendimHasta(Date.now());
+const rendimInvTotal=()=>rendimHasta(Date.now(),true);
+// Lo que rinde hoy el efectivo remunerado, en € al año.
+const rentaEfectivoAnual=()=>assets.reduce((s,a)=>a.cat==='liquidez'&&+a.apr>0?s+(vl(a)||0)*(+a.apr/100):s,0);
+const fpc=n=>new Intl.NumberFormat('es-ES',{maximumFractionDigits:2}).format(n)+'%';
+
 // Dinero APORTADO DE FUERA, acumulado. Es la pieza que estaba mal.
 //
 // El coste (tc()) no sirve como medida de lo aportado: cuando cierras una
@@ -2348,21 +2704,31 @@ const realizadoTotal=()=>realizadoHasta(Date.now());
 // plusvalía sin que haya entrado un euro de fuera. El cálculo anterior leía ese
 // salto como una aportación y, al restarla del resultado, convertía cada venta
 // con beneficio en una pérdida en el gráfico. Restar lo realizado lo cancela.
-const aportadoEn = s => (s.cost||0)-realizadoHasta(s.ts);
-const aportadoHoy = () => tc()-realizadoTotal();
-// Ganancia total de verdad: lo no realizado que llevas encima + lo ya embolsado.
-const gananciaTotal = () => (tv()-tc())+realizadoTotal();
+//
+// Los cobros en efectivo (intereses de cuentas remuneradas, dividendos) hacen lo
+// mismo que una venta con beneficio: suben el saldo —y con él el coste de la
+// liquidez— sin que hayas puesto un euro de fuera. Por eso se restan igual que
+// el resultado realizado.
+const aportadoEn = s => (s.cost||0)-realizadoHasta(s.ts)-rendimHasta(s.ts);
+const aportadoHoy = () => tc()-realizadoTotal()-rendimTotal();
+// Ganancia total de verdad: lo no realizado que llevas encima, lo ya embolsado
+// en ventas y lo cobrado en intereses y dividendos.
+const gananciaTotal = () => (tv()-tc())+realizadoTotal()+rendimTotal();
 
 // Serie de días guardados, ordenada y con el aportado ya corregido.
 // Un punto de la serie. valInv/apInv son el patrimonio y el aportado SIN la
 // liquidez; solo existen si ese día se apuntó la liquidez (los días anteriores
 // a agosto de 2026 no la tienen).
+// apInv NO es «ap menos liquidez»: un interés del efectivo sube el saldo sin que
+// el mercado se haya movido, y restarlo del aportado invertido lo convertiría en
+// una rentabilidad falsa de las inversiones. Ahí se descuentan solo los
+// dividendos, que sí los produce una posición de mercado.
 function puntoEvo(x){
   const val=x.val||0, ap=aportadoEn(x);
   const liq=x.liq!=null?+x.liq:null;
   return {ts:x.ts,val,ap,liq,
           valInv:liq!=null?val-liq:null,
-          apInv :liq!=null?ap-liq:null};
+          apInv :liq!=null?(x.cost||0)-realizadoHasta(x.ts)-rendimHasta(x.ts,true)-liq:null};
 }
 function serieEvo(){
   const s=[...snaps].sort((a,b)=>a.ts-b.ts).map(puntoEvo);
@@ -2375,7 +2741,7 @@ function serieEvo(){
   if(t>0&&(!s.length||new Date(s[s.length-1].ts).toDateString()!==hoy)){
     const liq=liquidezHoy();
     s.push({ts:Date.now(),val:t,ap:aportadoHoy(),liq,
-            valInv:t-liq,apInv:aportadoHoy()-liq,vivo:true});
+            valInv:t-liq,apInv:tc()-realizadoTotal()-rendimInvTotal()-liq,vivo:true});
   }
   return s;
 }
@@ -2430,27 +2796,71 @@ function renderAnalisis(){
 }
 
 // 1 · La cifra que de verdad se busca al entrar aquí
+// Fecha del primer movimiento que la app conoce: el día guardado más antiguo, la
+// operación más vieja del historial, la primera compra o el primer cobro. Es el
+// «desde que empezaste» del titular, y la ventana sobre la que anualizar.
+function inicioHistoria(){
+  let min=Infinity;
+  const ver=v=>{const x=typeof v==='number'?v:Date.parse(v);if(isFinite(x)&&x>0&&x<min)min=x;};
+  for(const s of snaps)ver(+s.ts);
+  for(const t of trades){ver(t.dateIn);ver(t.dateOut);}
+  for(const r of rendim)ver(r.date);
+  for(const a of aports)ver(a.date);
+  return isFinite(min)?min:null;
+}
+// Tasa anual equivalente de una rentabilidad acumulada en un número de días.
+// Por debajo de 90 días devuelve null: extrapolar un trimestre a un año da
+// cifras espectaculares y falsas, y de esas se toman las decisiones malas.
+function anualizar(pct,dias){
+  if(pct==null||!(dias>=90)||pct<=-100)return null;
+  const r=Math.pow(1+pct/100,365.25/dias)-1;
+  return isFinite(r)?r*100:null;
+}
+
 function renderAnHero(){
   const gan=gananciaTotal(),ap=aportadoHoy();
   const pct=ap>0?gan/ap*100:null;
   const g=el('an-gan');
   g.textContent=(gan>=0?'+':'')+fe(gan);
   g.className='an-big '+(gan>0?'up-c':gan<0?'dn-c':'');
+  // El acumulado manda; el equivalente anual va al lado, en gris, porque es lo
+  // único comparable con un 2,15% de cuenta remunerada o con un índice.
+  const ini=inicioHistoria();
+  const dias=ini?Math.max(1,Math.round((Date.now()-ini)/864e5)):0;
+  const anu=anualizar(pct,dias);
+  const anuHTML=anu==null?'':' <span class="an-anual" title="'+esc(
+      'El '+fp(pct)+' es lo acumulado en '+dias+' días, desde el '+fd(ini)+'. '
+    + 'En tasa anual equivalente son '+fp(anu)+': esa es la cifra que puedes comparar con el 2,15% '
+    + 'de una cuenta remunerada o con lo que renta un índice.\n\n'
+    + (dias<365
+        ? 'Ojo: llevas menos de un año, así que la cifra está extrapolada y se mueve mucho con cada semana que pasa.'
+        : 'Es una media hacia atrás sobre todo el periodo, no una previsión.'))
+    +'">'+fp(anu)+' anual</span>';
   el('an-gan-sub').innerHTML=ap>0
-    ? 'sobre <strong>'+fe(ap,0)+'</strong> aportados de tu bolsillo · <strong>'+fp(pct)+'</strong>'
+    ? 'sobre <strong>'+fe(ap,0)+'</strong> aportados de tu bolsillo · <strong>'+fp(pct)+'</strong>'+anuHTML
     : 'aún no hay aportaciones registradas';
 
-  const noReal=tv()-tc(),real=realizadoTotal();
+  const noReal=tv()-tc(),real=realizadoTotal(),cob=rendimTotal();
   const cel=(l,v,c,t)=>'<div class="an-cell" title="'+esc(t)+'"><div class="an-cell-l">'+l+'</div><div class="an-cell-v '+c+'">'+v+'</div></div>';
-  el('an-desglose').innerHTML=
+  // La celda de cobros solo aparece cuando hay algo que contar: quien nunca
+  // apunta intereses ni dividendos no gana nada con una columna a cero.
+  const cels=[
      cel('Sin vender',(noReal>=0?'+':'')+fe(noReal,0),noReal>0?'up-c':noReal<0?'dn-c':'',
-         'Lo que ganarías o perderías si vendieras hoy todo lo que tienes abierto.')
-    +cel('Ya vendido',(real>=0?'+':'')+fe(real,0),real>0?'up-c':real<0?'dn-c':'',
-         'Suma de las operaciones cerradas que tienes apuntadas en Historial.')
-    +cel('Aportado',fe(ap,0),'',
-         'Dinero que has metido de fuera, descontando lo que has sacado. No cuenta las plusvalías reinvertidas.')
-    +cel('Patrimonio',fe(tv(),0),'',
-         'Valor de mercado de todo, liquidez incluida.');
+         'Lo que ganarías o perderías si vendieras hoy todo lo que tienes abierto.'),
+     cel('Ya vendido',(real>=0?'+':'')+fe(real,0),real>0?'up-c':real<0?'dn-c':'',
+         'Suma de las operaciones cerradas que tienes apuntadas en Historial.'),
+  ];
+  if(cob!==0)cels.push(
+     cel('Cobrado',(cob>=0?'+':'')+fe(cob,0),cob>0?'up-c':cob<0?'dn-c':'',
+         'Intereses de cuentas remuneradas y dividendos apuntados en Historial. Es dinero ganado, no aportado: por eso suma aquí y se descuenta del aportado.'));
+  cels.push(
+     cel('Aportado',fe(ap,0),'',
+         'Dinero que has metido de fuera, descontando lo que has sacado. No cuenta ni las plusvalías reinvertidas ni los intereses y dividendos cobrados.'),
+     cel('Patrimonio',fe(tv(),0),'',
+         'Valor de mercado de todo, liquidez incluida.'));
+  const dg=el('an-desglose');
+  dg.style.gridTemplateColumns='repeat('+cels.length+',minmax(72px,1fr))';
+  dg.innerHTML=cels.join('');
 }
 
 // 2 · Patrimonio contra lo aportado. La franja entre ambos ES la ganancia, y por
@@ -2561,7 +2971,7 @@ function renderAnPnl(){
     const g=gn(a),c=cs(a);
     if(g==null||Math.abs(g)<0.005)continue;
     const n=veces[a.name]>1?a.name+' · '+(a.broker||'?'):a.name;
-    filas.push({n,g,pct:c>0?g/c*100:null,col:CC[a.cat].s,cerrada:false});
+    filas.push({n,g,pct:c>0?g/c*100:null,col:catCC(a.cat).s,cerrada:false});
   }
   const real=realizadoTotal();
   if(Math.abs(real)>0.005)filas.push({n:'Operaciones cerradas',g:real,pct:null,col:'#9d97b8',cerrada:true});
@@ -2638,7 +3048,7 @@ function renderRiskG(t){
   if(!pts.length){if(chartInstances['g-risk-scatter'])chartInstances['g-risk-scatter'].destroy();cv.style.display='none';nd.style.display='block';return;}
   cv.style.display='block';nd.style.display='none';
   mkChart('g-risk-scatter',{type:'bubble',
-    data:{datasets:pts.map(x=>({label:x.a.name,data:[{x:+x.vol.toFixed(1),y:+x.g.toFixed(1),r:Math.max(4,Math.sqrt(x.v/t)*26)}],backgroundColor:CC[x.a.cat].s+'88',borderColor:CC[x.a.cat].s,borderWidth:1}))},
+    data:{datasets:pts.map(x=>({label:x.a.name,data:[{x:+x.vol.toFixed(1),y:+x.g.toFixed(1),r:Math.max(4,Math.sqrt(x.v/t)*26)}],backgroundColor:catCC(x.a.cat).s+'88',borderColor:catCC(x.a.cat).s,borderWidth:1}))},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>` ${c.dataset.label} · vol ${c.raw.x}% · rent ${fp(c.raw.y)} · peso ${t>0?(pts[c.datasetIndex].v/t*100).toFixed(1):0}%`}}},
       scales:{
@@ -2732,30 +3142,112 @@ function tgSetBase(b){
   tgBase=(b==='inv')?'inv':'total';
   svSt();renderTarget();
 }
-const tgTotal = ()=>tgBase==='inv'?tvInv():tv();
+// La liquidez es estructural: sin ella el 100% no cuadraría en base total, y
+// para dejarla fuera ya está el modo «Solo invertido». No se puede excluir.
+const tgEsFijo = u=>u==='Liquidez';
 
-// Euros actuales por subyacente en la base activa.
-function tgCurr(){
-  const m={};
+// Euros por subyacente, separando lo que entra en el reparto de lo que has
+// sacado a mano. Una sola pasada por las posiciones para las dos cosas.
+function tgSplitEur(){
+  const fuera=new Set(tgFuera),dentro={},out={};
   for(const a of assets){
     if(tgBase==='inv'&&a.cat==='liquidez')continue;
     const v=vl(a);if(!v||v<=0)continue;
-    const u=und(a);m[u]=(m[u]||0)+v;
+    const u=und(a);
+    const dst=(!tgEsFijo(u)&&fuera.has(u))?out:dentro;
+    dst[u]=(dst[u]||0)+v;
   }
-  return m;
+  return {dentro,out};
+}
+const tgCurr     = ()=>tgSplitEur().dentro;
+const tgFueraEur = ()=>tgSplitEur().out;
+
+// Base del reparto: el patrimonio (o sólo lo invertido) menos lo que has sacado
+// del objetivo. Descontarlo es lo que hace que la tabla siga sumando 100 exacto
+// y que «lo que falta» y «lo que sobra» sigan coincidiendo.
+function tgTotal(){
+  const t=tgBase==='inv'?tvInv():tv();
+  const out=tgFueraEur();
+  const f=Object.keys(out).reduce((s,u)=>s+out[u],0);
+  return Math.max(0,t-f);
 }
 
-// Subyacentes a listar: los que tienes, los que tienen objetivo aunque todavía
-// no los tengas, y —solo en base total— la liquidez.
+// Subyacentes a listar: los que tienes, los que has añadido a mano aunque
+// todavía no los tengas, los que tienen objetivo, y —solo en base total— la
+// liquidez. Menos los que has sacado del reparto.
 function getUnderlyings(){
   const s=new Set();
   for(const a of assets){
     if(tgBase==='inv'&&a.cat==='liquidez')continue;
     s.add(und(a));
   }
+  for(const u of tgExtra)s.add(u);
   for(const k of Object.keys(targets))if((targets[k]||0)>0)s.add(k);
+  for(const u of tgFuera)if(!tgEsFijo(u))s.delete(u);
   if(tgBase==='inv')s.delete('Liquidez'); else s.add('Liquidez');
   return [...s];
+}
+
+// ── Añadir y quitar filas del objetivo ───────────────────────────────────────
+// Lo que se lista son subyacentes, no productos: si mañana compras el oro con
+// otro ETF la fila es la misma y el objetivo no se pierde. Por eso al añadir se
+// respeta el nombre que ya exista (comparando sin mayúsculas) en vez de crear
+// un duplicado tipo «Oro» / «oro» que partiría el peso en dos.
+function tgAddUnd(nombre){
+  let u=(nombre||'').trim().replace(/\s+/g,' ');
+  if(!u){toast('Escribe o elige un activo');return false;}
+  const eq=[...getUnderlyings(),...tgExtra,...tgFuera,...Object.keys(targets)]
+    .find(x=>x.toLowerCase()===u.toLowerCase());
+  if(eq)u=eq;
+  const ya=getUnderlyings().includes(u);
+  tgFuera=tgFuera.filter(x=>x!==u);
+  if(!tgExtra.includes(u)&&!tgEsFijo(u))tgExtra.push(u);
+  if(targets[u]==null)targets[u]=0;
+  svSt();renderTarget();
+  toast(ya?'«'+u+'» ya estaba en la lista':'«'+u+'» añadido · ponle un objetivo');
+  return true;
+}
+
+// Quitar NO toca la cartera: sólo saca la fila del reparto. Si tienes el activo,
+// su dinero deja de contar en la base y se muestra aparte, para que no parezca
+// que se ha evaporado ni que la cartera vale menos de lo que vale.
+function tgQuitar(u){
+  if(tgEsFijo(u)){toast('La liquidez no se quita · usa «Solo invertido»');return;}
+  const eur=tgCurr()[u]||0;
+  const propio=assets.some(a=>und(a)===u&&!(tgBase==='inv'&&a.cat==='liquidez'));
+  if(propio&&!confirm('«'+u+'» sale del reparto objetivo.\n\n'
+      +'Tienes '+fe(eur,0)+' ahí. La posición NO se toca: sigue en tu cartera y en el resto de pestañas, '
+      +'pero deja de contar en los porcentajes de esta y aparecerá debajo de la tabla.\n\n¿Seguir?'))return;
+  tgExtra=tgExtra.filter(x=>x!==u);
+  delete targets[u];
+  if(propio&&!tgFuera.includes(u))tgFuera.push(u);
+  svSt();renderTarget();
+  toast(propio?'«'+u+'» fuera del reparto':'«'+u+'» quitado de la lista');
+}
+
+function tgRestaurar(u){
+  tgFuera=tgFuera.filter(x=>x!==u);
+  if(targets[u]==null)targets[u]=0;
+  svSt();renderTarget();
+  toast('«'+u+'» vuelve al reparto');
+}
+
+// Tira de activos apartados. Se pintan siempre que la lista no esté vacía —aunque
+// ya no tengas saldo— porque si no, quitarlos sería una decisión irreversible
+// desde la interfaz.
+function renderTgFuera(){
+  const cont=el('tg-fuera');if(!cont)return;
+  if(!tgFuera.length){cont.innerHTML='';return;}
+  const out=tgFueraEur();
+  const tot=Object.keys(out).reduce((s,u)=>s+out[u],0);
+  cont.innerHTML='<div class="tg-out">'
+    +'<span class="tg-out-l">Fuera del reparto</span>'
+    +tgFuera.map(u=>'<span class="tg-chip">'+esc(u)+(out[u]>0?' <b>'+fe(out[u],0)+'</b>':'')
+        +'<button data-und="'+esc(u)+'" onclick="tgRestaurar(this.dataset.und)" title="Devolver «'+esc(u)+'» al reparto objetivo">Devolver</button></span>').join('')
+    +'<span class="tg-out-n">'+(tot>0
+        ? fe(tot,0)+' que no entran en los porcentajes de arriba'
+        : 'Sin saldo: no afecta a los porcentajes')+'</span>'
+  +'</div>';
 }
 
 // Posición concreta que da la exposición: sirve para decir DÓNDE comprar.
@@ -2815,9 +3307,11 @@ function renderTarget(){
   else if(drift<TG_TOL)hint.innerHTML='<strong>Cartera en objetivo.</strong> Nada que mover.';
   else hint.innerHTML='Cuadrar exige mover <strong>'+fe(drift/100*base,0)+'</strong>. Si prefieres no vender, usa el reparto de abajo.';
 
+  renderTgFuera();
+
   const cont=el('tg-rows');
   if(!rows.length){
-    cont.innerHTML='<div class="tg-empty">Aún no hay activos que repartir.<br>Añade posiciones desde Inicio y vuelve aquí.</div>';
+    cont.innerHTML='<div class="tg-empty">Aún no hay activos que repartir.<br>Añade posiciones desde Inicio, o pulsa <strong>«+ Añadir activo»</strong> para reservar sitio a algo que todavía no tienes.</div>';
     el('tg-aprows').innerHTML='';
     return;
   }
@@ -2850,6 +3344,12 @@ function renderTarget(){
       +'</div>'
       +'<div class="tg-dev '+dc+'">'+(sinObjetivo?'—':(r.dev>=0?'+':'')+r.dev.toFixed(1))+'</div>'
       +'<div style="text-align:right">'+tag+'</div>'
+      +(esLiq?'<div></div>'
+        :'<button class="tg-x" data-und="'+esc(r.u)+'" onclick="tgQuitar(this.dataset.und)" '
+          +'title="Quitar «'+esc(r.u)+'» del reparto objetivo · no toca tu posición" '
+          +'aria-label="Quitar '+esc(r.u)+' del objetivo">'
+          +'<svg fill="none" stroke="currentColor" viewBox="0 0 16 16" stroke-width="2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>'
+        +'</button>')
     +'</div>';
   }).join('');
 
@@ -3477,7 +3977,7 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('online',()=>fetchAll(false));
 
 // ── ASSET MODAL ───────────────────────────────────────────────────────────────
-function pCat(c){curCat=c;document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('on',b.dataset.c===c));const liq=c==='liquidez';el('a-mode-wrap').style.opacity=liq?.4:1;el('a-mode-wrap').style.pointerEvents=liq?'none':'auto';calibVis();}
+function pCat(c){curCat=c;document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('on',b.dataset.c===c));const liq=c==='liquidez';el('a-mode-wrap').style.opacity=liq?.4:1;el('a-mode-wrap').style.pointerEvents=liq?'none':'auto';const aw=el('a-apr-wrap');if(aw)aw.style.display=liq?'block':'none';calibVis();}
 function pMode(m){curMode=m;el('atab-auto').classList.toggle('on',m==='auto');el('atab-manual').classList.toggle('on',m==='manual');el('az-auto').style.display=m==='auto'?'block':'none';el('az-manual').style.display=m==='manual'?'block':'none';calibVis();}
 function updCP(){
   if(el('a-calib')&&el('a-calib').checked){
@@ -3531,8 +4031,9 @@ function catRank(c,q){
   return -1;
 }
 
-// dst: 'a' = modal de posición · 'w' = modal de watchlist. El mismo buscador
-// para los dos; sólo cambia dónde se vuelcan los datos del activo elegido.
+// dst: 'a' = modal de posición · 'w' = modal de watchlist · 't' = fila nueva de
+// Cartera objetivo. El mismo buscador para los tres; sólo cambia dónde se
+// vuelcan los datos del activo elegido.
 let catDst='a';
 function catSearch(q,dst='a'){
   catDst=dst;
@@ -3588,6 +4089,8 @@ function catPick(k,dst='a'){
   el(dst+'-results').classList.remove('open');
   el(dst+'-search').value=c.n;
   if(dst==='w')return catPickWL(c);
+  // Al objetivo sólo le interesa el subyacente: es lo que agrupa la exposición.
+  if(dst==='t'){el('t-und').value=c.u||c.n;el('t-und').focus();el('t-und').select();return;}
   el('a-name').value=c.n;
   el('a-isin').value=c.i||'';
   el('a-underlying').value=c.u||'';
@@ -3619,7 +4122,7 @@ function catPickWL(c){
 }
 
 document.addEventListener('mousedown',e=>{
-  for(const id of ['a-results','w-results']){
+  for(const id of ['a-results','w-results','t-results']){
     const box=el(id);
     if(box&&box.classList.contains('open')&&!e.target.closest('.cat-search'))box.classList.remove('open');
   }
@@ -3627,8 +4130,8 @@ document.addEventListener('mousedown',e=>{
 
 function openAModal(id=null){
   eaid=id;el('am-t').textContent=id?'Editar posición':'Nueva posición';
-  if(id){const a=assets.find(x=>x.id===id);el('a-name').value=a.name;el('a-broker').value=a.broker||'MyInvestor';el('a-ticker').value=a.ticker||'';el('a-isin').value=a.isin||'';el('a-qty').value=a.qty;el('a-unit').value=a.unit||'';el('a-costunit').value=a.costUnit||'';el('a-mprice').value=a.mp||'';el('a-ccy').value=up(a.ccy||'EUR');el('a-underlying').value=a.underlying||UND_MAP[a.id]||'';el('a-yfsym').value=a.yfSym||'';el('a-search').value='';el('a-calib').checked=!!a.calibPend;pCat(a.cat);pMode(a.mode||'manual');calibChg();}
-  else{['a-name','a-ticker','a-isin','a-qty','a-unit','a-costunit','a-mprice','a-underlying','a-search','a-yfsym'].forEach(i=>el(i).value='');el('a-broker').value='MyInvestor';el('a-ccy').value='EUR';el('a-calib').checked=false;pCat('fondo');pMode('manual');calibChg();}
+  if(id){const a=assets.find(x=>x.id===id);el('a-name').value=a.name;el('a-broker').value=a.broker||'MyInvestor';el('a-ticker').value=a.ticker||'';el('a-isin').value=a.isin||'';el('a-qty').value=a.qty;el('a-unit').value=a.unit||'';el('a-costunit').value=a.costUnit||'';el('a-mprice').value=a.mp||'';el('a-ccy').value=up(a.ccy||'EUR');el('a-underlying').value=a.underlying||UND_MAP[a.id]||'';el('a-yfsym').value=a.yfSym||'';el('a-search').value='';el('a-calib').checked=!!a.calibPend;el('a-apr').value=a.apr||'';pCat(a.cat);pMode(a.mode||'manual');calibChg();}
+  else{['a-name','a-ticker','a-isin','a-qty','a-unit','a-costunit','a-mprice','a-underlying','a-search','a-yfsym'].forEach(i=>el(i).value='');el('a-broker').value='MyInvestor';el('a-ccy').value='EUR';el('a-apr').value='';el('a-calib').checked=false;pCat('fondo');pMode('manual');calibChg();}
   el('a-results').classList.remove('open');catHits=[];catSel=-1;
   updCP();el('ov-a').classList.add('open');setTimeout(()=>el(id?'a-name':'a-search').focus(),50);
 }
@@ -3643,7 +4146,15 @@ function saveAsset(){
   const yfSym=el('a-yfsym').value.trim();
   if(!name){toast('Introduce un nombre');return;}if(isNaN(qty)||qty<=0){toast('Cantidad inválida');return;}
   if(isin&&!ISIN_RE.test(isin)){toast('ISIN no válido (12 caracteres, ej. IE0032620787)');return;}
-  const asset={name,broker,cat:curCat,mode:curMode,ticker,isin,qty,unit,costUnit,ccy,underlying};
+  // TAE solo tiene sentido en liquidez: en cualquier otra categoría se guarda a
+  // cero para que cambiar el tipo de una posición no la arrastre escondida.
+  const apr=parseFloat(el('a-apr').value)||0;
+  const asset={name,broker,cat:curCat,mode:curMode,ticker,isin,qty,unit,costUnit,ccy,underlying,apr:curCat==='liquidez'?apr:0};
+  // Sello del día en que empieza a devengar: sin él, la primera vez que apuntes
+  // intereses no habría desde cuándo calcularlos ni cuándo avisarte.
+  const ant=eaid?assets.find(a=>a.id===eaid):null;
+  if(asset.apr>0&&!(ant&&+ant.apr>0&&ant.aprDesde))asset.aprDesde=Date.now();
+  else if(!(asset.apr>0))asset.aprDesde=null;
   if(curMode==='manual'&&mp!=null)asset.mp=mp;
   // Importe en euros en vez de participaciones: se guarda como «1 € = 1 unidad»
   // y queda marcado para convertirse en participaciones al primer valor
@@ -3682,6 +4193,18 @@ function wCcyChg(){const c=up(el('w-ccy').value),s=CCY_SYM[c]||c;el('w-target-em
 function openWModal(id=null){ewid=id;el('wm-t').textContent=id?'Editar watchlist':'Añadir a watchlist';if(id){const w=wl.find(x=>x.id===id);el('w-name').value=w.name;el('w-ticker').value=w.ticker||'';el('w-ccy').value=up(w.ccy||'EUR');el('w-target').value=w.target||'';el('w-cprice').value=w.curPrice||'';el('w-notes').value=w.notes||'';}else{['w-name','w-ticker','w-target','w-cprice','w-notes'].forEach(i=>el(i).value='');el('w-ccy').value='EUR';}
   el('w-search').value='';el('w-results').classList.remove('open');catHits=[];catSel=-1;wCcyChg();el('ov-w').classList.add('open');setTimeout(()=>el('w-name').focus(),50);}
 function closeWModal(){el('ov-w').classList.remove('open');ewid=null;}
+
+// Añadir una fila al objetivo. El catálogo es un atajo, no un requisito: el
+// campo de texto acepta cualquier nombre, porque el subyacente lo decides tú.
+function openTgModal(){
+  el('t-search').value='';el('t-und').value='';
+  el('t-results').classList.remove('open');catHits=[];catSel=-1;
+  el('ov-tg').classList.add('open');
+  setTimeout(()=>el('t-search').focus(),50);
+}
+function closeTgModal(){el('ov-tg').classList.remove('open');}
+function saveTgUnd(){if(tgAddUnd(el('t-und').value||el('t-search').value))closeTgModal();}
+el('t-und').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveTgUnd();}});
 function saveWL(){
   const name=el('w-name').value.trim(),ticker=el('w-ticker').value.trim().toUpperCase();
   const ccy=up(el('w-ccy').value||'EUR');
@@ -3695,7 +4218,7 @@ function saveWL(){
 }
 function delW(id){if(!confirm('¿Eliminar?'))return;wl=wl.filter(w=>w.id!==id);svSt();renderWL();toast('Eliminado');}
 
-['ov-a','ov-p','ov-w','ov-trade','ov-b'].forEach(function(oid){el(oid).addEventListener('click',function(e){if(e.target===this)({'ov-a':closeAModal,'ov-p':closePModal,'ov-trade':closeTradeModal,'ov-w':closeWModal,'ov-b':closeBuyModal})[oid]();});});
+['ov-a','ov-p','ov-w','ov-tg','ov-pub','ov-trade','ov-b','ov-r'].forEach(function(oid){el(oid).addEventListener('click',function(e){if(e.target===this)({'ov-a':closeAModal,'ov-p':closePModal,'ov-trade':closeTradeModal,'ov-w':closeWModal,'ov-tg':closeTgModal,'ov-pub':closePubModal,'ov-b':closeBuyModal,'ov-r':closeRendModal})[oid]();});});
 
 // ── REGISTRAR COMPRA (aportación DCA) ─────────────────────────────────────────
 // Actualiza cantidad y precio medio ponderado de la posición y deja registro en
@@ -3708,10 +4231,23 @@ function openBuyModal(id=null){
   if(id&&opts.some(a=>a.id===id))sel.value=id;
   el('b-qty').value='';el('b-price').value='';
   el('b-date').value=new Date().toISOString().slice(0,10);
+  llenarPago();
   updBuyP();
   el('ov-b').classList.add('open');setTimeout(()=>el('b-qty').focus(),50);
 }
 function closeBuyModal(){el('ov-b').classList.remove('open');}
+// Cuentas de liquidez donde puede haber salido el dinero, más «dinero nuevo».
+// Por defecto se propone la cuenta del mismo broker que el activo: es de donde
+// sale casi siempre, y así el saldo queda bien sin acordarse de editarlo.
+function llenarPago(){
+  const sel=el('b-pago');if(!sel)return;
+  const a=assets.find(x=>x.id==el('b-asset').value);
+  const liqs=assets.filter(x=>x.cat==='liquidez');
+  sel.innerHTML='<option value="0">Dinero nuevo · transferencia desde fuera</option>'
+    +liqs.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' · '+fe(vl(x)||0,0)+'</option>').join('');
+  const mismo=a?liqs.find(x=>(x.broker||'')===(a.broker||'')):null;
+  sel.value=String(mismo?mismo.id:0);
+}
 function updBuyP(){
   const a=assets.find(x=>x.id==el('b-asset').value);if(!a)return;
   const usd=up(a.ccy||'EUR')==='USD';
@@ -3725,6 +4261,19 @@ function updBuyP(){
     el('b-avg').textContent=fn(nc,4)+(usd?' $':' €')+'/u  (antes '+fn(a.costUnit||0,4)+')';
     el('b-after').textContent=fn(nq)+' '+(a.unit||'u')+' · coste total '+fe(nq*nc*ccyRate(a));
   }else{el('b-total').textContent='—';el('b-avg').textContent='—';el('b-after').textContent='—';}
+  // Aviso de saldo: comprar con una cuenta que no llega es casi siempre un dato
+  // mal metido, y verlo antes de guardar evita tener que deshacerlo después.
+  const h=el('b-pago-hint'),pg=assets.find(x=>x.id==el('b-pago').value);
+  if(!h){/* modal antiguo */}
+  else if(!pg)h.textContent='La compra sumará al dinero que has aportado de tu bolsillo. Ningún saldo de la cartera baja.';
+  else{
+    const imp=q*p*ccyRate(a),saldo=vl(pg)||0;
+    h.innerHTML=imp>0
+      ? 'El saldo de <strong>'+esc(pg.name)+'</strong> bajará de '+fe(saldo,0)+' a '+fe(saldo-imp,0)
+        +(imp>saldo+0.005?' · <b style="color:var(--dn)">no hay saldo suficiente</b>':'')
+        +'. El dinero aportado no cambia: ya estaba dentro de la cartera.'
+      : 'El importe saldrá de esta cuenta. El dinero aportado no cambia: ya estaba dentro de la cartera.';
+  }
 }
 function saveBuy(){
   const a=assets.find(x=>x.id==el('b-asset').value);
@@ -3732,10 +4281,21 @@ function saveBuy(){
   if(!a){toast('Selecciona un activo');return;}
   if(isNaN(q)||q<=0){toast('Cantidad inválida');return;}
   if(isNaN(p)||p<0){toast('Precio inválido');return;}
+  const eur=q*p*ccyRate(a);
+  const pg=assets.find(x=>x.id==el('b-pago').value);
+  if(pg&&(vl(pg)||0)+0.005<eur&&!confirm('En «'+pg.name+'» solo tienes '+fe(vl(pg)||0,0)
+      +' y la compra son '+fe(eur,0)+'.\n\n¿Registrarla igualmente? El saldo quedará en negativo.'))return;
   const nq=a.qty+q;
   a.costUnit=(a.qty*(a.costUnit||0)+q*p)/nq;
   a.qty=nq;
-  aports.unshift({id:Date.now(),date:el('b-date').value||new Date().toISOString().slice(0,10),assetId:a.id,name:a.name,qty:q,price:p,eur:q*p*ccyRate(a)});
+  // El dinero sale de la cuenta elegida: baja saldo y coste a la vez (en
+  // liquidez el coste ES el saldo), así que el total aportado no se mueve.
+  let pagoId=0;
+  if(pg){
+    const pp=(pg.mp==null?1:pg.mp)*ccyRate(pg);
+    if(pp>0){pg.qty=+(pg.qty-eur/pp).toFixed(8);pagoId=pg.id;}
+  }
+  aports.unshift({id:Date.now(),date:el('b-date').value||new Date().toISOString().slice(0,10),assetId:a.id,name:a.name,qty:q,price:p,eur,pagoId});
   svSt();closeBuyModal();render();
   if(curPage==='historial')renderHist();
   toast('Compra registrada ✓ · precio medio '+fn(a.costUnit,4));
@@ -3744,16 +4304,119 @@ function delAport(id){
   const ap=aports.find(x=>x.id===id);if(!ap)return;
   const a=assets.find(x=>x.id===ap.assetId);
   const revertible=a&&a.qty>ap.qty;
-  if(!confirm('¿Eliminar esta aportación del registro?'+(revertible?' También se revertirá en la posición (cantidad y precio medio).':'')))return;
+  const pg=ap.pagoId?assets.find(x=>x.id===ap.pagoId):null;
+  if(!confirm('¿Eliminar esta aportación del registro?'
+      +(revertible?' También se revertirá en la posición (cantidad y precio medio).':'')
+      +(pg?' Y se devolverán '+fe(ap.eur)+' al saldo de '+pg.name+'.':'')))return;
   if(revertible){
     const oq=a.qty-ap.qty;
     const oc=(a.qty*(a.costUnit||0)-ap.qty*ap.price)/oq;
     if(oq>0&&oc>=0){a.qty=oq;a.costUnit=oc;}
   }
+  if(pg){const pp=(pg.mp==null?1:pg.mp)*ccyRate(pg);if(pp>0)pg.qty=+(pg.qty+(+ap.eur||0)/pp).toFixed(8);}
   aports=aports.filter(x=>x.id!==id);
   svSt();render();renderHist();toast('Aportación eliminada');
 }
 
+
+// ── COBROS · INTERESES Y DIVIDENDOS ───────────────────────────────────────────
+// Un cobro en efectivo sube el saldo de la cuenta, y el «coste» de la liquidez
+// es su propio saldo: si no se apunta, la app lee ese euro como una aportación
+// tuya y la ganancia no se mueve. Apuntándolo se resta del aportado y se suma a
+// la ganancia, que es lo que de verdad ha pasado.
+function openRendModal(preId){
+  const sel=el('r-asset');
+  if(!assets.length){toast('Añade primero una posición o una cuenta');return;}
+  // Primero las cuentas remuneradas, que es el caso habitual.
+  const opts=[...assets].sort((a,b)=>
+    ((b.cat==='liquidez'&&+b.apr>0)-(a.cat==='liquidez'&&+a.apr>0))
+    ||((b.cat==='liquidez')-(a.cat==='liquidez'))
+    ||((vl(b)||0)-(vl(a)||0))
+    ||a.name.localeCompare(b.name,'es'));
+  sel.innerHTML=opts.map(a=>'<option value="'+a.id+'">'+esc(a.name)+(a.broker?' · '+esc(a.broker):'')+'</option>').join('');
+  // Preselección: la cuenta desde la que se ha pulsado el aviso; si no, la
+  // primera remunerada; si tampoco, lo que haya.
+  const pre=(preId!=null?opts.find(a=>a.id===preId):null)
+          ||opts.find(a=>a.cat==='liquidez'&&+a.apr>0)||opts[0];
+  sel.value=String(pre.id);
+  el('r-kind').value=(pre.cat==='liquidez'&&+pre.apr>0)?'interes':'dividendo';
+  el('r-date').value=new Date().toISOString().slice(0,10);
+  el('r-add').checked=true;
+  rendPrefill();
+  el('ov-r').classList.add('open');
+  setTimeout(()=>el('r-eur').focus(),50);
+}
+function closeRendModal(){el('ov-r').classList.remove('open');}
+
+// Con una cuenta remunerada propone los intereses devengados desde el último
+// cobro apuntado (o desde hace 30 días si no hay ninguno). Es una propuesta: el
+// importe bueno es el del banco, y se corrige a mano.
+function rendPrefill(){
+  const a=assets.find(x=>x.id==el('r-asset').value);
+  const h=el('r-hint'),inp=el('r-eur');
+  if(!a){h.textContent='';return;}
+  if(el('r-kind').value==='interes'&&a.cat==='liquidez'&&+a.apr>0){
+    const desde=devengoDesde(a);
+    const yaHubo=rendim.some(r=>r.assetId===a.id&&r.kind==='interes');
+    const dias=Math.min(400,Math.max(1,Math.round((Date.now()-desde)/864e5)));
+    const est=(vl(a)||0)*(+a.apr/100)*dias/365;
+    inp.value=est.toFixed(2);
+    h.innerHTML='Al '+fpc(+a.apr)+' TAE sobre '+fe(vl(a)||0,0)+', en '+dias+' días se devengan <strong>'+fe(est)+'</strong>'
+      +(yaHubo?' desde el último cobro apuntado':'')+'. Ajústalo a lo que te haya pagado el banco.';
+  }else{
+    inp.value='';
+    h.textContent=a.cat==='liquidez'
+      ? 'Esta cuenta no tiene TAE apuntada. Ponla en la posición (Editar → Remuneración) y la app te propondrá el importe.'
+      : 'Apunta el importe neto que te ha entrado en cuenta.';
+  }
+}
+function saveRend(){
+  const a=assets.find(x=>x.id==el('r-asset').value);
+  const eur=parseFloat(el('r-eur').value);
+  if(!a){toast('Elige la cuenta o el activo');return;}
+  if(isNaN(eur)||eur===0){toast('Importe inválido');return;}
+  const kind=el('r-kind').value;
+  rendim.unshift({id:Date.now(),date:el('r-date').value||new Date().toISOString().slice(0,10),
+                  kind,assetId:a.id,name:a.name,broker:a.broker||'',eur});
+  // El dinero entra en la cuenta de efectivo: en liquidez, en la propia; en un
+  // activo de mercado, en la cuenta del mismo broker. Sube saldo y coste a la
+  // vez (coste = saldo), y el descuento del aportado lo hace rendimHasta().
+  if(el('r-add').checked){
+    const dest=a.cat==='liquidez'?a:assets.find(x=>x.cat==='liquidez'&&(x.broker||'')===(a.broker||''));
+    if(dest){
+      const p=(dest.mp==null?1:dest.mp)*ccyRate(dest);
+      if(p>0)dest.qty=+(dest.qty+eur/p).toFixed(8);
+    }else{
+      toast('Sin cuenta de liquidez en '+(a.broker||'ese broker')+': actualiza el saldo a mano');
+    }
+  }
+  svSt();closeRendModal();render();renderHist();
+  if(curPage==='analisis')renderAnalisis();
+  toast((kind==='interes'?'Intereses':'Dividendo')+' apuntado ✓ · cuenta como ganancia, no como aportación');
+}
+function delRend(id){
+  const r=rendim.find(x=>x.id===id);if(!r)return;
+  if(!confirm('¿Eliminar este cobro? La ganancia bajará '+fe(r.eur)+' y el aportado subirá lo mismo.\n\nEl saldo de la cuenta no se toca: ajústalo a mano si hace falta.'))return;
+  rendim=rendim.filter(x=>x.id!==id);
+  svSt();render();renderHist();toast('Cobro eliminado');
+}
+const RKIND={interes:'Intereses',dividendo:'Dividendo'};
+function renderRend(){
+  const tb=el('rend-tbody');if(!tb)return;
+  const yr=String(new Date().getFullYear());
+  const tot=rendim.filter(x=>String(x.date||'').startsWith(yr)).reduce((s,x)=>s+(+x.eur||0),0);
+  const ry=el('h-rend-yr');if(ry)ry.textContent=rendim.length?fe(tot):'—';
+  const ord=[...rendim].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  tb.innerHTML=ord.length?ord.map(function(x){
+    return '<tr>'
+      +'<td style="font-size:11px;color:var(--fg2)">'+esc(x.date||'—')+'</td>'
+      +'<td style="font-size:12px;font-weight:600;color:var(--fg0)">'+(RKIND[x.kind]||'Cobro')+'</td>'
+      +'<td style="font-size:12px;color:var(--fg1)">'+esc(x.name||'')+(x.broker?' · '+esc(x.broker):'')+'</td>'
+      +'<td class="r up-c" style="font-size:12px;font-weight:700">+'+fe(x.eur)+'</td>'
+      +'<td><div style="display:flex;justify-content:flex-end"><button class="abt del" onclick="delRend('+x.id+')" title="Eliminar cobro"><svg fill="none" stroke="currentColor" viewBox="0 0 16 16"><path d="M3 4h10M6 4V2h4v2M5 4l1 9h4l1-9" stroke-linecap="round"/></svg></button></div></td>'
+      +'</tr>';
+  }).join(''):'<tr><td class="empty-td" colspan="5">Sin cobros apuntados.<br>Si tu efectivo está en una cuenta remunerada (Trade Republic paga un 2,15%), apunta aquí cada pago: cuenta como ganancia y no infla el dinero que has aportado.</td></tr>';
+}
 
 // ── HISTORIAL ─────────────────────────────────────────────────────────────────
 let curTcat = 'accion';
@@ -3874,6 +4537,7 @@ function renderAports(){
 
 function renderHist(){
   renderAports();
+  renderRend();
   const tbody  = el('hist-tbody');
   const empty  = el('hist-empty');
   const totRes = trades.reduce(function(s,t){ return s + t.result; }, 0);
@@ -3918,12 +4582,14 @@ function renderHist(){
 }
 
 // ── GUARDAR / CARGAR CARTERA (JSON) ───────────────────────────────────────────
-function exportJSON(){
-  const data = {
+// La foto completa del perfil activo. La usan el backup manual y el publicador
+// del informe diario: si divergieran, el correo contaría una cartera distinta de
+// la que te acabas de descargar.
+function carteraJSON(){
+  return {
     version:   2,
     // Perfil de origen: lo lee loadJSONFile() para avisar antes de sobrescribir
-    // la cartera equivocada, y sirve de control visual al actualizar el secret
-    // POSICIONES_JSON (que debe salir siempre del perfil Marc).
+    // la cartera equivocada, y lo usa el informe para saber a quién escribir.
     perfil:    perfilActivo(),
     perfilNombre: perfilNombre(),
     exportedAt: new Date().toISOString(),
@@ -3931,12 +4597,21 @@ function exportJSON(){
     snaps:     snaps,
     wl:        wl,
     targets:   targets,
+    tgExtra:   tgExtra,
+    tgFuera:   tgFuera,
     tgBase:    tgBase,
     tgAporte:  tgAporte,
     trades:    trades,
     aports:    aports,
+    rendim:    rendim,
+    bandMode:  bandMode,
+
     cashflow:  cf,
   };
+}
+
+function exportJSON(){
+  const data = carteraJSON();
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -3971,6 +4646,239 @@ async function copySecretJSON(){
   toast('JSON copiado ✓ · pégalo en GitHub → Settings → Secrets → POSICIONES_JSON');
 }
 
+// ── PUBLICAR PARA EL INFORME DIARIO ──────────────────────────────────────────
+// El informe corre en GitHub Actions, que no puede leer tu localStorage. Hasta
+// ahora había que pegar el JSON a mano en el secret POSICIONES_JSON, así que el
+// correo llegaba con la cartera del último día que te acordaste de hacerlo.
+//
+// Ahora la app publica ella sola un fichero en el repo. Como el repositorio es
+// PÚBLICO, lo que se sube va cifrado con AES-GCM: sin la contraseña es un churro
+// de bytes, y esa contraseña solo la conocen este navegador y el workflow (donde
+// vive como secret). El token de GitHub tampoco sale de aquí: se guarda en
+// localStorage, no en el código, y con permiso únicamente de Contents en este
+// repo. Todo el cifrado es WebCrypto, que ya trae el navegador: cero librerías.
+const PUB_REPO     = 'MarcAiBTC/Cartera';
+const PUB_RAMA     = 'main';
+const PUB_DIR      = 'datos';
+const PUB_ITER     = 210000;   // vueltas de PBKDF2 (recomendación OWASP 2023)
+const PUB_ESPERA   = 12000;    // ms de calma antes de publicar un cambio
+// Los ajustes del publicador NO pasan por K(): son de este navegador, no de una
+// cartera. El mismo token y la misma contraseña valen para los dos perfiles, y
+// tenerlos por duplicado solo llevaría a dejarlos desparejados.
+const PUB_TOKEN_SK = 'pub_token';
+const PUB_PASS_SK  = 'pub_pass';
+const PUB_EST_SK   = 'pub_estado';
+
+const pubToken = ()=>localStorage.getItem(PUB_TOKEN_SK)||'';
+const pubPass  = ()=>localStorage.getItem(PUB_PASS_SK)||'';
+const pubListo = ()=>!!(pubToken()&&pubPass());
+// WebCrypto solo existe en contexto seguro. Abriendo el index.html con doble
+// clic (file://) no hay crypto.subtle y no se puede cifrar nada: mejor decirlo
+// que fallar con un TypeError críptico.
+const pubSeguro = ()=>!!(window.crypto&&window.crypto.subtle);
+
+function pubEstado(){try{return JSON.parse(localStorage.getItem(PUB_EST_SK))||{};}catch(e){return{};}}
+function pubGuardaEstado(e){localStorage.setItem(PUB_EST_SK,JSON.stringify(e));}
+
+// btoa() no traga un Uint8Array grande de golpe (desborda la pila al hacer
+// spread), así que se trocea. Con carteras de 30 KB importa.
+function pubB64(buf){
+  const b=new Uint8Array(buf);let s='';
+  for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));
+  return btoa(s);
+}
+const pubBytes = t=>new TextEncoder().encode(t);
+
+async function pubHash(txt){
+  const h=await crypto.subtle.digest('SHA-256',pubBytes(txt));
+  return pubB64(h);
+}
+
+async function pubClave(pass,salt){
+  const base=await crypto.subtle.importKey('raw',pubBytes(pass),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2',salt,iterations:PUB_ITER,hash:'SHA-256'},
+    base,{name:'AES-GCM',length:256},false,['encrypt']);
+}
+
+// Sal e IV nuevos en cada publicación: reutilizarlos con la misma clave es el
+// fallo clásico que rompe AES-GCM.
+async function pubCifrar(texto,pass){
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const k=await pubClave(pass,salt);
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},k,pubBytes(texto));
+  return {v:1,alg:'AES-GCM-256',kdf:'PBKDF2-SHA256',iter:PUB_ITER,
+          salt:pubB64(salt),iv:pubB64(iv),ct:pubB64(ct)};
+}
+
+// ── API de GitHub (Contents) ─────────────────────────────────────────────────
+async function pubGH(ruta,opts){
+  const r=await fetch('https://api.github.com/repos/'+PUB_REPO+'/contents/'+ruta,
+    Object.assign({},opts,{headers:Object.assign({
+      Authorization:'Bearer '+pubToken(),
+      Accept:'application/vnd.github+json',
+      'X-GitHub-Api-Version':'2022-11-28',
+    },(opts||{}).headers)}));
+  return r;
+}
+async function pubSha(ruta){
+  const r=await pubGH(ruta+'?ref='+PUB_RAMA,{});
+  if(r.status===404)return null;
+  if(!r.ok)throw new Error('GitHub '+r.status+' al leer el fichero: '+(await r.text()).slice(0,180));
+  return (await r.json()).sha||null;
+}
+
+// El repo recibe commits automáticos de otros workflows (precios cada 15 min),
+// así que un 409 por sha caducado es normal: se relee y se reintenta una vez.
+async function pubSubir(ruta,contenido,mensaje){
+  for(let intento=0;intento<2;intento++){
+    const sha=await pubSha(ruta);
+    const cuerpo={message:mensaje,content:pubB64(pubBytes(contenido)),branch:PUB_RAMA};
+    if(sha)cuerpo.sha=sha;
+    const r=await pubGH(ruta,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cuerpo)});
+    if(r.ok)return;
+    if(r.status===409&&intento===0)continue;
+    const txt=(await r.text()).slice(0,220);
+    if(r.status===401)throw new Error('El token no vale (401). Vuelve a generarlo y pégalo otra vez.');
+    if(r.status===403||r.status===404)throw new Error('El token no tiene permiso de escritura sobre '+PUB_REPO+' (Contents: Read and write).');
+    throw new Error('GitHub '+r.status+': '+txt);
+  }
+}
+
+// ── Datos de cada perfil ─────────────────────────────────────────────────────
+// Del perfil activo mandan los arrays vivos; del otro se lee su localStorage tal
+// cual, sin cambiar de perfil ni recargar. Están en el mismo origen, así que es
+// solo cuestión de mirar la clave con el sufijo que toca.
+function carteraDePerfil(p){
+  if(p===perfilActivo())return carteraJSON();
+  let s={},c={};
+  try{s=JSON.parse(localStorage.getItem('cv9'+PERFILES[p]))||{};}catch(e){}
+  try{c=JSON.parse(localStorage.getItem('cf1'+PERFILES[p]))||{};}catch(e){}
+  if(!Array.isArray(s.assets)||!s.assets.length)return null;
+  return {version:2,perfil:p,perfilNombre:PERFIL_LBL[p],exportedAt:new Date().toISOString(),
+    assets:s.assets,snaps:s.snaps||[],wl:s.wl||[],targets:s.targets||{},
+    tgExtra:s.tgExtra||[],tgFuera:s.tgFuera||[],tgBase:s.tgBase||'total',tgAporte:s.tgAporte||0,
+    trades:s.trades||[],aports:s.aports||[],rendim:s.rendim||[],bandMode:s.bandMode||'clase',
+    cashflow:c&&c.meses?c:null};
+}
+
+// ── Publicar un perfil ───────────────────────────────────────────────────────
+let pubEnCurso=false;
+async function publicarPerfil(p,silencioso){
+  if(!pubListo()){if(!silencioso)toast('Configura antes el token y la contraseña');return false;}
+  if(!pubSeguro()){if(!silencioso)toast('Sin cifrado disponible · abre la app por https, no como fichero local');return false;}
+  const datos=carteraDePerfil(p);
+  if(!datos){if(!silencioso)toast('El perfil '+PERFIL_LBL[p]+' todavía no tiene posiciones en este navegador');return false;}
+  // exportedAt cambia en cada llamada: si entrara en la huella, cada repintado
+  // parecería un cambio y publicaríamos commits vacíos toda la tarde.
+  const sinFecha=Object.assign({},datos);delete sinFecha.exportedAt;
+  const txt=JSON.stringify(sinFecha);
+  const huella=await pubHash(txt);
+  const est=pubEstado();
+  if(est[p]&&est[p].huella===huella){if(!silencioso)toast('No hay cambios que publicar');return false;}
+  const sobre={
+    // Metadatos en claro a propósito: sirven para saber qué hay dentro sin
+    // descifrar, y no dicen nada de cuánto dinero hay.
+    perfil:p,actualizado:new Date().toISOString(),
+    nota:'Cartera cifrada con AES-GCM. Sin la contraseña del informe no se puede leer.',
+    enc:await pubCifrar(JSON.stringify(datos),pubPass()),
+  };
+  await pubSubir(PUB_DIR+'/cartera-'+p+'.enc.json',JSON.stringify(sobre,null,1),
+                 'Cartera de '+PERFIL_LBL[p]+' para el informe diario');
+  est[p]={huella,at:new Date().toISOString()};
+  pubGuardaEstado(est);
+  pubPintaEstado();
+  return true;
+}
+
+// ── Publicación automática ───────────────────────────────────────────────────
+// svSt() se llama en cada tecla del objetivo y en cada cambio de posición, así
+// que se deja pasar un rato de calma antes de subir nada; y como se compara la
+// huella, tocar y deshacer no genera ningún commit.
+let pubTimer=null,pubPendiente=false,pubUltimoError='';
+function pubTocado(){
+  if(!pubListo())return;
+  pubPendiente=true;pubPintaEstado();
+  clearTimeout(pubTimer);
+  pubTimer=setTimeout(pubAuto,PUB_ESPERA);
+}
+async function pubAuto(){
+  if(pubEnCurso)return;
+  pubEnCurso=true;
+  try{
+    const hubo=await publicarPerfil(perfilActivo(),true);
+    pubPendiente=false;
+    if(hubo)toast('Cartera publicada para el informe ✓');
+  }catch(e){
+    // Sin conexión o con el token caducado no se molesta al usuario cada 12 s:
+    // el punto de la cabecera se pone en rojo y el detalle está en el modal.
+    console.warn('No se pudo publicar: '+e.message);
+    pubUltimoError=e.message;
+  }finally{pubEnCurso=false;pubPintaEstado();}
+}
+
+// ── Cabecera y modal ─────────────────────────────────────────────────────────
+function pubPintaEstado(){
+  const d=el('pub-dot');if(!d)return;
+  const cl=!pubListo()?'off':pubUltimoError?'err':pubPendiente?'wait':'ok';
+  d.className='pub-dot '+cl;
+  const est=pubEstado(),act=est[perfilActivo()];
+  el('pub-btn').title=
+    cl==='off' ?'El informe diario todavía usa datos pegados a mano. Pulsa para conectarlo con tu cartera real.'
+   :cl==='err' ?'Falló la última publicación: '+pubUltimoError
+   :cl==='wait'?'Hay cambios sin publicar; se suben solos en unos segundos.'
+   :'Cartera publicada'+(act?' · '+new Date(act.at).toLocaleString('es-ES'):'');
+}
+
+function openPubModal(){
+  el('pub-token').value=pubToken();
+  el('pub-pass').value=pubPass();
+  pubPintaModal();
+  el('ov-pub').classList.add('open');
+}
+function closePubModal(){el('ov-pub').classList.remove('open');}
+
+function pubPintaModal(){
+  const est=pubEstado();
+  el('pub-perfiles').innerHTML=Object.keys(PERFILES).map(p=>{
+    const e=est[p],hay=!!carteraDePerfil(p);
+    return '<div class="pub-row">'
+      +'<span class="pub-nom">'+esc(PERFIL_LBL[p])+(p===perfilActivo()?' <em>· perfil activo</em>':'')+'</span>'
+      +'<span class="pub-when">'+(e?'publicada '+new Date(e.at).toLocaleString('es-ES')
+                                   :hay?'nunca publicada':'sin datos en este navegador')+'</span>'
+      +'<button class="tgt" '+(hay?'':'disabled ')+'onclick="pubAhora(this.dataset.p)" data-p="'+p+'">Publicar</button>'
+    +'</div>';
+  }).join('');
+  el('pub-error').innerHTML=
+    !pubSeguro()
+      ?'<div class="pub-err">Esta página está abierta como fichero local, y ahí el navegador no ofrece cifrado. '
+        +'Ábrela en <b>marcaibtc.github.io/Cartera</b> para poder publicar.</div>'
+    :pubUltimoError
+      ?'<div class="pub-err">Último error: '+esc(pubUltimoError)+'</div>':'';
+}
+
+function pubGuardarAjustes(){
+  const t=el('pub-token').value.trim(),p=el('pub-pass').value;
+  if(t)localStorage.setItem(PUB_TOKEN_SK,t); else localStorage.removeItem(PUB_TOKEN_SK);
+  if(p)localStorage.setItem(PUB_PASS_SK,p); else localStorage.removeItem(PUB_PASS_SK);
+  pubUltimoError='';
+  pubPintaEstado();pubPintaModal();
+  toast(pubListo()?'Publicador conectado ✓':'Ajustes guardados');
+}
+
+async function pubAhora(p){
+  pubUltimoError='';
+  try{
+    // A mano se sube aunque la huella no haya cambiado: es lo que espera quien
+    // pulsa el botón, y sirve para comprobar que el token funciona.
+    const est=pubEstado();delete est[p];pubGuardaEstado(est);
+    const hubo=await publicarPerfil(p,false);
+    if(hubo)toast('Cartera de '+PERFIL_LBL[p]+' publicada ✓');
+  }catch(e){pubUltimoError=e.message;toast('No se pudo publicar');}
+  pubPintaEstado();pubPintaModal();
+}
+
 function loadJSONFile(event){
   const file = event.target.files[0];
   if(!file) return;
@@ -4002,10 +4910,14 @@ function loadJSONFile(event){
       snaps    = data.snaps    || [];
       wl       = data.wl       || [];
       targets  = data.targets  || {};
+      tgExtra  = Array.isArray(data.tgExtra)?data.tgExtra.filter(x=>typeof x==='string'&&x):[];
+      tgFuera  = Array.isArray(data.tgFuera)?data.tgFuera.filter(x=>typeof x==='string'&&x&&x!=='Liquidez'):[];
       tgBase   = data.tgBase==='inv'?'inv':'total';
       tgAporte = +data.tgAporte>0?+data.tgAporte:0;
       trades   = data.trades   || [];
       aports   = data.aports   || [];
+      rendim   = Array.isArray(data.rendim) ? data.rendim : [];
+      bandMode = data.bandMode==='broker' ? 'broker' : 'clase';
       if(data.cashflow&&Array.isArray(data.cashflow.meses)&&data.cashflow.pct){
         // Un backup anterior no trae mes típico, horizonte ni rentabilidad: se
         // normalizan igual que al cargar de localStorage para que la proyección
@@ -4084,6 +4996,10 @@ function exportXLSX(){
     ['Valor total (€)', r2(tot)],
     ['Capital invertido (€)', r2(cost)],
     ['Resultado no realizado (€)', r2(gain)],
+    ['Intereses y dividendos cobrados (€)', r2(rendimTotal())],
+    ['Dinero aportado de tu bolsillo (€)', r2(aportadoHoy())],
+    ['Ganancia total (€)', r2(gananciaTotal())],
+
     ['Rentabilidad % cartera', r2(pct)],
     ['Nº posiciones activas', assets.filter(function(a){ return a.cat!=='liquidez'; }).length],
     [''],
@@ -4333,6 +5249,10 @@ function cfAddMes(){
 let tt;function toast(msg){const t=el('toast');t.textContent=msg;t.className='toast on';clearTimeout(tt);tt=setTimeout(()=>t.className='toast',2500);}
 
 renderPerfil();autoUpgradeAssets();render();fetchAll(false);
+// El informe usa la última cartera publicada. Al abrir la app se comprueba si
+// lo guardado en este navegador ya no coincide y, si hace falta, se sube.
+pubPintaEstado();
+if(pubListo())setTimeout(()=>{pubAuto();},4000);
 </script>
 </body>
 </html>
