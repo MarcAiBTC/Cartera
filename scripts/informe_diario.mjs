@@ -176,6 +176,15 @@ function variantesPass(p) {
 }
 
 async function cargarCartera(perfil) {
+  // Vista previa en local con una cartera EN CLARO (un export de la app, del
+  // botón «Descargar copia»). No se usa nunca en el workflow —allí solo hay
+  // ficheros cifrados— y existe para poder mirar cómo queda el correo sin
+  // teclear la contraseña. Ver scripts/vista-previa.mjs.
+  if (process.env.CARTERA_FILE) {
+    const c = JSON.parse(readFileSync(process.env.CARTERA_FILE, 'utf8'));
+    return { datos: Array.isArray(c) ? { assets: c } : c,
+             publicado: Date.parse(c.exportedAt) || null, origen: 'fichero' };
+  }
   const ruta = new URL(`../datos/cartera-${perfil}.enc.json`, import.meta.url);
   if (existsSync(ruta)) {
     if (!process.env.CARTERA_PASS) throw new Error('hay fichero cifrado pero falta el secret CARTERA_PASS');
@@ -464,9 +473,14 @@ Escribe 2 o 3 frases, 55 palabras como mucho, que expliquen QUÉ ha pasado y POR
 // <head>, no entiende flex ni grid y recorta el CSS en la app móvil. Una sola
 // columna de 600 px como máximo, cifras de 15-17 px y nada que obligue a hacer
 // zoom ni a desplazarse en horizontal: el informe se lee de pie, en el metro.
+// word-break no es decoración: una sola palabra larga —el nombre kilométrico de
+// un fondo, una ruta de fichero— no puede partirse y ensancha la tabla que la
+// contiene, y con ella TODO el correo. El resultado es un mensaje que se lee
+// con desplazamiento horizontal en el móvil, que es lo peor que le puede pasar.
+const PARTIR = 'word-break:break-word;overflow-wrap:anywhere';
 const tarjeta = contenido =>
   `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.tarjeta};border-radius:16px;margin:0 0 12px">
-     <tr><td style="padding:18px 16px">${contenido}</td></tr></table>`;
+     <tr><td style="padding:18px 16px;${PARTIR}">${contenido}</td></tr></table>`;
 
 // Título de tarjeta, con una línea opcional que explica CÓMO se lee lo que hay
 // debajo. Es la diferencia entre un gráfico bonito y uno que se entiende sin
@@ -565,12 +579,16 @@ async function construirInforme(perfil, carga) {
   // vieja sin decirlo. Antes pasaba siempre y en silencio; ahora se avisa.
   const diasSinPublicar = carga.publicado ? Math.floor((Date.now() - carga.publicado) / 864e5) : null;
   const avisoDatos =
-    carga.origen === 'secret'
+    carga.origen === 'fichero'
+      // Solo el nombre del fichero, no la ruta entera: una ruta de Windows es
+      // una palabra de 400 px que no se puede partir y ensancharía el correo.
+      ? `Vista previa: las posiciones salen de ${(process.env.CARTERA_FILE || '').split(/[\\/]/).pop()}${diasSinPublicar != null ? `, exportado hace ${diasSinPublicar} días` : ''}. Los precios sí son los de hoy, pero las posiciones no.`
+    : carga.origen === 'secret'
       ? 'Estas posiciones vienen del secret POSICIONES_JSON, que se actualiza a mano. Conecta la app (botón «Informe diario») para que se publiquen solas.'
       : diasSinPublicar != null && diasSinPublicar >= 4
         ? `La app no publica la cartera desde hace ${diasSinPublicar} días. Ábrela para que se ponga al día.`
         : null;
-  const aviso = txt => `<div style="margin-top:10px;font-size:12px;line-height:1.45;background:rgba(0,0,0,.22);border-radius:9px;padding:8px 11px;color:#ffffff">⚠️ ${txt}</div>`;
+  const aviso = txt => `<div style="margin-top:10px;font-size:12px;line-height:1.45;background:rgba(0,0,0,.22);border-radius:9px;padding:8px 11px;color:#ffffff;${PARTIR}">⚠️ ${txt}</div>`;
 
   // La comparación con el mercado va en su propia fila: es la pregunta de «¿esto
   // es cosa mía o del día que ha hecho?» y merece verse sin abrir nada.
@@ -591,7 +609,7 @@ async function construirInforme(perfil, carga) {
 
   const cabecera = `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.violeta};background-image:linear-gradient(135deg,${C.violeta},${C.violeta2});border-radius:16px;margin:0 0 12px">
-    <tr><td style="padding:20px 16px;color:#ffffff">
+    <tr><td style="padding:20px 16px;color:#ffffff;${PARTIR}">
       <div style="font-size:12px;opacity:.85">Cartera de ${esc(perfil.nombre)} · ${esc(fechaLarga)} · ${esc(horaTexto)}</div>
       <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.75;margin-top:16px">Valor total</div>
       <div style="font-size:32px;font-weight:800">${fe(k.total)}</div>
@@ -771,7 +789,11 @@ async function enviar(destino, asunto, html, adjuntos, htmlPreview) {
 if (!existsSync(MARCAS)) mkdirSync(MARCAS, { recursive: true });
 let fallos = 0, enviados = 0;
 
+// SOLO_PERFIL sirve para previsualizar o depurar uno solo sin tocar el del otro.
+const SOLO = (process.env.SOLO_PERFIL || '').trim().toLowerCase();
+
 for (const perfil of PERFILES) {
+  if (SOLO && perfil.id !== SOLO) continue;
   const marca = `${MARCAS}/${perfil.id}-${hoyMadrid}`;
   if (existsSync(marca)) { console.log(`· ${perfil.nombre}: ya se envió hoy, se salta.`); continue; }
 

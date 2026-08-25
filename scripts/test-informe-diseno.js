@@ -224,6 +224,43 @@ async function cifrar(txt, pass) {
   eq(/name="viewport"/.test(htmlMarc), true, 'declara el viewport para el móvil');
   eq(/max-width:600px/.test(htmlMarc), true, 'y una columna que no pasa de 600 px');
   eq(/position:\s*(absolute|fixed)/.test(htmlMarc), false, 'nada posicionado en absoluto');
+  // Una sola palabra larga que no se pueda partir —el nombre kilométrico de un
+  // fondo, una ruta de fichero— ensancha su tabla y con ella todo el correo, y
+  // el mensaje acaba leyéndose con desplazamiento horizontal en el móvil.
+  eq((htmlMarc.match(/word-break:break-word;overflow-wrap:anywhere/g) || []).length >= 3, true,
+     'las tarjetas y la cabecera parten las palabras largas');
+
+  console.log('\n10 · El modo de vista previa (scripts/vista-previa.mjs)');
+  // Lee una cartera EN CLARO y genera un solo perfil. Es lo que permite mirar
+  // cómo queda el correo sin tener que teclear la contraseña.
+  const claro = path.join(RAIZ, 'cartera-de-prueba.json');
+  let prev = '', htmlPrev = '';
+  try {
+    fs.writeFileSync(claro, JSON.stringify({ ...estado, exportedAt: new Date(Date.now() - 6 * 864e5).toISOString() }));
+    try {
+      prev = execFileSync(process.execPath, [path.join(RAIZ, 'scripts', 'informe_diario.mjs')], {
+        cwd: RAIZ, encoding: 'utf8',
+        env: { ...process.env, FORCE: '1', DRY_RUN: '1', SOLO_PERFIL: 'marc', CARTERA_FILE: claro,
+               CARTERA_PASS: '', POSICIONES_JSON: '', RESEND_API_KEY: '', ANTHROPIC_API_KEY: '' },
+      });
+    } catch (e) { prev = (e.stdout || '') + (e.stderr || ''); }
+    const q = path.join(RAIZ, 'informe-marc.html');
+    htmlPrev = fs.existsSync(q) ? fs.readFileSync(q, 'utf8') : '';
+  } finally {
+    for (const f of [claro, path.join(RAIZ, 'informe-marc.html'), path.join(RAIZ, 'informe-leti.html')]) {
+      if (fs.existsSync(f)) fs.unlinkSync(f);
+    }
+    fs.rmSync(path.join(RAIZ, '.informe-enviado'), { recursive: true, force: true });
+  }
+  eq(/Marc: informe generado desde fichero/.test(prev), true, 'lee la cartera en claro sin pedir contraseña');
+  eq(/Leti/.test(prev), false, 'SOLO_PERFIL deja fuera al otro perfil');
+  eq(num((htmlPrev.match(/font-size:32px;font-weight:800">([^<]+) €</) || [])[1]), TOTAL,
+     'y las cifras salen igual que por el camino cifrado', 1);
+  eq(/Vista previa: las posiciones salen de cartera-de-prueba\.json/.test(htmlPrev), true,
+     'avisa de que es una vista previa y con qué fichero');
+  eq(/salen de [^<]*[\\/]/.test(htmlPrev), false,
+     'sin la ruta entera: una ruta de Windows es una palabra que no se puede partir');
+  eq(/exportado hace 6 días/.test(htmlPrev), true, 'y de lo viejas que son las posiciones');
 
   console.log('\n' + ok + ' bien · ' + ko + ' mal');
   process.exit(ko ? 1 : 0);
