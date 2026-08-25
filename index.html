@@ -119,6 +119,34 @@ button:focus:not(:focus-visible){outline:none}
 .hero-sep{width:1px;height:16px;background:var(--line2)}
 .hero-note{font-size:12px;color:var(--fg3);font-weight:500}
 
+/* ── INICIO · QUÉ MUEVE HOY LA CARTERA ──
+   El héroe dice CUÁNTO se mueve la cartera hoy; esto dice POR QUÉ. Mismas
+   barras divergentes que «Quién gana y quién pierde» en Análisis, pero en la
+   escala del día y agrupadas por subyacente. */
+.hoy{background:var(--bg1);margin:0 24px 20px;border:1px solid var(--line);border-radius:20px;box-shadow:var(--elev1);padding:16px 20px 14px}
+.hoy:empty{display:none}
+.hoy-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.hoy-ttl{font-size:13px;font-weight:700;letter-spacing:-.2px;color:var(--fg0)}
+.hoy-tot{font-family:var(--disp);font-size:18px;font-weight:700;letter-spacing:-.5px}
+.hoy-tot em{font-style:normal;font-size:12px;font-weight:600;opacity:.72;margin-left:7px}
+.hoy-txt{font-size:12px;color:var(--fg2);font-weight:500;line-height:1.65;margin-bottom:12px;max-width:720px}
+.hoy-txt b{color:var(--fg0);font-weight:700}
+.hoy-row{display:grid;grid-template-columns:minmax(84px,1.2fr) minmax(110px,2fr) 82px 60px;align-items:center;gap:12px;padding:6px 2px;border-bottom:1px solid var(--line)}
+.hoy-row:last-of-type{border-bottom:none}
+.hoy-row>*{min-width:0}
+.hoy-n{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--fg0);overflow:hidden}
+.hoy-n span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hoy-dot{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+.hoy-bar{position:relative;height:13px}
+.hoy-eje{position:absolute;left:50%;top:-1px;width:1px;height:15px;background:var(--line3)}
+.hoy-fill{position:absolute;top:2px;height:9px;border-radius:3px;transition:width .4s ease}
+.hoy-v{font-family:var(--disp);font-size:13px;font-weight:700;text-align:right}
+.hoy-p{font-family:var(--disp);font-size:11px;font-weight:600;text-align:right;color:var(--fg3)}
+.hoy-resto .hoy-n{color:var(--fg2);font-weight:500}
+.hoy-mas{margin-top:9px;border:0;background:none;font-family:var(--sans);font-size:11.5px;font-weight:700;color:var(--blue);cursor:pointer;padding:2px 0}
+.hoy-mas:hover{text-decoration:underline}
+.hoy-nd{font-size:11.5px;color:var(--fg3);font-weight:500;line-height:1.6}
+
 /* ── INICIO · BANDAS POR CLASE ──
    Cinco filas, una por clase de activo. La tabla de posiciones sólo aparece
    al desplegar una banda: de un vistazo se ve el reparto, y el detalle se pide. */
@@ -167,6 +195,9 @@ button:focus:not(:focus-visible){outline:none}
   .band-val{width:110px;font-size:18px}
   .band-name{width:auto;flex:1}
   .hero-val{font-size:40px;letter-spacing:-1.4px}
+  .hoy{margin:0 12px 16px;padding:14px 15px 12px}
+  .hoy-row{grid-template-columns:minmax(72px,1.3fr) 78px 58px;gap:9px}
+  .hoy-bar{display:none}
 }
 
 /* ── RESUMEN PAGE ── */
@@ -357,6 +388,42 @@ td{padding:11px 14px;vertical-align:middle}
 .lgk b{font-family:var(--disp);font-weight:700}
 .lgk-off{color:var(--fg3);font-weight:500}
 .lgk-num{margin-left:auto;font-family:var(--disp);font-weight:700;font-size:12.5px}
+
+/* ── ANÁLISIS · CUÁNTO TENGO DE CADA COSA ──
+   Tarta por subyacente + leyenda desplegable. La leyenda lleva las cifras
+   dentro y además ES el control: al pulsar una fila se resalta su porción y se
+   abre el detalle de los productos que la componen. */
+.ex-wrap{display:grid;grid-template-columns:210px 1fr;gap:26px;align-items:start}
+.ex-donut{position:relative;width:100%;max-width:210px;margin:0 auto}
+.ex-svg{width:100%;height:auto;display:block}
+.ex-arc{cursor:pointer;transition:stroke-width .16s ease,opacity .16s ease}
+.ex-arc:hover{stroke-width:21px}
+.ex-donut.dim .ex-arc:not(.on){opacity:.26}
+.ex-mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;padding:0 30px}
+.ex-mid-v{font-family:var(--disp);font-size:19px;font-weight:700;letter-spacing:-.6px;color:var(--fg0);line-height:1.1}
+.ex-mid-l{font-size:10px;color:var(--fg3);font-weight:600;margin-top:4px;line-height:1.35}
+.ex-row{display:grid;grid-template-columns:11px minmax(78px,1.5fr) minmax(52px,1.5fr) 50px 82px 74px 20px;align-items:center;gap:10px;width:100%;padding:7px 5px;border:0;border-bottom:1px solid var(--line);background:none;font-family:var(--sans);text-align:left;cursor:pointer;border-radius:9px;transition:background .13s}
+.ex-row>*{min-width:0}
+.ex-row:hover,.ex-row.on{background:var(--bg2)}
+.ex-dot{width:11px;height:11px;border-radius:4px}
+.ex-name{font-size:12.5px;font-weight:600;color:var(--fg0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ex-track{height:7px;border-radius:5px;background:var(--bg3);overflow:hidden}
+.ex-track i{display:block;height:100%;border-radius:5px;transition:width .45s ease}
+.ex-pct{font-family:var(--disp);font-size:12.5px;font-weight:700;text-align:right;color:var(--fg0)}
+.ex-val{font-family:var(--disp);font-size:12.5px;font-weight:600;text-align:right;color:var(--fg1)}
+.ex-pnl{font-family:var(--disp);font-size:11.5px;font-weight:700;text-align:right}
+.ex-ct{font-size:10px;font-weight:700;color:var(--fg3);text-align:right}
+.ex-body{padding:2px 6px 10px 27px;border-bottom:1px solid var(--line);background:var(--bg2);border-radius:0 0 9px 9px}
+.ex-sub{display:grid;grid-template-columns:1fr 88px 54px;gap:10px;align-items:center;padding:4px 0;font-size:11.5px;color:var(--fg2)}
+.ex-sub b{font-weight:600;color:var(--fg1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ex-sub span{font-family:var(--disp);text-align:right;font-weight:600}
+.ex-nota{font-size:11px;color:var(--fg3);font-weight:500;margin-top:12px;line-height:1.55}
+@media(max-width:860px){
+  .ex-wrap{grid-template-columns:1fr;gap:18px}
+  .ex-row{grid-template-columns:11px 1fr 50px 82px;gap:9px}
+  .ex-track,.ex-pnl,.ex-ct{display:none}
+  .ex-body{padding-left:20px}
+}
 
 /* Quién gana y quién pierde: barras divergentes desde un eje central */
 .an-pnl-row{display:grid;grid-template-columns:minmax(90px,1.1fr) minmax(120px,2fr) 84px 62px;
@@ -804,6 +871,10 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
       </div>
     </div>
     <div id="h-aviso"></div>
+    <!-- Por qué se mueve hoy la cartera. Va justo debajo del héroe porque es la
+         pregunta que sigue a «ha subido un 1%»: sin ella el porcentaje del día
+         obliga a desplegar las cinco bandas y comparar a ojo. -->
+    <div class="hoy" id="h-hoy"></div>
     <div class="bands-head">
       <span class="bands-head-lbl">Agrupar</span>
       <div class="tg-seg" role="group" aria-label="Cómo agrupar las posiciones">
@@ -863,7 +934,22 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         <div class="no-data" id="twr-nodata" style="display:none">Hacen falta al menos dos días guardados con fechas distintas.</div>
       </div>
 
-      <!-- 4 · ¿Dónde está mi dinero? -->
+      <!-- 4 · ¿Cuánto tengo de cada cosa? -->
+      <div class="an-block">
+        <div class="an-head">
+          <div>
+            <div class="an-title">Cuánto tengo de cada cosa</div>
+            <div class="an-sub2">Agrupado por <b>subyacente</b>, no por producto: el fondo del S&amp;P 500 y el ETF del S&amp;P 500 son la misma apuesta y aquí van en la misma porción. Pulsa una porción para ver de qué productos sale.</div>
+          </div>
+          <div class="tg-seg" role="group" aria-label="Sobre qué se calculan los pesos de la tarta">
+            <button class="tgb on" id="exb-total" onclick="setExpoBase('total')" title="Reparte el patrimonio completo, con la liquidez dentro como una porción más.">Con liquidez</button>
+            <button class="tgb" id="exb-inv" onclick="setExpoBase('inv')" title="Reparte solo el dinero en mercado: la liquidez queda fuera y los porcentajes se recalculan sobre lo invertido.">Solo invertido</button>
+          </div>
+        </div>
+        <div id="an-expo"></div>
+      </div>
+
+      <!-- 5 · ¿Dónde está mi dinero? -->
       <div class="an-block">
         <div class="an-head">
           <div>
@@ -874,7 +960,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         <div class="treemap an-treemap" id="g-treemap"></div>
       </div>
 
-      <!-- 5 · ¿Quién me da el dinero y quién me lo quita? -->
+      <!-- 6 · ¿Quién me da el dinero y quién me lo quita? -->
       <div class="an-block">
         <div class="an-head">
           <div>
@@ -885,7 +971,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         <div id="an-pnl-rows"></div>
       </div>
 
-      <!-- 6 · ¿Cuánto riesgo llevo encima? -->
+      <!-- 7 · ¿Cuánto riesgo llevo encima? -->
       <div class="an-block">
         <div class="an-head">
           <div>
@@ -1198,7 +1284,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
       <div class="field" style="margin:0" id="a-unit-wrap"><label class="fl">Unidad</label><input class="fi" id="a-unit" placeholder="títulos · part. · BTC"></div>
     </div>
     <div class="frow" style="margin-top:11px">
-      <div class="field" style="margin:0"><label class="fl" id="a-cost-l">Precio de compra <em>(por unidad)</em></label><input class="fi" id="a-costunit" type="number" step="any" min="0" placeholder="21.51"></div>
+      <div class="field" style="margin:0" id="a-cost-wrap"><label class="fl" id="a-cost-l">Precio de compra <em>(por unidad)</em></label><input class="fi" id="a-costunit" type="number" step="any" min="0" placeholder="21.51"></div>
       <div class="field" style="margin:0"><label class="fl">Divisa <em>· de tus precios</em></label>
         <select class="fi" id="a-ccy" onchange="updCP()">
           <option value="EUR">EUR €</option>
@@ -1207,6 +1293,9 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;ba
         </select>
       </div>
     </div>
+    <!-- Solo en liquidez: deja claro que meter dinero no es ganar dinero. Es la
+         confusión que provocaba el campo «precio de compra» al dejarlo vacío. -->
+    <div class="fhint" id="a-liq-hint" style="display:none;margin-top:3px">El efectivo no tiene precio de compra: su coste es su propio saldo, así que nunca cuenta como ganancia. Meter dinero en la cartera es una <strong>aportación</strong> —igual si es dinero nuevo que si es dinero que ya tenías y no habías apuntado—. Lo que sí es ganancia son los intereses, y esos se apuntan en Historial → «Apuntar cobro».</div>
     <div class="fhint" style="margin-top:3px">Si compraste en dólares elige USD: el coste y el precio manual se convierten a € en el total de la cartera (los precios automáticos ya llegan en €).</div>
     <!-- Solo para liquidez: la remuneración de la cuenta. No mueve el saldo por
          su cuenta (eso lo hace el banco cuando paga); sirve para estimar cuánto
@@ -1635,6 +1724,18 @@ const UND_COLORS={
   'S&P 500':'#6d7df6','MSCI World':'#22b8cf','China':'#e5484d',
   'Strategy':'#9b7bf3','Caixabank':'#2fbf9c','Liquidez':'#9a94b8',
 };
+
+// Un subyacente que no esté en la tabla de arriba —una acción suelta, un ETF
+// nuevo— también necesita color, y tiene que ser SIEMPRE el mismo: si cambiara
+// entre recargas, la tarta y la tira del día dejarían de poder leerse juntas.
+// De ahí el hash del nombre en vez de un índice de posición.
+const UND_PALETA=['#6d7df6','#2fbf9c','#e9a23b','#9b7bf3','#f783ac','#22b8cf','#ff8e42','#0ea97d','#c6b5f8','#e5484d','#8fa3b8','#ffb477'];
+function undColor(u){
+  if(UND_COLORS[u])return UND_COLORS[u];
+  const t=String(u||'');let h=0;
+  for(let i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))>>>0;
+  return UND_PALETA[h%UND_PALETA.length];
+}
 
 // ── CATÁLOGO DE ACTIVOS ───────────────────────────────────────────────────────
 // 519 instrumentos con símbolo de Yahoo Finance verificado uno a uno (devolvieron
@@ -2152,19 +2253,19 @@ const CATALOGO=[
   {s:"XMEU.DE",n:"Xtrackers MSCI Europe",c:"fondo",u:"Europa",i:"IE00BJ0KDR00",un:"títulos"},
   {s:"XDWD.DE",n:"Xtrackers MSCI World",c:"fondo",u:"MSCI World",i:"IE00BJ0KDQ92",un:"títulos"},
   {s:"XEON.DE",n:"Xtrackers Overnight Rate (monetario €)",c:"fondo",u:"Monetario",i:"LU0290358497",un:"títulos"},
-  {s:"PPLT",n:"abrdn Physical Platinum",c:"metal",u:"Platino",un:"títulos"},
+  {s:"PPLT",n:"abrdn Physical Platinum",c:"metal",u:"Platino",un:"títulos",cy:"USD"},
   {s:"GLDA.DE",n:"Amundi Physical Gold ETC",c:"metal",u:"Oro",i:"FR0013416716",un:"títulos"},
   {s:"HG=F",n:"Cobre",c:"metal",u:"Cobre",un:"lb",cy:"USD"},
   {s:"SGLD.L",n:"Invesco Physical Gold ETC",c:"metal",u:"Oro",i:"IE00B579F325",un:"títulos",cy:"USD"},
-  {s:"IAU",n:"iShares Gold Trust",c:"metal",u:"Oro",un:"títulos"},
-  {s:"IGLN.L",n:"iShares Physical Gold ETC",c:"metal",u:"Oro",i:"IE00B4ND3602",un:"títulos"},
-  {s:"SLV",n:"iShares Silver Trust",c:"metal",u:"Plata",un:"títulos"},
+  {s:"IAU",n:"iShares Gold Trust",c:"metal",u:"Oro",un:"títulos",cy:"USD"},
+  {s:"IGLN.L",n:"iShares Physical Gold ETC",c:"metal",u:"Oro",i:"IE00B4ND3602",un:"títulos",cy:"USD"},
+  {s:"SLV",n:"iShares Silver Trust",c:"metal",u:"Plata",un:"títulos",cy:"USD"},
   {s:"GC=F",n:"Oro spot (COMEX)",c:"metal",u:"Oro",un:"oz",cy:"USD"},
   {s:"PA=F",n:"Paladio spot",c:"metal",u:"Paladio",un:"oz",cy:"USD"},
   {s:"CL=F",n:"Petróleo WTI",c:"metal",u:"Petróleo",un:"barriles",cy:"USD"},
   {s:"SI=F",n:"Plata spot (COMEX)",c:"metal",u:"Plata",un:"oz",cy:"USD"},
   {s:"PL=F",n:"Platino spot",c:"metal",u:"Platino",un:"oz",cy:"USD"},
-  {s:"GLDM",n:"SPDR Gold MiniShares",c:"metal",u:"Oro",un:"títulos"},
+  {s:"GLDM",n:"SPDR Gold MiniShares",c:"metal",u:"Oro",un:"títulos",cy:"USD"},
   {s:"GBSE.MI",n:"WisdomTree Physical Gold EUR Hedged",c:"metal",u:"Oro",i:"JE00B8DFY052",un:"títulos"},
   {s:"PHAG.MI",n:"WisdomTree Physical Silver",c:"metal",u:"Plata",i:"JE00B1VS3333",un:"títulos"}
 ];
@@ -2204,7 +2305,7 @@ const DEF=[
 
 function ldSt(){try{return JSON.parse(localStorage.getItem(SK))||{};}catch(e){return{};}}
 function svSt(){
-  localStorage.setItem(SK,JSON.stringify({assets,snaps,wl,targets,tgExtra,tgFuera,trades,aports,rendim,fx:fxRates,tgBase,tgAporte,bandMode}));
+  localStorage.setItem(SK,JSON.stringify({assets,snaps,wl,targets,tgExtra,tgFuera,trades,aports,rendim,fx:fxRates,tgBase,tgAporte,bandMode,expoBase}));
   // Todo lo que se guarda aquí acaba en el informe de esta noche. pubTocado()
   // solo marca; publicar de verdad espera a que dejes de teclear.
   if(typeof pubTocado==='function')pubTocado();
@@ -2246,6 +2347,10 @@ let rendim = Array.isArray(st.rendim) ? st.rendim : [];
 // Cómo se agrupan las bandas de Inicio: por clase de activo o por broker. Se
 // guarda porque es una preferencia de lectura, no un filtro de usar y tirar.
 let bandMode = st.bandMode==='broker' ? 'broker' : 'clase';
+// Base de la tarta «cuánto tengo de cada cosa»: con la liquidez dentro o solo
+// sobre el dinero en mercado. Se guarda por lo mismo que bandMode: es cómo
+// prefieres leer el reparto, no un filtro de usar y tirar.
+let expoBase = st.expoBase==='inv' ? 'inv' : 'total';
 
 let lpx={},lpxPrev={},lpxSpark={},wlpx={},wlpxNat={},pxStat={},fxCache={EUR:1},fxPending={};
 // Cierres descartados por prevFiable(): sin ellos no hay variación del día, y el
@@ -2292,7 +2397,26 @@ function pxState(a){
   return a.mp!=null?'stale':'load';
 }
 const vl  = a=>{const p=px(a);return p!=null?a.qty*p:null;};
-const cs  = a=>a.qty*(a.costUnit||0)*ccyRate(a);
+// Coste de una posición.
+//
+// En la LIQUIDEZ el coste es siempre el propio saldo, y no lo que hubiera
+// guardado en costUnit. El efectivo ni gana ni pierde: los euros que tienes en
+// una cuenta son dinero que pusiste tú, o beneficio que YA está contado como
+// resultado realizado o como cobro. Contarlos otra vez aquí sería contarlos dos
+// veces.
+//
+// El formulario pedía «precio de compra (por unidad)», que en una cuenta
+// corriente no significa nada. Al dejarlo vacío se guardaba costUnit:0, así que
+// añadir una cuenta con 730 € la metía como 730 € de PLUSVALÍA: la ganancia
+// total subía sola y el aportado bajaba en la misma cantidad, con lo que el
+// porcentaje sobre el capital salía mal por los dos lados a la vez.
+//
+// Se corrige aquí, en la fórmula, y no sólo normalizando el dato guardado:
+// así un backup viejo, un JSON editado a mano o un import de otra herramienta
+// tampoco pueden volver a inventar una ganancia que no existe.
+const cs  = a=>a.cat==='liquidez'
+  ? a.qty*(a.mp??1)*ccyRate(a)          // = vl(a): coste ≡ valor, ganancia ≡ 0
+  : a.qty*(a.costUnit||0)*ccyRate(a);
 const gn  = a=>{const v=vl(a),c=cs(a);return v!=null?v-c:null;};
 const tv  = ()=>assets.reduce((s,a)=>s+(vl(a)||0),0);
 const tc  = ()=>assets.reduce((s,a)=>s+cs(a),0);
@@ -2303,6 +2427,49 @@ const enMercado = a=>a.cat!=="liquidez";
 const tvInv = ()=>assets.filter(enMercado).reduce((s,a)=>s+(vl(a)||0),0);
 const tcInv = ()=>assets.filter(enMercado).reduce((s,a)=>s+cs(a),0);
 const und = a=>a.cat==='liquidez'?'Liquidez':(a.underlying||UND_MAP[a.id]||a.name);
+// Cuánto hay de cada COSA, que no es lo mismo que cuántos productos hay: el
+// fondo del S&P 500 de ING y el ETF del S&P 500 de MyInvestor son la misma
+// apuesta y sumados pesan lo que de verdad pesa el índice en la cartera. Es la
+// vista que faltaba: por clase salen «fondos», por broker sale «MyInvestor», y
+// ninguna de las dos contesta «¿cuánto tengo en bitcoin?».
+function expoPorUnd(conLiquidez=true){
+  const map=new Map();
+  for(const a of assets){
+    const v=vl(a);if(!v||v<=0)continue;
+    if(!conLiquidez&&a.cat==='liquidez')continue;
+    const u=und(a);
+    let g=map.get(u);
+    if(!g){g={u,v:0,c:0,items:[]};map.set(u,g);}
+    g.v+=v;g.c+=cs(a);g.items.push(a);
+  }
+  const tot=[...map.values()].reduce((s,g)=>s+g.v,0);
+  return [...map.values()].map(g=>({
+    u:g.u,v:g.v,c:g.c,items:g.items.sort((x,y)=>(vl(y)||0)-(vl(x)||0)),
+    g:g.v-g.c, gp:g.c>0?(g.v-g.c)/g.c*100:null,
+    pct:tot>0?g.v/tot*100:0, col:undColor(g.u),
+  })).sort((x,y)=>y.v-x.v);
+}
+
+// Lo mismo pero para el día: qué subyacente está moviendo hoy la cartera y por
+// cuántos euros. Se salta la liquidez con el mismo criterio que tDay(), para que
+// la suma de las filas cuadre exactamente con el «Hoy» del héroe.
+function moversHoy(){
+  const map=new Map();
+  for(const a of assets){
+    if(a.cat==='liquidez')continue;
+    const p=px(a),pv=pxPrev(a);
+    if(p==null||pv==null||pv<=0)continue;
+    const u=und(a),abs=a.qty*(p-pv),base=a.qty*pv;
+    let g=map.get(u);
+    if(!g){g={u,abs:0,base:0,items:[]};map.set(u,g);}
+    g.abs+=abs;g.base+=base;
+    g.items.push({name:a.name,broker:a.broker||'Otro',abs,pct:(p-pv)/pv*100});
+  }
+  return [...map.values()]
+    .map(g=>({u:g.u,abs:g.abs,base:g.base,items:g.items.sort((x,y)=>Math.abs(y.abs)-Math.abs(x.abs)),
+              pct:g.base>0?g.abs/g.base*100:0,col:undColor(g.u)}))
+    .sort((x,y)=>Math.abs(y.abs)-Math.abs(x.abs));
+}
 // Guardarraíl del cierre anterior. El precio de hoy y el cierre de ayer tienen
 // que salir de la misma serie. Cuando no es así —en FBTC.SW Yahoo servía el
 // histórico de la clase en dólares junto a la cotización en francos— la
@@ -2419,7 +2586,7 @@ function goto(p){
 }
 
 // ── MAIN RENDER ───────────────────────────────────────────────────────────────
-function render(){rHero();rAviso();rBands();rFeedChip();}
+function render(){rHero();rHoy();rAviso();rBands();rFeedChip();}
 
 function rFeedChip(){
   const c=el('feed-chip');if(!c)return;
@@ -2506,6 +2673,113 @@ function rHero(){
   el('h-comp').innerHTML=(t>0&&ck.length)
     ? ck.map(k=>`<div class="comp-seg" style="width:${(cats[k]/t*100).toFixed(2)}%;background:${catCC(k).s}" title="${CLP[k]||k} · ${fe(cats[k],0)} · ${(cats[k]/t*100).toFixed(1)}%"></div>`).join('')
     : '';
+}
+
+// ── INICIO · QUÉ MUEVE HOY LA CARTERA ────────────────────────────────────────
+// El héroe dice que la cartera sube un 1%. Esta tira dice de dónde sale ese 1%.
+// Tres decisiones la hacen legible:
+//  · agrupa por subyacente, porque el motivo es «el bitcoin», no «el ETF de
+//    bitcoin de Revolut» y «el de Trade Republic» contados por separado;
+//  · ordena por EUROS aportados al movimiento, no por porcentaje: un +9% sobre
+//    40 € no explica una subida de 180 €, y ordenando por % saldría el primero;
+//  · se salta la liquidez igual que tDay(), así la suma de las filas cuadra
+//    exactamente con el «Hoy» del héroe en vez de quedarse corta.
+const HOY_TOP=5;              // filas antes de tener que pedir el resto
+let hoyTodos=false;
+function toggleHoyTodos(){hoyTodos=!hoyTodos;rHoy();}
+
+function rHoy(){
+  const box=el('h-hoy');if(!box)return;
+  const day=tDay(),ms=moversHoy();
+
+  // Sin cierre anterior no hay variación del día que explicar. Se dice por qué:
+  // el hueco dura lo que tarda el feed, y callado parecería un fallo.
+  if(!day||!ms.length){
+    box.innerHTML='<div class="hoy-head"><span class="hoy-ttl">Qué mueve hoy la cartera</span></div>'
+      +'<div class="hoy-nd">Todavía no hay variación del día: hace falta el precio de hoy y el cierre anterior de cada posición. Llegan con el feed de precios, unos segundos después de abrir.</div>';
+    return;
+  }
+
+  const sube=day.abs>=0;
+  const bruto=ms.reduce((s,m)=>s+Math.abs(m.abs),0);
+  const aFavor  =ms.filter(m=>sube?m.abs>0:m.abs<0).sort((a,b)=>sube?b.abs-a.abs:a.abs-b.abs);
+  const enContra=ms.filter(m=>sube?m.abs<0:m.abs>0).sort((a,b)=>sube?a.abs-b.abs:b.abs-a.abs);
+  const motor=aFavor[0],freno=enContra[0];
+  const ladoTot=aFavor.reduce((s,m)=>s+Math.abs(m.abs),0);
+
+  // El titular. Tres casos, porque «plano» puede querer decir dos cosas muy
+  // distintas: que no se mueve nada, o que se mueve mucho y se compensa. La
+  // segunda es justo la que no se ve mirando solo el porcentaje del héroe.
+  let txt;
+  if(bruto<0.5){
+    txt='Día plano: hoy no se mueve nada que se note.';
+  }else if(Math.abs(day.abs)<bruto*0.18&&motor&&freno){
+    txt='La cartera se queda casi igual hoy ('+(sube?'+':'')+fe(day.abs,0)+'), pero por dentro sí se mueve: '
+      +'<b>'+esc(motor.u)+'</b> '+(motor.abs>=0?'+':'')+fe(motor.abs,0)
+      +' y <b>'+esc(freno.u)+'</b> '+(freno.abs>=0?'+':'')+fe(freno.abs,0)+' se anulan entre sí.';
+  }else{
+    txt='La cartera <b>'+(sube?'sube':'baja')+' '+fpc(Math.abs(day.pct))+'</b> hoy · <b>'+(sube?'+':'')+fe(day.abs,0)+'</b>.';
+    if(motor){
+      const cuota=ladoTot>0?Math.abs(motor.abs)/ladoTot*100:0;
+      txt+=' Manda <b>'+esc(motor.u)+'</b> con '+(motor.abs>=0?'+':'')+fe(motor.abs,0)
+        +(cuota>=35?' — '+cuota.toFixed(0)+'% de todo lo que '+(sube?'sube':'baja')+' hoy':'')+'.';
+    }
+    if(freno&&Math.abs(freno.abs)>=0.5&&Math.abs(freno.abs)>=Math.abs(day.abs)*0.12)
+      txt+=' En sentido contrario, <b>'+esc(freno.u)+'</b> '+(freno.abs>=0?'+':'')+fe(freno.abs,0)+'.';
+  }
+
+  const max=Math.max(...ms.map(m=>Math.abs(m.abs)))||1;
+  const vis=hoyTodos?ms:ms.slice(0,HOY_TOP);
+  const oc =hoyTodos?[]:ms.slice(HOY_TOP);
+
+  const barra=(v,pos)=>'<div class="hoy-bar"><div class="hoy-eje"></div>'
+    +'<div class="hoy-fill" style="'+(pos?'left:50%':'right:50%')+';width:'+(Math.abs(v)/max*50).toFixed(2)
+    +'%;background:'+(pos?'var(--up)':'var(--dn)')+';opacity:.72"></div></div>';
+
+  const filas=vis.map(m=>{
+    const pos=m.abs>=0;
+    // Cuando un subyacente sale de más de un producto, el tooltip lo desglosa:
+    // si no, la fila «Bitcoin» no dice cuál de los dos ETFs se ha movido.
+    const det=m.items.length>1
+      ?'\n\n'+m.items.map(i=>i.name+' · '+i.broker+' · '+(i.abs>=0?'+':'')+fe(i.abs)+' ('+fp(i.pct)+')').join('\n')
+      :'';
+    return '<div class="hoy-row" title="'+esc(m.u+' · '+(pos?'+':'')+fe(m.abs)+' · '+fp(m.pct)+det)+'">'
+      +'<div class="hoy-n"><i class="hoy-dot" style="background:'+m.col+'"></i><span>'+esc(m.u)+'</span></div>'
+      +barra(m.abs,pos)
+      +'<div class="hoy-v '+(pos?'up-c':'dn-c')+'">'+(pos?'+':'')+fe(m.abs,0)+'</div>'
+      +'<div class="hoy-p">'+fp(m.pct)+'</div>'
+    +'</div>';
+  }).join('');
+
+  // El resto no desaparece: se agrupa en una fila, para que las cifras sigan
+  // sumando el total del día y no quede dinero movido sin explicar.
+  let resto='';
+  if(oc.length){
+    const a=oc.reduce((s,m)=>s+m.abs,0),pos=a>=0;
+    resto='<div class="hoy-row hoy-resto" title="'+esc(oc.map(m=>m.u+' '+(m.abs>=0?'+':'')+fe(m.abs)).join('\n'))+'">'
+      +'<div class="hoy-n"><i class="hoy-dot" style="background:var(--bg4)"></i><span>Otros '+oc.length+'</span></div>'
+      +barra(a,pos)
+      +'<div class="hoy-v '+(pos?'up-c':'dn-c')+'">'+(pos?'+':'')+fe(a,0)+'</div>'
+      +'<div class="hoy-p"></div></div>';
+  }
+
+  const mas=ms.length>HOY_TOP
+    ?'<button class="hoy-mas" onclick="toggleHoyTodos()">'+(hoyTodos?'Ver solo los '+HOY_TOP+' que más mueven':'Ver los '+ms.length+' subyacentes')+'</button>'
+    :'';
+
+  // Posiciones que hoy no cuentan: sin precio, sin cierre anterior, o con el
+  // cierre descartado por prevFiable(). Decirlo evita la duda de «¿por qué no
+  // sale mi acción?» y avisa de que el total del día va incompleto.
+  const fuera=assets.filter(a=>a.cat!=='liquidez'&&(px(a)==null||pxPrev(a)==null)).length;
+  const nota=fuera
+    ?'<div class="hoy-nd" style="margin-top:10px">'+fuera+(fuera===1?' posición se queda':' posiciones se quedan')
+      +' fuera del cálculo de hoy: sin precio de hoy o sin cierre anterior fiable.</div>'
+    :'';
+
+  box.innerHTML='<div class="hoy-head"><span class="hoy-ttl">Qué mueve hoy la cartera</span>'
+    +'<span class="hoy-tot '+(day.abs>0?'up-c':day.abs<0?'dn-c':'nu-c')+'">'+(sube?'+':'')+fe(day.abs,0)
+    +'<em>'+fp(day.pct)+'</em></span></div>'
+    +'<div class="hoy-txt">'+txt+'</div>'+filas+resto+mas+nota;
 }
 
 // ── INICIO · AVISO DE INTERESES SIN APUNTAR ───────────────────────────────────
@@ -2753,12 +3027,21 @@ const gananciaTotal = () => (tv()-tc())+realizadoTotal()+rendimTotal();
 // el mercado se haya movido, y restarlo del aportado invertido lo convertiría en
 // una rentabilidad falsa de las inversiones. Ahí se descuentan solo los
 // dividendos, que sí los produce una posición de mercado.
+// Coste de lo invertido en un día guardado. Los días nuevos lo traen apuntado;
+// en los viejos se reconstruye restando la liquidez, que es lo que se hacía
+// antes y sigue siendo correcto siempre que el coste del efectivo fuera su
+// saldo. Nunca negativo: un coste de mercado por debajo de cero no existe y
+// dejaría el aportado por los suelos.
+function costInvEn(x){
+  if(x.costInv!=null&&isFinite(+x.costInv))return Math.max(0,+x.costInv);
+  return Math.max(0,(x.cost||0)-(x.liq!=null?+x.liq:0));
+}
 function puntoEvo(x){
   const val=x.val||0, ap=aportadoEn(x);
   const liq=x.liq!=null?+x.liq:null;
   return {ts:x.ts,val,ap,liq,
           valInv:liq!=null?val-liq:null,
-          apInv :liq!=null?(x.cost||0)-realizadoHasta(x.ts)-rendimHasta(x.ts,true)-liq:null};
+          apInv :liq!=null?costInvEn(x)-realizadoHasta(x.ts)-rendimHasta(x.ts,true):null};
 }
 function serieEvo(){
   const s=[...snaps].sort((a,b)=>a.ts-b.ts).map(puntoEvo);
@@ -2819,6 +3102,7 @@ function renderAnalisis(){
   renderAnHero();
   renderAnPatrimonio();
   renderTWR();
+  renderExpo();
   renderTreemap();
   renderAnPnl();
   renderRiskG(tv());
@@ -3087,6 +3371,104 @@ function renderRiskG(t){
       },animation:{duration:400}}});
 }
 
+// ── ANÁLISIS · CUÁNTO TENGO DE CADA COSA ─────────────────────────────────────
+// La pregunta que ni las bandas de Inicio ni el mapa contestaban. Por clase sale
+// «Fondos»; por broker, «MyInvestor»; y el mapa pinta una casilla por producto.
+// Ninguna dice cuánto hay de bitcoin cuando el bitcoin está repartido en dos
+// ETFs de dos brokers. Esta tarta agrupa por subyacente, que es la unidad en la
+// que uno piensa el riesgo, y deja abrir cada porción para ver de qué sale.
+//
+// SVG a pelo y no Chart.js a propósito: el viewBox escala solo, así que no hay
+// que esperar a que el contenedor tenga ancho —el problema que obligó a poner un
+// reintento con requestAnimationFrame en el treemap— ni repintar al cambiar el
+// tamaño de la ventana.
+let expoOpen=null;
+
+function setExpoBase(m){expoBase=m==='inv'?'inv':'total';expoOpen=null;svSt();renderExpo();}
+function toggleExpo(u){expoOpen=expoOpen===u?null:u;renderExpo();}
+
+function renderExpo(){
+  const box=el('an-expo');if(!box)return;
+  const inv=expoBase==='inv';
+  const bt=el('exb-total'),bi=el('exb-inv');
+  if(bt)bt.classList.toggle('on',!inv);
+  if(bi)bi.classList.toggle('on',inv);
+
+  const gs=expoPorUnd(!inv),tot=gs.reduce((s,g)=>s+g.v,0);
+  if(!gs.length||tot<=0){
+    box.innerHTML='<div class="an-empty">'+(inv
+      ?'Todo lo que tienes es liquidez: no hay nada que repartir en mercado.'
+      :'Sin posiciones con valor todavía.')+'</div>';
+    return;
+  }
+  // Si el grupo abierto ya no existe (has cambiado de base o borrado la
+  // posición) se cierra solo, en vez de dejar la tarta a medio resaltar.
+  if(!gs.some(g=>g.u===expoOpen))expoOpen=null;
+  const ab=gs.find(g=>g.u===expoOpen)||null;
+
+  // Arcos: un círculo por grupo con el trazo recortado a su porción. El hueco
+  // entre porciones es fijo en unidades de la circunferencia, así que las
+  // porciones pequeñas nunca desaparecen del todo (mínimo 1 unidad de arco).
+  const R=54,LARGO=2*Math.PI*R,HUECO=gs.length>1?2.4:0;
+  let acc=0;
+  const arcos=gs.map(g=>{
+    const trozo=g.v/tot*LARGO,largo=Math.max(1,trozo-HUECO),on=expoOpen===g.u,off=-acc;
+    acc+=trozo;
+    return '<circle class="ex-arc'+(on?' on':'')+'" data-u="'+esc(g.u)+'" onclick="toggleExpo(this.dataset.u)"'
+      +' cx="70" cy="70" r="'+R+'" fill="none" stroke="'+g.col+'" stroke-width="'+(on?21:16)+'"'
+      +' stroke-dasharray="'+largo.toFixed(2)+' '+(LARGO-largo).toFixed(2)+'"'
+      +' stroke-dashoffset="'+off.toFixed(2)+'">'
+      +'<title>'+esc(g.u+' · '+fe(g.v,0)+' · '+g.pct.toFixed(1)+'%')+'</title></circle>';
+  }).join('');
+
+  // El centro cambia con lo que señalas: total mientras no hay nada abierto, y
+  // el grupo elegido en cuanto pulsas. Ahorra tener que cruzar la vista con la
+  // leyenda para saber qué porción estás mirando.
+  const centro=ab
+    ? '<div class="ex-mid-v">'+fe(ab.v,0)+'</div><div class="ex-mid-l"><b>'+esc(ab.u)+'</b><br>'+ab.pct.toFixed(1)+'% de la cartera</div>'
+    : '<div class="ex-mid-v">'+fe(tot,0)+'</div><div class="ex-mid-l">'+gs.length+(gs.length===1?' subyacente':' subyacentes')
+      +'<br>'+(inv?'sin la liquidez':'liquidez incluida')+'</div>';
+
+  const donut='<div class="ex-donut'+(ab?' dim':'')+'">'
+    +'<svg class="ex-svg" viewBox="0 0 140 140" role="img" aria-label="Reparto de la cartera por subyacente">'
+    +'<g transform="rotate(-90 70 70)">'+arcos+'</g></svg>'
+    +'<div class="ex-mid">'+centro+'</div></div>';
+
+  const maxPct=Math.max(...gs.map(g=>g.pct))||1;
+  const lista=gs.map(g=>{
+    const on=expoOpen===g.u,gc=g.g>0?'up-c':g.g<0?'dn-c':'nu-c';
+    const fila='<button class="ex-row'+(on?' on':'')+'" data-u="'+esc(g.u)+'" onclick="toggleExpo(this.dataset.u)"'
+      +' aria-expanded="'+on+'" title="'+esc((on?'Ocultar':'Ver')+' de qué productos sale '+g.u)+'">'
+      +'<span class="ex-dot" style="background:'+g.col+'"></span>'
+      +'<span class="ex-name">'+esc(g.u)+'</span>'
+      +'<span class="ex-track"><i style="width:'+(g.pct/maxPct*100).toFixed(1)+'%;background:'+g.col+';opacity:.6"></i></span>'
+      +'<span class="ex-pct">'+g.pct.toFixed(1)+'%</span>'
+      +'<span class="ex-val">'+fe(g.v,0)+'</span>'
+      +'<span class="ex-pnl '+gc+'">'+(g.gp!=null?fp(g.gp):'—')+'</span>'
+      +'<span class="ex-ct"'+(g.items.length>1?' title="'+g.items.length+' productos distintos dan esta exposición"':'')+'>'+(g.items.length>1?g.items.length:'')+'</span>'
+      +'</button>';
+    if(!on)return fila;
+    // Detalle: de qué productos sale la porción y cuánto pone cada uno. Es la
+    // otra mitad de la pregunta —«¿dónde lo tengo?»— y evita ir a buscarlo a
+    // Inicio banda por banda.
+    const sub=g.items.map(a=>{
+      const v=vl(a)||0;
+      return '<div class="ex-sub"><b>'+esc(a.name)+' · '+esc(a.broker||'Otro')+'</b>'
+        +'<span>'+fe(v,0)+'</span>'
+        +'<span>'+(g.v>0?(v/g.v*100).toFixed(0):'0')+'%</span></div>';
+    }).join('');
+    return fila+'<div class="ex-body">'+sub+'</div>';
+  }).join('');
+
+  // Cómo se decide la agrupación, dicho una vez y donde importa: si dos
+  // posiciones deberían ir juntas y no lo están, se arregla desde la posición.
+  const nota='<div class="ex-nota">Los porcentajes se miden sobre '+fe(tot,0)
+    +(inv?' de dinero en mercado.':' de patrimonio total.')
+    +' Si dos posiciones deberían ir en la misma porción y salen separadas, edítalas y ponles el mismo «subyacente».</div>';
+
+  box.innerHTML='<div class="ex-wrap">'+donut+'<div class="ex-list">'+lista+'</div></div>'+nota;
+}
+
 // Treemap squarified (Bruls et al.): rects {x,y,w,h} en el orden de los valores.
 function squarify(values,x,y,w,h){
   const n=values.length,rects=new Array(n),total=values.reduce((s,v)=>s+v,0);
@@ -3137,7 +3519,10 @@ const liquidezHoy = ()=>assets.filter(a=>a.cat==='liquidez').reduce((s,a)=>s+(vl
 
 function saveSnap(){
   const t=tv();if(!t){toast('Sin valor');return;}
-  snaps.push({id:Date.now(),ts:Date.now(),val:t,cost:tc(),liq:liquidezHoy()});
+  // costInv = coste SOLO de lo invertido. Antes se reconstruía como cost-liq,
+  // que sale bien únicamente si el coste del efectivo era su saldo; guardarlo
+  // aparte quita esa suposición del medio para siempre.
+  snaps.push({id:Date.now(),ts:Date.now(),val:t,cost:tc(),costInv:tcInv(),liq:liquidezHoy()});
   svSt();toast('Día guardado · '+fe(t));
   if(curPage==='analisis')renderAnalisis();
   const sv=el('snap-now-val');if(sv)sv.textContent=fe(t,0);
@@ -3149,8 +3534,20 @@ function delSnap(id){snaps=snaps.filter(s=>s.id!==id);svSt();renderAnalisis();}
 function autoSnapDaily(){
   const t=tv();if(!(t>0))return;
   const hoy=new Date().toDateString();
-  if(snaps.some(s=>new Date(s.ts).toDateString()===hoy))return;
-  snaps.push({id:Date.now(),ts:Date.now(),val:t,cost:tc(),liq:liquidezHoy(),auto:true});
+  const yaHoy=snaps.find(s=>new Date(s.ts).toDateString()===hoy);
+  if(yaHoy){
+    // Un día de hoy escrito por la versión anterior no trae costInv, y su cost
+    // puede llevar dentro el efectivo valorado a cero. Como es de hoy, se puede
+    // rehacer con las cifras de ahora mismo sin inventar nada: es el mismo día y
+    // la misma cartera. Los días anteriores no se tocan.
+    if(yaHoy.costInv==null){
+      yaHoy.val=t;yaHoy.cost=tc();yaHoy.costInv=tcInv();yaHoy.liq=liquidezHoy();
+      svSt();
+      if(curPage==='analisis')renderAnalisis();
+    }
+    return;
+  }
+  snaps.push({id:Date.now(),ts:Date.now(),val:t,cost:tc(),costInv:tcInv(),liq:liquidezHoy(),auto:true});
   svSt();
   if(curPage==='analisis')renderAnalisis();
 }
@@ -3783,17 +4180,45 @@ async function yfQuote(sym){
   const d=await pxFetch(YF_HOSTS.map(h=>`https://${h}${path}`));
   const res=d?.chart?.result?.[0],m=res?.meta;
   if(!m||m.regularMarketPrice==null)throw new Error('Sin precio para '+sym);
-  let cl=[];
-  try{cl=(res.indicators.quote[0].close||[]).filter(c=>c!=null);}catch(e){}
-  let p=m.regularMarketPrice;
+  // Cada cierre, emparejado con SU marca de tiempo. Antes se filtraban los nulos
+  // de `close` y se seguía indexando `timestamp` sin filtrar: las dos listas
+  // dejaban de estar alineadas y todo lo que mirase «la última vela» leía cosas
+  // de días distintos.
+  const ts=res.timestamp||[];
+  let cl0=[];try{cl0=res.indicators.quote[0].close||[];}catch(e){}
+  const velas=[];
+  for(let i=0;i<cl0.length;i++)if(cl0[i]!=null&&ts[i]!=null)velas.push({t:ts[i],c:cl0[i]});
+  // La serie del sparkline se queda con TODOS los cierres reales, tengan fecha
+  // utilizable o no: si no, una respuesta sin timestamps dejaría el gráfico vacío
+  // y sin respaldo para el cierre anterior.
+  const cl=cl0.filter(c=>c!=null);
+  const ult=velas[velas.length-1]||null;
+  let p=m.regularMarketPrice, tp=m.regularMarketTime||Math.floor(Date.now()/1000);
   // En fondos (0P…) regularMarketPrice se queda a veces un día rezagado: el VL
   // nuevo sólo aparece en la serie de cierres. Si el gráfico trae un cierre
   // posterior a la hora del precio, manda ese cierre. (En acciones en sesión no
   // salta: el último cierre nunca es posterior al último cruce.)
-  const ts=res.timestamp||[],mkt=m.regularMarketTime||0;
-  if(cl.length&&ts.length&&mkt&&ts[ts.length-1]>mkt&&cl[cl.length-1])p=cl[cl.length-1];
-  // Cierre anterior = penúltimo cierre de la serie (el último es la sesión en curso)
-  const prev=cl.length>=2?cl[cl.length-2]:null;
+  if(ult&&m.regularMarketTime&&ult.t>m.regularMarketTime){p=ult.c;tp=ult.t;}
+  // Cierre anterior = el último cierre de un día ANTERIOR al del precio que
+  // acabamos de elegir.
+  //
+  // Antes esto era `cl[cl.length-2]`, con el razonamiento de que el último
+  // elemento es siempre la sesión en curso. Sólo es verdad cuando la vela de hoy
+  // trae dato. Los ETPs europeos (GLDA.DE, GBSE.MI, XETH.DE…) llegan a media
+  // sesión con `close:null`, esa vela se caía al filtrar, y el «penúltimo» pasaba
+  // a ser el cierre de ANTEAYER: la variación del día era en realidad la de dos
+  // días. En GLDA eso eran +10,11 € en vez de +4,60 €.
+  //
+  // Y encima no se quedaba quieto: loadFeed() escribe el cierre bueno y, pasados
+  // 90 s de TTL del feed, Yahoo lo pisaba con el malo. El total del día saltaba
+  // de un valor a otro y volvía, según qué fuente hubiera escrito la última.
+  const dia=t=>Math.floor(t/86400);   // día UTC; las velas diarias van a la hora de apertura
+  const dp=dia(tp);
+  let prev=null;
+  for(let i=velas.length-1;i>=0;i--)if(dia(velas[i].t)<dp){prev=velas[i].c;break;}
+  // Respaldo para series sin fechas usables: el criterio viejo, que para las
+  // que sí traen la vela de hoy con dato da lo mismo.
+  if(prev==null&&cl.length>=2)prev=cl[cl.length-2];
   return {p,cur:m.currency||'USD',prev,closes:cl};
 }
 
@@ -3839,7 +4264,15 @@ async function yfResolve(query){
 function autoUpgradeAssets(){
   let n=0;
   for(const a of assets){
-    if(a.cat==='liquidez')continue;
+    if(a.cat==='liquidez'){
+      // cs() ya ignora costUnit en la liquidez, pero el dato guardado se
+      // normaliza igual: se exporta al JSON, viaja al informe diario y sale en
+      // el Excel. Dejarlo a 0 sería dejar la trampa puesta para el siguiente
+      // que lea el fichero sin pasar por cs().
+      const u=a.mp??1;
+      if(!(a.costUnit>0)||Math.abs(a.costUnit-u)>1e-9){a.costUnit=u;n++;}
+      continue;
+    }
     // Rescate de una posición que se quedó a medio calibrar (cantidad en
     // participaciones pero precio con el saldo entero): se veía como un valor
     // varias veces mayor del real. Se devuelve el precio al valor liquidativo
@@ -4019,7 +4452,15 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('online',()=>fetchAll(false));
 
 // ── ASSET MODAL ───────────────────────────────────────────────────────────────
-function pCat(c){curCat=c;document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('on',b.dataset.c===c));const liq=c==='liquidez';el('a-mode-wrap').style.opacity=liq?.4:1;el('a-mode-wrap').style.pointerEvents=liq?'none':'auto';const aw=el('a-apr-wrap');if(aw)aw.style.display=liq?'block':'none';calibVis();}
+function pCat(c){curCat=c;document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('on',b.dataset.c===c));const liq=c==='liquidez';el('a-mode-wrap').style.opacity=liq?.4:1;el('a-mode-wrap').style.pointerEvents=liq?'none':'auto';const aw=el('a-apr-wrap');if(aw)aw.style.display=liq?'block':'none';
+  // En una cuenta de efectivo no hay «precio de compra»: preguntarlo era lo que
+  // llevaba a dejarlo vacío y a que el saldo entero se leyera como ganancia. Se
+  // esconde el campo y se llaman las cosas por su nombre: saldo, no cantidad.
+  const cw=el('a-cost-wrap');if(cw)cw.style.display=liq?'none':'';
+  const ql=el('a-qty-l');if(ql)ql.textContent=liq?'Saldo':'Cantidad';
+  const uw=el('a-unit-wrap');if(uw)uw.style.display=liq?'none':'';
+  const lh=el('a-liq-hint');if(lh)lh.style.display=liq?'block':'none';
+  calibVis();}
 function pMode(m){curMode=m;el('atab-auto').classList.toggle('on',m==='auto');el('atab-manual').classList.toggle('on',m==='manual');el('az-auto').style.display=m==='auto'?'block':'none';el('az-manual').style.display=m==='manual'?'block':'none';calibVis();}
 function updCP(){
   if(el('a-calib')&&el('a-calib').checked){
@@ -4192,6 +4633,15 @@ function saveAsset(){
   // cero para que cambiar el tipo de una posición no la arrastre escondida.
   const apr=parseFloat(el('a-apr').value)||0;
   const asset={name,broker,cat:curCat,mode:curMode,ticker,isin,qty,unit,costUnit,ccy,underlying,apr:curCat==='liquidez'?apr:0};
+  // El efectivo entra con coste = saldo, se haya tecleado lo que se haya
+  // tecleado en el campo de coste (que además está oculto en esta categoría).
+  // Añadir dinero a la cartera es una APORTACIÓN, nunca una ganancia: da igual
+  // que sea dinero nuevo o dinero que ya tenías y no habías apuntado todavía.
+  if(curCat==='liquidez'){
+    const u=(mp!=null&&mp>0)?mp:1;
+    asset.costUnit=u;asset.mp=u;
+    if(!asset.unit)asset.unit=ccy==='USD'?'$':'€';
+  }
   // Sello del día en que empieza a devengar: sin él, la primera vez que apuntes
   // intereses no habría desde cuándo calcularlos ni cuándo avisarte.
   const ant=eaid?assets.find(a=>a.id===eaid):null;
@@ -4647,6 +5097,7 @@ function carteraJSON(){
     aports:    aports,
     rendim:    rendim,
     bandMode:  bandMode,
+    expoBase:  expoBase,
 
     cashflow:  cf,
   };
@@ -4814,7 +5265,7 @@ function carteraDePerfil(p){
   return {version:2,perfil:p,perfilNombre:PERFIL_LBL[p],exportedAt:new Date().toISOString(),
     assets:s.assets,snaps:s.snaps||[],wl:s.wl||[],targets:s.targets||{},
     tgExtra:s.tgExtra||[],tgFuera:s.tgFuera||[],tgBase:s.tgBase||'total',tgAporte:s.tgAporte||0,
-    trades:s.trades||[],aports:s.aports||[],rendim:s.rendim||[],bandMode:s.bandMode||'clase',
+    trades:s.trades||[],aports:s.aports||[],rendim:s.rendim||[],bandMode:s.bandMode||'clase',expoBase:s.expoBase||'total',
     cashflow:c&&c.meses?c:null};
 }
 
@@ -4973,6 +5424,7 @@ function loadJSONFile(event){
       aports   = data.aports   || [];
       rendim   = Array.isArray(data.rendim) ? data.rendim : [];
       bandMode = data.bandMode==='broker' ? 'broker' : 'clase';
+      expoBase = data.expoBase==='inv' ? 'inv' : 'total';
       if(data.cashflow&&Array.isArray(data.cashflow.meses)&&data.cashflow.pct){
         // Un backup anterior no trae mes típico, horizonte ni rentabilidad: se
         // normalizan igual que al cargar de localStorage para que la proyección
