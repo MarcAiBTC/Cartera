@@ -67,6 +67,12 @@ jobs:
           # Respaldos: transporte antiguo y posiciones pegadas a mano
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           POSICIONES_JSON: ${{ secrets.POSICIONES_JSON }}
+          # OPCIONAL y de pago. Si existe el secret, el comentario del día lo
+          # redacta Claude a partir de los titulares (por qué se ha movido la
+          # cartera, no solo cuánto). Sin él se usa el texto de plantilla y no
+          # cambia nada más. Al modelo solo se le mandan porcentajes y nombres
+          # de subyacente: ni euros, ni saldos, ni cantidades.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # Un disparo manual salta el control de la franja horaria
           FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
           DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '1' || '' }}
