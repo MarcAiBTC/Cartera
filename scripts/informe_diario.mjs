@@ -654,15 +654,6 @@ async function construirInforme(perfil, carga) {
     : `${titulo('Qué ha movido la cartera hoy')}
        <div style="font-size:14px;line-height:1.5;color:${C.suave}">Todavía no hay variación del día: hace falta el precio de hoy y el cierre anterior de cada posición.</div>`);
 
-  // ── Titulares ──────────────────────────────────────────────────────────────
-  const bloqueNoticias = noticias.length ? tarjeta(
-    `${titulo('Titulares de tus posiciones · 48 h')}
-     ${noticias.map(n => `
-       <div style="margin:0 0 13px">
-         <a href="${esc(n.enlace)}" style="font-size:15px;line-height:1.4;color:${C.violeta};text-decoration:none;font-weight:600">${esc(n.titulo)}</a>
-         <div style="font-size:12px;color:${C.tenue};margin-top:3px">${esc(n.medio || '')} · ${esc(n.sobre)} · ${esc(new Date(n.ts).toLocaleString('es-ES', { timeZone: TZ, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</div>
-       </div>`).join('')}`) : '';
-
   // ── Reparto de la cartera (donut + pesos) ──────────────────────────────────
   const tarta = donutPNG(k.reparto.map(g => ({ pct: g.pct, col: g.col })), { lado: 660 });
   const filaPeso = g => `
@@ -705,6 +696,19 @@ async function construirInforme(perfil, carga) {
        ${k.filas.slice().sort((x, y) => (y.valor || 0) - (x.valor || 0)).map(filaPos).join('')}
      </table>`);
 
+  // ── Titulares ──────────────────────────────────────────────────────────────
+  // Van los últimos a propósito. Son lectura opcional: contexto para el día que
+  // te apetezca tirar del hilo, no algo que haga falta para saber cómo va la
+  // cartera. Puestos en medio obligaban a pasar seis titulares para llegar a la
+  // tarta y al detalle, que es información tuya y no del mundo.
+  const bloqueNoticias = noticias.length ? tarjeta(
+    `${titulo('Titulares de tus posiciones · 48 h')}
+     ${noticias.map(n => `
+       <div style="margin:0 0 13px">
+         <a href="${esc(n.enlace)}" style="font-size:15px;line-height:1.4;color:${C.violeta};text-decoration:none;font-weight:600">${esc(n.titulo)}</a>
+         <div style="font-size:12px;color:${C.tenue};margin-top:3px">${esc(n.medio || '')} · ${esc(n.sobre)} · ${esc(new Date(n.ts).toLocaleString('es-ES', { timeZone: TZ, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</div>
+       </div>`).join('')}`) : '';
+
   // Texto de vista previa: lo que se lee en la bandeja de entrada sin abrir el
   // correo. Sin esto, Gmail enseña el primer texto que encuentre («Cartera de
   // Marc · lunes, 25 de…»), que no dice nada.
@@ -729,9 +733,9 @@ async function construirInforme(perfil, carga) {
 ${cabecera}
 ${bloqueTexto}
 ${bloqueMovers}
-${bloqueNoticias}
 ${bloqueTarta}
 ${bloquePosiciones}
+${bloqueNoticias}
         <div style="text-align:center;color:${C.tenue};font-size:11px;line-height:1.6;padding:2px 8px">
           Informe automático (GitHub Actions) · precios del feed de ${esc(new Date(feedTs).toLocaleTimeString('es-ES', { timeZone: TZ, hour: '2-digit', minute: '2-digit' }))}${carga.publicado ? ` · cartera publicada el ${esc(new Date(carga.publicado).toLocaleString('es-ES', { timeZone: TZ, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}` : ''}
         </div>

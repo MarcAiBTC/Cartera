@@ -205,9 +205,19 @@ async function cifrar(txt, pass) {
   eq(Math.max(...pesos), Math.max(PESO_ORO, PESO_LIQ), 'el bloque más grande pesa lo que dice la cuenta', 0.2);
 
   console.log('\n7 · El detalle de posiciones');
-  const detalle = htmlMarc.split('Detalle de posiciones')[1];
+  const detalle = htmlMarc.split('Detalle de posiciones')[1].split('Titulares de tus posiciones')[0];
   for (const a of assets) eq(detalle.includes(a.name), true, `aparece «${a.name}»`);
   eq(/Trade Republic/.test(detalle) && /MyInvestor/.test(detalle), true, 'con el broker de cada una');
+
+  console.log('\n7b · El orden de los bloques');
+  // Lo tuyo primero y en orden de menos a más detalle; los titulares al final,
+  // que son lectura opcional. Si algún bloque se cuela en medio, el correo deja
+  // de leerse de arriba abajo sin saltos y se nota en el móvil.
+  const orden = ['Hoy, en corto', 'Qué ha movido la cartera hoy', 'Reparto de la cartera',
+                 'Detalle de posiciones', 'Titulares de tus posiciones'];
+  const dónde = orden.map(t => htmlMarc.indexOf(t));
+  eq(dónde.every(i => i >= 0), true, 'están los cinco bloques');
+  eq(dónde.every((v, i) => i === 0 || v > dónde[i - 1]), true, 'y van en este orden: ' + orden.join(' → '));
 
   console.log('\n8 · Cada informe es solo de quien es');
   eq(/Cartera de Marc/.test(htmlMarc), true, 'el de Marc se identifica');
