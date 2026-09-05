@@ -66,6 +66,7 @@ Rellena `app/.env` (el archivo ya está creado con los huecos y una explicación
 de dónde sale cada valor; git lo ignora) y ejecuta:
 
 ```bash
+npm run comprobar   # revisa que cada clave es la que toca
 npm run preparar
 ```
 
