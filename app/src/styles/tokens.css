@@ -1,0 +1,112 @@
+/* ── TOKENS ──────────────────────────────────────────────────────────────
+   La paleta es la lavanda de la app de siempre (index.html:12-25): el
+   proyecto ya se reconoce por ella y cambiarla habría sido estrenar una app
+   ajena. Lo que se trae de Fintrack es la ESTRUCTURA: cuatro radios en vez
+   de uno, tres niveles de sombra, curvas de animación con nombre y unos
+   titulares enormes y apretados. Ahí es donde estaba la diferencia.
+
+   Regla del tema: el juego completo se declara en :root (claro). El oscuro
+   sólo REDEFINE, nunca estrena un color. Así ninguna superficie se queda sin
+   valor cuando el usuario cambia de tema. */
+
+:root {
+  color-scheme: light;
+
+  /* Lienzo lavanda y superficies blancas que flotan encima */
+  --bg0: #f3f1fb;
+  --bg1: #ffffff;
+  --bg2: #f4f2fb;
+  --bg3: #e8e4f5;
+  --bg4: #d9d4ec;
+
+  /* Hairlines de tinta violeta translúcida: valen sobre cualquier superficie */
+  --line: rgba(39, 33, 74, 0.08);
+  --line2: rgba(39, 33, 74, 0.13);
+  --line3: rgba(39, 33, 74, 0.22);
+
+  /* Cuatro niveles de tinta: título, cuerpo, secundario, apagado */
+  --fg0: #28234a;
+  --fg1: #4e4870;
+  --fg2: #736d95;
+  --fg3: #9d97b8;
+
+  /* Sube y baja. El verde y el rosa no se usan para nada más. */
+  --up: #0ea97d;
+  --dn: #f0537c;
+  --up-bg: #dcf5ec;
+  --dn-bg: #fde3ec;
+
+  /* Acento y paleta de categorías */
+  --blue: #6d7df6;
+  --blue-glow: rgba(109, 125, 246, 0.32);
+  --gold: #e9a23b;
+  --purple: #9b7bf3;
+  --mint: #3ecba5;
+  --peach: #ffb477;
+  --lilac: #c6b5f8;
+  --rose: #f783ac;
+
+  /* Tipografía */
+  --sans: "Manrope", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --disp: "Space Grotesk", var(--sans);
+
+  /* Radios: campo, azulejo, tarjeta, hoja. Un solo radio para todo era lo
+     que hacía que la app anterior pareciera plana. */
+  --r-field: 12px;
+  --r-tile: 16px;
+  --r-card: 22px;
+  --r-sheet: 30px;
+
+  /* Sombras en tres alturas, no una */
+  --sh1: 0 1px 2px rgba(39, 33, 74, 0.04), 0 2px 8px rgba(39, 33, 74, 0.05);
+  --sh2: 0 2px 6px rgba(39, 33, 74, 0.07), 0 10px 28px rgba(39, 33, 74, 0.08);
+  --sh3: 0 8px 20px rgba(39, 33, 74, 0.1), 0 28px 64px rgba(39, 33, 74, 0.14);
+
+  /* Movimiento */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --dur-fast: 0.14s;
+  --dur-base: 0.24s;
+  --dur-slow: 0.42s;
+
+  /* Titulares: enormes, apretados y con las líneas casi pegadas */
+  --hero-tracking: -0.045em;
+  --hero-leading: 0.88;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg0: #0e0c18;
+  --bg1: #171528;
+  --bg2: #1d1a30;
+  --bg3: #272242;
+  --bg4: #332c53;
+
+  --line: rgba(214, 208, 245, 0.1);
+  --line2: rgba(214, 208, 245, 0.16);
+  --line3: rgba(214, 208, 245, 0.26);
+
+  --fg0: #eeebfa;
+  --fg1: #c2bcdd;
+  --fg2: #8f88ad;
+  --fg3: #6b6488;
+
+  --up: #3ddba6;
+  --dn: #ff7ba3;
+  --up-bg: rgba(61, 219, 166, 0.14);
+  --dn-bg: rgba(255, 123, 163, 0.14);
+
+  --blue: #8d99ff;
+  --blue-glow: rgba(141, 153, 255, 0.34);
+  --gold: #f0b45c;
+  --purple: #b294ff;
+  --mint: #5fdcbc;
+  --peach: #ffc38f;
+  --lilac: #d3c6fb;
+  --rose: #fb9dbf;
+
+  --sh1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.22);
+  --sh2: 0 2px 6px rgba(0, 0, 0, 0.34), 0 10px 28px rgba(0, 0, 0, 0.3);
+  --sh3: 0 8px 20px rgba(0, 0, 0, 0.42), 0 28px 64px rgba(0, 0, 0, 0.46);
+}

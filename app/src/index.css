@@ -1,0 +1,137 @@
+@import "tailwindcss";
+@import "./styles/tokens.css";
+
+/* `inline` es lo que hace que el tema funcione: Tailwind emite var(--bg0) en
+   vez de copiar el color, así que cambiar data-theme repinta todo sin
+   reconstruir nada. */
+@theme inline {
+  --color-bg0: var(--bg0);
+  --color-bg1: var(--bg1);
+  --color-bg2: var(--bg2);
+  --color-bg3: var(--bg3);
+  --color-bg4: var(--bg4);
+  --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-line3: var(--line3);
+  --color-fg0: var(--fg0);
+  --color-fg1: var(--fg1);
+  --color-fg2: var(--fg2);
+  --color-fg3: var(--fg3);
+  --color-up: var(--up);
+  --color-dn: var(--dn);
+  --color-up-bg: var(--up-bg);
+  --color-dn-bg: var(--dn-bg);
+  --color-blue: var(--blue);
+  --color-gold: var(--gold);
+  --color-purple: var(--purple);
+  --color-mint: var(--mint);
+  --color-peach: var(--peach);
+  --color-lilac: var(--lilac);
+  --color-rose: var(--rose);
+
+  --font-sans: var(--sans);
+  --font-disp: var(--disp);
+
+  --radius-field: var(--r-field);
+  --radius-tile: var(--r-tile);
+  --radius-card: var(--r-card);
+  --radius-sheet: var(--r-sheet);
+
+  --shadow-e1: var(--sh1);
+  --shadow-e2: var(--sh2);
+  --shadow-e3: var(--sh3);
+
+  --ease-out: var(--ease-out);
+  --ease-spring: var(--ease-spring);
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* La barra de iOS tapa el pie si el contenido no se aparta */
+    scroll-padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg0);
+    color: var(--fg0);
+    min-height: 100dvh;
+    overflow-x: hidden;
+    /* tnum: dígitos de ancho fijo, para que las cifras alineen en columna */
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 1px;
+    border-radius: 6px;
+  }
+  button:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--bg4);
+    border-radius: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* El titular gigante y apretado que abre cada pantalla. Es el gesto que
+     más carácter le da a Fintrack y el que la app anterior no tenía. */
+  .hero-num {
+    font-family: var(--disp);
+    font-weight: 700;
+    letter-spacing: var(--hero-tracking);
+    line-height: var(--hero-leading);
+    font-size: clamp(2.75rem, 13vw, 4.25rem);
+  }
+
+  .card {
+    background: var(--bg1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    box-shadow: var(--sh1);
+  }
+
+  .tile {
+    background: var(--bg1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-tile);
+  }
+
+  .lbl {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fg3);
+  }
+}

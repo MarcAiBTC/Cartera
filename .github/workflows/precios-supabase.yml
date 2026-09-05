@@ -1,0 +1,53 @@
+# ── PRECIOS CADA 15 MINUTOS ──────────────────────────────────────────────
+# El plan Hobby de Vercel SÓLO admite crons diarios: un «*/15» en vercel.json
+# hace fallar el despliegue con «Hobby accounts are limited to daily cron
+# jobs». Los crons de vercel.json se quedan como red de seguridad diaria y el
+# ritmo de verdad lo marca esto, que en GitHub Actions es gratis e ilimitado —
+# igual que la Action que ya refrescaba precios.json.
+#
+# De propina, cada llamada toca la base de datos, así que el proyecto de
+# Supabase no se duerme: el plan gratuito pausa los proyectos tras una semana
+# sin actividad.
+#
+# Si algún día pasas a Vercel Pro, borra este archivo y pon el horario real en
+# vercel.json:  { "path": "/api/precios", "schedule": "*/15 6-22 * * 1-5" }
+
+name: Precios a Supabase
+
+on:
+  schedule:
+    # Cada 15 minutos entre las 06:00 y las 22:00 UTC, de lunes a viernes.
+    # GitHub no garantiza la puntualidad: con la plataforma cargada puede
+    # retrasarse unos minutos, lo cual da igual para un precio de bolsa.
+    - cron: "*/15 6-22 * * 1-5"
+    # Los fines de semana sólo cripto, que sí cotiza: una vez cada cuatro horas.
+    - cron: "0 */4 * * 0,6"
+  # Y a mano, desde la pestaña Actions, para probar sin esperar.
+  workflow_dispatch:
+
+# Si una ejecución se solapa con la anterior, se cancela la vieja: dos crones
+# escribiendo los mismos precios a la vez no aportan nada.
+concurrency:
+  group: precios-supabase
+  cancel-in-progress: true
+
+jobs:
+  refrescar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pedir a Vercel que actualice los precios
+        env:
+          URL: ${{ secrets.VERCEL_APP_URL }}
+          SECRETO: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$SECRETO" ]; then
+            echo "Faltan los secretos VERCEL_APP_URL o CRON_SECRET del repositorio."
+            exit 1
+          fi
+
+          # --fail-with-body: que un 401 o un 500 rompan el job Y enseñen el
+          # motivo. Con --fail a secas se pierde el cuerpo de la respuesta y no
+          # se sabe si es el secreto o Supabase.
+          curl --fail-with-body --silent --show-error --max-time 300 \
+            -H "Authorization: Bearer $SECRETO" \
+            "$URL/api/precios"

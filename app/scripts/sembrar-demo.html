@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sembrar datos de prueba</title>
+  </head>
+  <body>
+    <p>Sembrando…</p>
+    <!--
+      Herramienta de desarrollo, NO se despliega.
+
+      Sirve para mirar la app con datos que se parezcan a una cartera real sin
+      tener que teclearlos: escribe el modo local en localStorage y salta a la
+      portada. Como se sirve desde el mismo origen que la app, comparte su
+      almacenamiento.
+
+          npm run build
+          cp scripts/sembrar-demo.html dist/
+          npx vite preview
+          → abre http://localhost:4173/sembrar-demo.html
+
+      Para borrar los datos de prueba: Ajustes → Salir del modo local.
+    -->
+    <script>
+      const id = (n) => "demo-" + n;
+
+      const activos = [
+        { id: id(1), name: "Liquidez MyInvestor", ticker: null, isin: null, cat: "liquidez", unit: "€", currency: "EUR", underlying: null, mode: "manual", manual_qty: 282.36, manual_cost_unit: 1, manual_price: 1, archived: false },
+        { id: id(2), name: "WisdomTree Physical Gold", ticker: "WGLD", isin: "JE00B8DFY052", cat: "metal", unit: "acc.", currency: "EUR", underlying: "Oro", mode: "operations", manual_qty: null, manual_cost_unit: null, manual_price: null, archived: false },
+        { id: id(3), name: "Fidelity Physical Bitcoin", ticker: "FBTC", isin: "XS2434891219", cat: "cripto", unit: "acc.", currency: "EUR", underlying: "Bitcoin", mode: "operations", manual_qty: null, manual_cost_unit: null, manual_price: null, archived: false },
+        { id: id(4), name: "iShares Physical Gold", ticker: "IGLN", isin: "IE00B4ND3602", cat: "metal", unit: "acc.", currency: "EUR", underlying: "Oro", mode: "operations", manual_qty: null, manual_cost_unit: null, manual_price: null, archived: false },
+        { id: id(5), name: "Vanguard US500 EUR Acc", ticker: null, isin: "IE0032620787", cat: "fondo", unit: "part.", currency: "EUR", underlying: "S&P 500", mode: "operations", manual_qty: null, manual_cost_unit: null, manual_price: null, archived: false },
+        { id: id(6), name: "MicroStrategy", ticker: "MSTR", isin: null, cat: "accion", unit: "acc.", currency: "USD", underlying: "Bitcoin", mode: "operations", manual_qty: null, manual_cost_unit: null, manual_price: null, archived: false },
+        { id: id(7), name: "Liquidez Trade Republic", ticker: null, isin: null, cat: "liquidez", unit: "€", currency: "EUR", underlying: null, mode: "manual", manual_qty: 447.57, manual_cost_unit: 1, manual_price: 1, archived: false },
+      ];
+
+      let n = 0;
+      const op = (assetId, type, date, quantity, price, total) => ({
+        id: "op-" + ++n,
+        account_id: null,
+        asset_id: assetId,
+        type,
+        date,
+        quantity,
+        price,
+        total,
+        fees: 0,
+        currency: "EUR",
+        total_eur: total,
+        is_internal_transfer: false,
+        source: "import",
+        source_format: "traderepublic-csv",
+        import_hash: "h" + n,
+        notes: null,
+      });
+
+      const operaciones = [
+        op(id(2), "buy", "2024-11-04", 7, 21.51, 150.57),
+        op(id(3), "buy", "2025-01-20", 22, 8.23, 181.06),
+        op(id(4), "buy", "2024-06-12", 1, 60.06, 60.06),
+        op(id(5), "buy", "2024-03-08", 8, 62.78, 502.24),
+        op(id(5), "buy", "2025-02-10", 4.62, 71.4, 329.87),
+        op(id(6), "buy", "2025-03-14", 2, 268.4, 536.8),
+        op(id(6), "sell", "2026-05-21", 1, 402.1, 402.1),
+        op(id(5), "dividend", "2026-06-30", null, null, 34.2),
+        op(id(1), "interest", "2026-07-31", null, null, 8.44),
+      ];
+
+      const snapshots = [];
+      const base = new Date("2025-09-01").getTime();
+      for (let i = 0; i < 52; i++) {
+        const d = new Date(base + i * 7 * 86400e3);
+        const t = i / 51;
+        snapshots.push({
+          id: "s" + i,
+          date: d.toISOString().slice(0, 10),
+          val: 1500 + t * 900 + Math.sin(i / 3) * 70,
+          cost: 1500 + t * 620,
+          cost_inv: 1100 + t * 500,
+          liq: 400 + t * 120,
+          auto: true,
+        });
+      }
+
+      // ?tema=dark deja el tema fijado antes de entrar, para poder capturar
+      // las dos versiones sin tener que tocar Ajustes a mano.
+      const tema = new URLSearchParams(location.search).get("tema");
+      if (tema === "dark" || tema === "light") localStorage.setItem("tema", tema);
+      else localStorage.removeItem("tema");
+
+      localStorage.setItem("cartera:modo-local", "1");
+      localStorage.setItem(
+        "cartera:local",
+        JSON.stringify({
+          cuentas: [
+            { id: "c1", name: "MyInvestor", broker: "MyInvestor", currency: "EUR" },
+            { id: "c2", name: "Trade Republic", broker: "Trade Republic", currency: "EUR" },
+          ],
+          activos,
+          operaciones,
+          snapshots,
+          seguimiento: [
+            { id: "w1", ticker: "AMZN", name: "Amazon", note: null, target_price: 160 },
+            { id: "w2", ticker: "IGLN.L", name: "iShares Gold", note: null, target_price: null },
+          ],
+          objetivos: [
+            { id: "t1", key: "fondo", weight: 45, extra: false, excluded: false },
+            { id: "t2", key: "metal", weight: 15, extra: false, excluded: false },
+            { id: "t3", key: "cripto", weight: 15, extra: false, excluded: false },
+            { id: "t4", key: "accion", weight: 10, extra: false, excluded: false },
+            { id: "t5", key: "liquidez", weight: 15, extra: false, excluded: false },
+          ],
+          cashflow: { ingresos: 2400, gastos: 1750, pctInvertir: 60, pctLiquidez: 20, pctReserva: 20, horizonte: 15, rentabilidad: 6, meses: [] },
+          ajustes: { display_name: null, theme: "auto", tg_base: "total", tg_aporte: 500, band_mode: "cat", expo_base: "total", data: {} },
+        }),
+      );
+      location.href = "/";
+    </script>
+  </body>
+</html>

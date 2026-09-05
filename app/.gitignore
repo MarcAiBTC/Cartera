@@ -1,0 +1,40 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Credenciales: la clave de servicio de Supabase salta la RLS y no puede
+# entrar nunca en el repositorio.
+.env
+.env.local
+.env.*.local
+.vercel
+
+# El .gitignore de la raíz ignora `package.json` y `package-lock.json` en todo
+# el repositorio —vienen de pruebas sueltas de la app antigua—, y un
+# .gitignore más profundo es el único sitio desde el que se puede desactivar
+# esa regla. Aquí los dos archivos son imprescindibles: sin ellos Vercel no
+# sabe qué instalar ni cómo construir, y el despliegue falla con un
+# «no package.json found» que no dice de dónde viene.
+!package.json
+!package-lock.json
