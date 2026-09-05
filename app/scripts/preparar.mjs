@@ -27,11 +27,22 @@ if (!url) {
   console.error(`
 Falta DATABASE_URL en app/.env.
 
-Se saca de Supabase: Project Settings → Database → Connection string →
-pestaña "URI". Copia la que pone "Session pooler" o "Direct connection", y
-sustituye [YOUR-PASSWORD] por la contraseña de la base de datos.
+Está en el botón «Connect», arriba del todo del panel de Supabase, al lado
+del nombre del proyecto. No está dentro de Settings. Elige «Session pooler»,
+copia la línea y sustituye [YOUR-PASSWORD] por la contraseña de la base de
+datos:
 
   DATABASE_URL=postgresql://postgres.xxxx:CONTRASENA@aws-0-eu-central-1.pooler.supabase.com:5432/postgres
+
+────────────────────────────────────────────────────────────────────────
+
+Si no lo encuentras, hay otra forma sin DATABASE_URL: pegar el esquema a
+mano. Copia el archivo al portapapeles con
+
+  Get-Content supabase\\migrations\\0001_esquema.sql -Raw | Set-Clipboard
+
+y pégalo en el SQL Editor de Supabase (barra izquierda, icono «SQL»), botón
+«Run». Después vuelve aquí y ejecuta  npm run sembrar-catalogo
 `);
   process.exit(1);
 }
