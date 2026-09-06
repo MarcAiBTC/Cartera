@@ -285,8 +285,13 @@ export function leerTradeRepublicNuevo(t: Tabla): Lectura {
 
     // Las comisiones y los ajustes fiscales llegan con `amount` a cero y la
     // cifra en su propia columna.
+    let comisionAparte = comision != null ? Math.abs(comision) : undefined;
     if ((total == null || total === 0) && destino === "fee") {
       total = Math.abs(comision ?? 0) || Math.abs(impuesto ?? 0);
+      // Y entonces la comision NO va ademas en su campo: el importe de la
+      // operacion ya ES la comision, y dejarla en los dos sitios la cobra dos
+      // veces al calcular el efectivo.
+      comisionAparte = undefined;
     }
 
     if (total == null || !isFinite(total) || total === 0) {
@@ -320,7 +325,7 @@ export function leerTradeRepublicNuevo(t: Tabla): Lectura {
       cantidad: cantidad != null ? Math.abs(cantidad) : undefined,
       precio: precio != null ? Math.abs(precio) : undefined,
       total,
-      comision: comision != null ? Math.abs(comision) : undefined,
+      comision: comisionAparte,
       divisa,
       nota: nombre && !esValor ? `${bruto} · ${nombre}` : bruto,
     });

@@ -32,12 +32,15 @@ export default async function handler(req: Request): Promise<Response> {
   // Lo segundo es lo que hace que un activo recién importado tenga precio en
   // el siguiente cuarto de hora sin que nadie toque el catálogo.
   const [cat, activos] = await Promise.all([
-    sb.from("catalog").select("symbol,yahoo,coingecko").eq("retired", false),
+    sb.from("catalog").select("symbol,yahoo,coingecko,isin").eq("retired", false),
     sb.from("assets").select("ticker,isin").eq("archived", false),
   ]);
   if (cat.error) return respuesta({ error: cat.error.message }, 500);
 
   const simbolos = new Map<string, Simbolo>();
+  /** ISIN de la cartera que nadie sabe traducir todavia. Se informan en la
+   *  respuesta para que se vean, en vez de pedirlos a Yahoo en balde. */
+  const sinTraducir = new Set<string>();
   for (const c of (cat.data ?? []) as Simbolo[]) {
     simbolos.set(c.symbol.toUpperCase(), {
       symbol: c.symbol.toUpperCase(),
@@ -45,13 +48,31 @@ export default async function handler(req: Request): Promise<Response> {
       coingecko: c.coingecko,
     });
   }
+  // El ISIN que el catálogo ya sabe traducir no hace falta pedirlo: su
+  // símbolo real ya está en la lista de arriba.
+  const isinesConocidos = new Set(
+    ((cat.data ?? []) as { isin: string | null }[])
+      .map((c) => c.isin?.toUpperCase())
+      .filter((i): i is string => Boolean(i)),
+  );
+
   for (const a of (activos.data ?? []) as { ticker: string | null; isin: string | null }[]) {
-    for (const clave of [a.ticker, a.isin]) {
-      const k = clave?.toUpperCase();
-      if (!k || simbolos.has(k)) continue;
+    const t = a.ticker?.toUpperCase();
+    if (t && !simbolos.has(t)) {
       // Sin entrada en el catálogo se prueba el propio ticker en Yahoo: para
       // los símbolos normales (AMZN, MSTR) acierta a la primera.
-      simbolos.set(k, { symbol: k, yahoo: k, coingecko: null });
+      simbolos.set(t, { symbol: t, yahoo: t, coingecko: null });
+    }
+
+    // Un ISIN NO es un símbolo de Yahoo: pedirlo devuelve 404 siempre. Antes
+    // se metía en la lista igual, así que cada vuelta del cron gastaba una
+    // petición inútil por cada valor europeo y llenaba `fallos` de ruido que
+    // tapaba los fallos de verdad. Si el activo ya tiene ticker, o si el
+    // catálogo sabe traducir ese ISIN, no hay nada que pedir; y si no lo
+    // sabe, lo que hace falta es resolverlo (/api/isin), no insistir.
+    const i = a.isin?.toUpperCase();
+    if (i && !t && !simbolos.has(i) && !isinesConocidos.has(i)) {
+      sinTraducir.add(i);
     }
   }
 
@@ -131,5 +152,9 @@ export default async function handler(req: Request): Promise<Response> {
     escritos: filas.length,
     divisas: tasas.length,
     fallos,
+    // Un ISIN aqui significa: hay un activo en alguna cartera al que nadie
+    // sabe ponerle precio. Se ve de un vistazo en vez de esconderse entre
+    // los 404 que antes generaba pedirlo a Yahoo.
+    sinTraducir: [...sinTraducir],
   });
 }

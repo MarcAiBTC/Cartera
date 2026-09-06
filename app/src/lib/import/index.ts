@@ -162,6 +162,11 @@ export interface Plan {
   totalCompras: number;
   totalVentas: number;
   totalCobros: number;
+  /** El efectivo que implica el extracto y el activo de liquidez que lo
+   *  representa. Sin esto el patrimonio sale corto: un extracto trae los
+   *  ingresos y las retiradas, pero si nadie crea la cuenta de efectivo el
+   *  dinero parado en el broker no aparece por ningun lado. */
+  efectivo?: { saldo: number; activo: Partial<Activo>; existente?: Activo };
 }
 
 export interface OpcionesPlan {
@@ -267,7 +272,12 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
         nuevoActivo = {
           name: fila.nombre || clave,
           isin: fila.isin ?? entradaCat?.isin ?? null,
-          ticker: fila.ticker ?? entradaCat?.ticker ?? entradaCat?.yahoo ?? null,
+          // El orden importa y costo que cuatro acciones entraran mudas: los
+          // precios se buscan por `ticker` contra el mapa que llena el cron, y ese
+          // mapa esta indexado por el simbolo de Yahoo. El campo `ticker` del
+          // catalogo es el corto y bonito (CABK), el que cotiza es `yahoo`
+          // (CABK.MC). Preferir el corto deja al activo sin precio para siempre.
+          ticker: fila.ticker ?? entradaCat?.yahoo ?? entradaCat?.symbol ?? entradaCat?.ticker ?? null,
           cat: categoriaDe(fila, entradaCat),
           currency: fila.divisa || entradaCat?.currency || "EUR",
           underlying: entradaCat?.underlying ?? null,
@@ -322,6 +332,72 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
   const broker = op.broker ?? lectura.broker;
   const cuentaExiste = estado.cuentas.some((c) => c.broker === broker);
 
+  // ── El efectivo ──────────────────────────────────────────────────────
+  // Se calcula sobre TODAS las operaciones que van a existir despues de
+  // importar, no solo sobre las nuevas: asi importar dos veces el mismo
+  // extracto deja el mismo saldo, y no el doble.
+  //
+  // La comision se resta aparte porque el importe de una compra viene bruto:
+  // el motor la suma al coste, pero del bolsillo sale igual.
+  const efectivoDe = (ops: { type?: string; total_eur?: number | null; fees?: number | null }[]) =>
+    ops.reduce((s, o) => {
+      const v = o.total_eur ?? 0;
+      // La comision se resta SIEMPRE, sea cual sea el tipo. Trade Republic
+      // cobra 1 EUR por algunas transferencias de entrada, y restarla solo en
+      // las compras y las ventas dejaba ese euro fuera del saldo.
+      const s2 = s - (o.fees ?? 0);
+      switch (o.type) {
+        case "deposit": return s2 + v;
+        case "withdrawal": return s2 - v;
+        case "buy": return s2 - v;
+        case "sell": return s2 + v;
+        case "dividend":
+        case "interest": return s2 + v;
+        case "fee": return s2 - v;
+        default: return s2;
+      }
+    }, 0);
+
+  const cuentaDestino = op.cuentaId ?? estado.cuentas.find((c) => c.broker === broker)?.id;
+  const yaHabia = estado.operaciones.filter((o) => o.account_id === cuentaDestino);
+  const todas = [...yaHabia, ...nuevas.map((p) => p.operacion)];
+  const saldo = efectivoDe(todas);
+
+  // Solo si la cuenta habla de dinero en algun momento. Un archivo que solo
+  // trae compras y ventas no dice nada del saldo, e inventarle uno seria peor
+  // que no ponerlo.
+  //
+  // Se mira sobre TODAS y no solo sobre las nuevas: reimportar el mismo
+  // extracto no trae ninguna fila nueva —el dedupe hace su trabajo— y aun asi
+  // el saldo tiene que quedar puesto.
+  const CAJA = ["deposit", "withdrawal", "interest", "dividend", "fee"];
+  const hayMovimientoDeCaja = todas.some((o) => CAJA.includes(String(o.type)));
+
+  const nombreEfectivo = `Efectivo · ${broker || "cuenta"}`;
+  const efectivoExistente = estado.activos.find(
+    (a) => a.cat === "liquidez" && a.name === nombreEfectivo,
+  );
+
+  const efectivo = hayMovimientoDeCaja
+    ? {
+        saldo,
+        existente: efectivoExistente,
+        activo: {
+          ...(efectivoExistente ?? {}),
+          name: nombreEfectivo,
+          cat: "liquidez",
+          currency: "EUR",
+          unit: "€",
+          // REGLA 1: en el efectivo el coste ES el saldo. Nunca un coste a 0,
+          // que convertiria cada ingreso en una plusvalia inventada.
+          mode: "manual" as const,
+          manual_qty: saldo,
+          manual_cost_unit: 1,
+          manual_price: 1,
+        },
+      }
+    : undefined;
+
   return {
     lectura,
     planeadas,
@@ -342,5 +418,6 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
     totalCompras: suma(["buy"]),
     totalVentas: suma(["sell"]),
     totalCobros: suma(["dividend", "interest"]),
+    efectivo,
   };
 }
