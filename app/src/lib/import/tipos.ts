@@ -32,6 +32,9 @@ export interface FilaImportada {
   isin?: string;
   ticker?: string;
   nombre?: string;
+  /** Categoría que el bróker ya sabe («CRYPTO», «STOCK»…). Cuando viene, vale
+   *  más que adivinarla por la forma del ISIN. */
+  categoria?: string;
   cantidad?: number;
   precio?: number;
   total: number;

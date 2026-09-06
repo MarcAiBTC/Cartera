@@ -203,6 +203,9 @@ function tasaEn(divisa: string, fechaOp: string, fx: MapaFx, hist?: FxHistorico)
 
 /** Categoría razonable para un activo que aún no existe en la cartera. */
 function categoriaDe(fila: FilaImportada, cat?: EntradaCatalogo): string {
+  // Lo que diga el broker manda: sabe si aquello era una cripto o un warrant,
+  // y aqui solo se podria adivinar por la forma del ISIN.
+  if (fila.categoria) return fila.categoria;
   if (cat?.cat) return cat.cat;
   // Un ISIN de fondo español o luxemburgués sin ticker suele ser fondo; con
   // ticker, un ETF o una acción. No es exacto, pero es el punto de partida
@@ -237,8 +240,16 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
   const planeadas: Planeada[] = [];
   const vistas = new Set<string>();
 
+  // Solo estas tres tocan un valor. Un ingreso, unos intereses o una comision
+  // mueven el saldo y nada mas: si se les deja crear activo, la cartera se
+  // llena de fantasmas llamados «Interest payment for payout collection
+  // 019a3d67-7887-7038-8c06-a7afa4e172f6». Paso de verdad con un extracto de
+  // Trade Republic: 24 de los 41 activos creados eran conceptos bancarios.
+  const TOCA_UN_VALOR = new Set(["buy", "sell", "dividend"]);
+
   for (const fila of lectura.filas) {
-    const clave = (fila.isin || fila.ticker || fila.nombre || "").toUpperCase();
+    const esValor = TOCA_UN_VALOR.has(fila.tipo);
+    const clave = esValor ? (fila.isin || fila.ticker || fila.nombre || "").toUpperCase() : "";
     const existente =
       (fila.isin ? porIsin.get(fila.isin.toUpperCase()) : undefined) ??
       (fila.ticker ? porTicker.get(fila.ticker.toUpperCase()) : undefined);
