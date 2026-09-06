@@ -181,12 +181,25 @@ export interface PuntoBenchmark {
 export async function cargarBenchmark(): Promise<PuntoBenchmark[]> {
   if (hayNube) {
     try {
-      const { data, error } = await supabase!
-        .from("benchmark")
-        .select("date,value")
-        .eq("symbol", "SP500_EUR")
-        .order("date");
-      if (!error && data && data.length > 0) return data as PuntoBenchmark[];
+      // Por paginas de mil. PostgREST corta en 1000 filas por defecto y no
+      // avisa: la serie tiene 1255 dias, asi que una sola consulta devolvia
+      // hasta agosto del ano pasado y la comparacion contra el indice se
+      // hacia contra un cierre de hace doce meses, sin que nada fallara.
+      const PAGINA = 1000;
+      const puntos: PuntoBenchmark[] = [];
+      for (let desde = 0; ; desde += PAGINA) {
+        const { data, error } = await supabase!
+          .from("benchmark")
+          .select("date,value")
+          .eq("symbol", "SP500_EUR")
+          .order("date")
+          .range(desde, desde + PAGINA - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        puntos.push(...(data as PuntoBenchmark[]));
+        if (data.length < PAGINA) break;
+      }
+      if (puntos.length > 0) return puntos;
     } catch {
       /* se prueba el feed */
     }

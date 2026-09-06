@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDatos } from "../lib/datos";
 import { CAT_COLOR, SERIE_COLOR } from "../lib/tipos";
-import { movimientoDelDia, porSubyacente } from "../lib/cartera";
+import { contraIndice, movimientoDelDia, porSubyacente } from "../lib/cartera";
 import { cargarBenchmark, type PuntoBenchmark } from "../lib/precios";
 import { fd, fe, fp, fpc } from "../lib/formato";
 import {
@@ -195,71 +195,58 @@ function ContraElIndice() {
     };
   }, []);
 
-  const comparacion = useMemo(() => {
-    if (!indice || indice.length < 2) return null;
-    const snaps = [...estado.snapshots].sort((a, b) => a.date.localeCompare(b.date));
-    if (snaps.length < 2) return null;
-
-    const desde = snaps[0].date;
-    // El índice del día de arranque, o el primero posterior si ese día no
-    // cotizó.
-    const iDesde = indice.find((p) => p.date >= desde);
-    const iHasta = indice[indice.length - 1];
-    if (!iDesde || !iHasta || iDesde.value <= 0) return null;
-
-    const indicePct = ((iHasta.value - iDesde.value) / iDesde.value) * 100;
-    // La cartera se mide sobre lo aportado, no sobre el coste: si no, cada
-    // aportación nueva contaría como si hubiera perdido dinero.
-    const carteraPct = resumen.gananciaPct;
-    if (carteraPct == null) return null;
-
-    return { desde, indicePct, carteraPct, diferencia: carteraPct - indicePct };
-  }, [indice, estado.snapshots, resumen.gananciaPct]);
+  // Antes esto arrancaba en la primera FOTO guardada de la cartera, que es la
+  // primera vez que abriste la app — no el dia que empezaste a invertir. En
+  // una cuenta recien importada no hay ninguna foto, asi que la tarjeta ni
+  // aparecia teniendo dos anos de operaciones dentro. Ahora arranca en tu
+  // primer movimiento de dinero y replica tus aportaciones sobre el indice.
+  const c = useMemo(
+    () => (indice ? contraIndice(estado.operaciones, indice, resumen.valor) : null),
+    [indice, estado.operaciones, resumen.valor],
+  );
 
   if (indice == null) return null;
 
   return (
     <Tarjeta>
-      <TituloSeccion nota="El índice, en euros: comparar una cartera en euros con uno en dólares mide sobre todo el dólar.">
+      <TituloSeccion nota="Cada aportacion tuya compra indice al precio de SU dia: es la unica forma de comparar cuando se aporta a plazos. En euros, porque comparar una cartera en euros con un indice en dolares mide sobre todo el dolar.">
         Contra el S&amp;P 500
       </TituloSeccion>
 
-      {!comparacion ? (
+      {!c ? (
         <p className="text-[12px] text-fg2">
-          Hacen falta al menos dos días guardados de tu cartera para poder comparar. Se guardan
-          solos según vayas usando la app.
+          Para comparar hacen falta ingresos con fecha. Importa un extracto que los traiga o
+          apuntalos en Historial.
         </p>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Etiqueta>Tu cartera</Etiqueta>
-              <p
-                className={`font-disp text-[22px] font-bold ${
-                  comparacion.carteraPct >= 0 ? "text-up" : "text-dn"
-                }`}
-              >
-                {fp(comparacion.carteraPct)}
+              <p className={`font-disp text-[22px] font-bold ${c.tuyo >= c.indice ? "text-up" : "text-dn"}`}>
+                {fe(c.tuyo)}
               </p>
+              <p className="text-[11.5px] text-fg2">{c.tuyoPct == null ? "" : fp(c.tuyoPct)}</p>
             </div>
             <div>
-              <Etiqueta>S&amp;P 500</Etiqueta>
-              <p className="font-disp text-[22px] font-bold text-fg1">
-                {fp(comparacion.indicePct)}
-              </p>
+              <Etiqueta>Si hubieras comprado el indice</Etiqueta>
+              <p className="font-disp text-[22px] font-bold text-fg1">{fe(c.indice)}</p>
+              <p className="text-[11.5px] text-fg2">{c.indicePct == null ? "" : fp(c.indicePct)}</p>
             </div>
           </div>
+
           <p className="mt-3 border-t border-line pt-3 text-[12.5px] leading-relaxed text-fg1">
-            {comparacion.diferencia >= 0 ? (
+            Desde el {fd(c.desde)} has puesto <strong>{fe(c.aportadoNeto)}</strong>.{" "}
+            {c.diferencia >= 0 ? (
               <>
-                Vas <strong className="text-up">{fp(comparacion.diferencia)}</strong> por delante
-                del índice desde {fd(comparacion.desde)}.
+                Hoy tienes <strong className="text-up">{fe(c.diferencia)}</strong> mas de lo que
+                tendrias comprando el indice con ese mismo dinero y en esas mismas fechas.
               </>
             ) : (
               <>
-                Vas <strong className="text-dn">{fp(comparacion.diferencia)}</strong> por detrás
-                del índice desde {fd(comparacion.desde)}. Comprarlo y olvidarte habría salido
-                mejor.
+                Hoy tienes <strong className="text-dn">{fe(Math.abs(c.diferencia))}</strong> menos
+                de lo que tendrias comprando el indice con ese mismo dinero y en esas mismas
+                fechas. Comprarlo y olvidarte habria salido mejor.
               </>
             )}
           </p>
