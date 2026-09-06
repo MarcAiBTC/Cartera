@@ -17,10 +17,14 @@
          pantalla completa. iOS ignora display/icons del manifest y necesita
          estas tres metas aparte, así que van los dos juegos. -->
     <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Cartera" />
-    <link rel="apple-touch-icon" href="/icono.png?v=1" />
+    <!-- Sin esquinas redondeadas y sin transparencia: el iPhone aplica su propia
+         mascara y pinta de NEGRO lo transparente, asi que un icono ya
+         redondeado sale con las cuatro esquinas negras. -->
+    <link rel="apple-touch-icon" href="/icono-ios.png?v=2" />
     <link rel="icon" href="/icono.svg" type="image/svg+xml" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />

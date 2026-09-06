@@ -9,8 +9,7 @@
   "theme_color": "#f3f1fb",
   "lang": "es",
   "icons": [
-    { "src": "/icono.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icono.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icono.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icono-ios.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
   ]
 }
