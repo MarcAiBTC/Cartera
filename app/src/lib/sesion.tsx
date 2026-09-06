@@ -133,7 +133,24 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
           /* nada que limpiar */
         }
         setLocal(false);
-        if (hayNube) await supabase!.auth.signOut();
+        // Bajar la sesion AQUI y no esperar a que llegue el evento de
+        // Supabase. Si la llamada de abajo falla, el evento no llega nunca y
+        // te quedabas dentro: pulsabas «Cerrar sesion» y no pasaba nada.
+        setUsuario(null);
+        if (!hayNube) return;
+        try {
+          await supabase!.auth.signOut();
+        } catch {
+          // El cierre normal es global: necesita que el servidor reconozca la
+          // sesion, y si ha caducado o no hay red devuelve error. Entonces al
+          // menos se borra la de este dispositivo, que es lo que el usuario
+          // esta pidiendo.
+          try {
+            await supabase!.auth.signOut({ scope: "local" });
+          } catch {
+            /* ya se ha bajado la sesion en memoria: la app esta fuera */
+          }
+        }
       },
     }),
     [cargando, usuario, local, usarLocal],

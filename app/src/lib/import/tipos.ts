@@ -8,6 +8,7 @@ export type Formato =
   | "revolut-csv"
   | "myinvestor-json"
   | "myinvestor-tabla"
+  | "myinvestor-cuenta"
   | "generico-csv"
   | "generico-json"
   | "desconocido";
@@ -17,6 +18,7 @@ export const FORMATO_LBL: Record<Formato, string> = {
   "revolut-csv": "Revolut · extracto de cuenta",
   "myinvestor-json": "MyInvestor · JSON",
   "myinvestor-tabla": "MyInvestor · movimientos",
+  "myinvestor-cuenta": "MyInvestor · extracto de cuenta",
   "generico-csv": "Genérico · CSV/Excel",
   "generico-json": "Genérico · JSON",
   desconocido: "Formato no reconocido",
@@ -40,6 +42,10 @@ export interface FilaImportada {
   total: number;
   comision?: number;
   divisa: string;
+  /** Cambio a euros que trae el PROPIO extracto, si lo trae. Vale mas que el
+   *  historico de divisas: es el que el broker te aplico de verdad ese dia,
+   *  con su margen incluido. Multiplica: importe * cambio = euros. */
+  cambio?: number;
   /** Traspaso entre cuentas propias: no es dinero nuevo */
   traspasoInterno?: boolean;
   nota?: string;

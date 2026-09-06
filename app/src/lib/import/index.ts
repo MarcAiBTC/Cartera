@@ -14,8 +14,10 @@ import { esRevolut, leerRevolut } from "./revolut";
 import { esTradeRepublic, leerTradeRepublic } from "./traderepublic";
 import {
   esMyInvestorJson,
+  esMyInvestorMovimientos,
   esMyInvestorTabla,
   leerMyInvestorJson,
+  leerMyInvestorMovimientos,
   leerMyInvestorTabla,
 } from "./myinvestor";
 import { adivinarMapa, leerGenerico, leerGenericoJson, type Mapa } from "./generico";
@@ -99,6 +101,7 @@ export function detectar(e: Entrada): Formato {
   if (!t || t.filas.length === 0) return "desconocido";
   if (esRevolut(t)) return "revolut-csv";
   if (esMyInvestorTabla(t)) return "myinvestor-tabla";
+  if (esMyInvestorMovimientos(t)) return "myinvestor-cuenta";
   if (esTradeRepublic(t)) return "traderepublic-csv";
   return "generico-csv";
 }
@@ -125,6 +128,8 @@ export function leer(e: Entrada, op: OpcionesLectura = {}): Lectura {
       return leerRevolut(e.tabla!);
     case "myinvestor-tabla":
       return leerMyInvestorTabla(e.tabla!);
+    case "myinvestor-cuenta":
+      return leerMyInvestorMovimientos(e.tabla!);
     case "traderepublic-csv":
       return leerTradeRepublic(e.tabla!);
     case "generico-csv":
@@ -297,7 +302,12 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
     const duplicada = yaImportadas.has(h) || vistas.has(h);
     vistas.add(h);
 
-    const cambio = tasaEn(fila.divisa, fila.fecha, fx, fxHistorico);
+    // El cambio que venga en el extracto gana: es el que el broker aplico
+    // de verdad ese dia, margen incluido. El historico es una aproximacion.
+    const cambio =
+      fila.cambio != null && isFinite(fila.cambio) && fila.cambio > 0
+        ? fila.cambio
+        : tasaEn(fila.divisa, fila.fecha, fx, fxHistorico);
 
     planeadas.push({
       fila,

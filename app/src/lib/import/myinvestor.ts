@@ -180,3 +180,184 @@ export function leerMyInvestorTabla(t: Tabla): Lectura {
 
   return { ...out, filas, descartes };
 }
+
+// ── EL EXTRACTO DE LA CUENTA ─────────────────────────────────────────────
+// Un tercer archivo, distinto de los dos de arriba: Mi cuenta → Movimientos →
+// Descargar. Sale así, con punto y coma y decimales con coma:
+//
+//   Fecha de operación;Fecha de valor;Concepto;Importe;Divisa
+//   30/07/2026;31/07/2026;PICTET-CHINA IX P EUR @ 0.0368;-4,99;EUR
+//   30/07/2026;30/07/2026;Envio de dinero - imaginBank;250;EUR
+//
+// Es el extracto de la CUENTA CORRIENTE, no el de los fondos. Todo cuelga de
+// una sola columna de texto libre —`Concepto`— y hay que deducir de ella si
+// aquello fue una compra de fondo, un ingreso o los intereses del mes.
+//
+// Y hay un detalle que lo condiciona todo: **el concepto viene cortado a 30
+// caracteres**. Cuando el nombre del fondo es corto, el valor liquidativo
+// sobrevive al final («… @ 0.0368») y se puede deducir cuántas
+// participaciones se compraron. Cuando es largo, el corte se lo come:
+//
+//   PICTET-CHINA IX P EUR @ 0.0368   ← 30 caracteres justos, precio salvado
+//   FIDELITY PHYSICAL BITCOIN ET @   ← 30 caracteres, el precio se perdió
+//
+// De ahí que unas compras entren con participaciones y otras no. Las que no,
+// se avisan una a una: el dinero es correcto, lo que falta es el número de
+// participaciones, y eso sólo está en el extracto de fondos.
+
+/** Frases del banco que NO son un valor, con lo que significan. */
+const FRASES: [RegExp, "interest" | "deposit" | "withdrawal" | "fee"][] = [
+  // «PERIODO 11/12/2025 11/01/2026» es la remuneración de la cuenta.
+  [/^periodo\s+\d/i, "interest"],
+  // Bonos por traer a un amigo. Dinero que regala el banco: se cobra igual.
+  [/^promocion/i, "interest"],
+  [/^envio de dinero/i, "deposit"],
+  [/^transferencia/i, "deposit"],
+  [/^movimiento\b/i, "deposit"],
+  [/^comision|^gastos?\b/i, "fee"],
+];
+
+/** El valor liquidativo que el banco pega al final del concepto, si ha
+ *  sobrevivido al corte de 30 caracteres. */
+function precioDelConcepto(concepto: string): number | undefined {
+  const m = concepto.match(/@\s*([\d.,]+)\s*$/);
+  if (!m) return undefined;
+  const v = num(m[1]);
+  return v != null && v > 0 ? v : undefined;
+}
+
+/** Un fondo se reconoce por dos señales, y las dos son del banco:
+ *
+ *   · lleva el «@» del valor liquidativo, aunque el número se haya cortado;
+ *   · o está escrito TODO EN MAYÚSCULAS, que es como el banco escribe los
+ *     nombres de producto y nunca los conceptos que escribes tú.
+ *
+ *  Lo que tecleas al hacer un ingreso («ultimo sueldo», «Inversion Mayo»)
+ *  lleva minúsculas siempre. */
+function pareceFondo(concepto: string): boolean {
+  if (/@/.test(concepto)) return true;
+  const sinPrecio = concepto.replace(/@.*$/, "").trim();
+  if (sinPrecio.length < 6) return false;
+  if (/[a-z]/.test(sinPrecio)) return false;
+  return /[A-Z]{3}/.test(sinPrecio) && sinPrecio.split(/\s+/).length >= 2;
+}
+
+export function esMyInvestorMovimientos(t: Tabla): boolean {
+  const h = t.cabeceras.join(" ");
+  return (
+    /fecha de (la )?operaci/.test(h) &&
+    h.includes("concepto") &&
+    h.includes("importe") &&
+    // El de fondos trae ISIN y participaciones; ése lo lee el otro lector.
+    !h.includes("isin")
+  );
+}
+
+export function leerMyInvestorMovimientos(t: Tabla): Lectura {
+  const out = lecturaVacia("myinvestor-cuenta", "MyInvestor");
+  const filas: FilaImportada[] = [];
+  const descartes: Descarte[] = [];
+  /** Fondos cuyas compras entran sin participaciones, agrupados por nombre. */
+  const sinParticipaciones = new Map<string, { veces: number; euros: number; linea: number }>();
+
+  t.filas.forEach((f, i) => {
+    const linea = t.lineas[i] ?? i + 2;
+    const crudo = Object.values(f).join(" · ");
+
+    const d = fecha(campo(f, "fecha de operación", "fecha de la operación", "fecha"), "dmy");
+    if (!d) {
+      descartes.push({ linea, motivo: "Sin fecha reconocible", crudo });
+      return;
+    }
+
+    const concepto = (campo(f, "concepto", "descripción", "description") ?? "").trim();
+    const importe = num(campo(f, "importe", "amount"));
+    const divisa = (campo(f, "divisa", "currency") ?? "EUR").toUpperCase();
+
+    if (importe == null || importe === 0) {
+      // Las filas a cero son cortes de extracto, no movimientos.
+      descartes.push({ linea, motivo: "Sin importe", crudo: crudo || "(fila vacía)" });
+      return;
+    }
+
+    // ── ¿Efectivo o fondo? ──────────────────────────────────────────────
+    const frase = FRASES.find(([re]) => re.test(concepto));
+    if (frase) {
+      const tipo = frase[1];
+      // «PROMOCION …» en negativo no es un cobro: es que lo retiraron.
+      const real =
+        tipo === "interest" && importe < 0
+          ? "withdrawal"
+          : tipo === "deposit" && importe < 0
+            ? "withdrawal"
+            : tipo;
+      filas.push({
+        linea,
+        fecha: d,
+        tipo: real,
+        total: Math.abs(importe),
+        divisa,
+        nota: concepto,
+      });
+      return;
+    }
+
+    if (pareceFondo(concepto)) {
+      const nombre = concepto.replace(/@.*$/, "").trim();
+      const precio = precioDelConcepto(concepto);
+      const total = Math.abs(importe);
+      // Negativo es dinero que sale de la cuenta: has comprado.
+      const tipo: TipoOperacion = importe < 0 ? "buy" : "sell";
+
+      filas.push({
+        linea,
+        fecha: d,
+        tipo,
+        nombre,
+        categoria: "fondo",
+        cantidad: precio != null ? total / precio : undefined,
+        precio,
+        total,
+        divisa,
+        nota: concepto,
+      });
+
+      if (precio == null) {
+        // No es un descarte —la fila entra y el dinero es correcto— pero hay
+        // que decirlo. Se acumula por fondo y se avisa UNA vez al final: un
+        // aviso por fila serían 119 líneas iguales, y un listado que nadie lee
+        // esconde los avisos que sí importan.
+        const acc = sinParticipaciones.get(nombre) ?? { veces: 0, euros: 0, linea };
+        acc.veces += 1;
+        acc.euros += total;
+        sinParticipaciones.set(nombre, acc);
+      }
+      return;
+    }
+
+    // Texto libre: lo que tú escribiste al mover el dinero. Manda el signo.
+    filas.push({
+      linea,
+      fecha: d,
+      tipo: importe > 0 ? "deposit" : "withdrawal",
+      total: Math.abs(importe),
+      divisa,
+      nota: concepto || undefined,
+    });
+  });
+
+  for (const [nombre, a] of sinParticipaciones) {
+    descartes.push({
+      linea: a.linea,
+      motivo:
+        `«${nombre}»: ${a.veces} compras por ${a.euros.toFixed(2)} € entran con el importe ` +
+        `correcto pero SIN participaciones. MyInvestor corta el concepto a 30 caracteres y en ` +
+        `este fondo el corte se come el valor liquidativo. Apunta las participaciones en ` +
+        `Historial → Posiciones, o importa el extracto de fondos (Mi cartera → Movimientos), ` +
+        `que sí las trae`,
+      crudo: `${a.veces} líneas del archivo`,
+    });
+  }
+
+  return { ...out, filas, descartes };
+}

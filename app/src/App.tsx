@@ -4,7 +4,7 @@
 // centrada en vez de estirarse — una tabla de posiciones de 1.400 px de ancho
 // no se lee mejor, se lee peor.
 
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, type ReactNode , useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useSesion } from "./lib/sesion";
 import { useDatos } from "./lib/datos";
@@ -71,7 +71,6 @@ function Navegacion() {
 
 function BarraSuperior() {
   const { mercado } = useDatos();
-  const { usuario, local } = useSesion();
 
   const edad = mercado.actualizado ? Date.now() - Date.parse(mercado.actualizado) : null;
   const frescura =
@@ -101,11 +100,69 @@ function BarraSuperior() {
         >
           {frescura}
         </span>
-        <span className="rounded-full bg-bg2 px-2 py-0.5">
-          {local ? "este dispositivo" : (usuario?.email?.split("@")[0] ?? "cuenta")}
-        </span>
+        <MenuCuenta />
       </div>
     </header>
+  );
+}
+
+/** El nombre de la cuenta, y detras la unica forma de salir de ella.
+ *
+ *  Antes esto era una etiqueta muerta y «Cerrar sesion» vivia en Ajustes,
+ *  al final del todo. Cambiar de cuenta —o pasar del modo local a la cuenta
+ *  de verdad— era imposible de encontrar. */
+function MenuCuenta() {
+  const { usuario, local, salir } = useSesion();
+  const [abierto, setAbierto] = useState(false);
+
+  const nombre = local ? "este dispositivo" : (usuario?.email?.split("@")[0] ?? "cuenta");
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setAbierto((v) => !v)}
+        aria-expanded={abierto}
+        aria-haspopup="menu"
+        className="rounded-full bg-bg2 px-2 py-0.5 text-[10px] font-semibold text-fg2 transition-colors hover:bg-bg3 hover:text-fg1"
+      >
+        {nombre} ▾
+      </button>
+
+      {abierto && (
+        <>
+          {/* Una capa que cubre la pantalla: tocar fuera cierra el menu, que
+              en el movil es como se espera que funcione. */}
+          <button
+            className="fixed inset-0 z-40 cursor-default"
+            aria-label="Cerrar el menu"
+            onClick={() => setAbierto(false)}
+          />
+          <div
+            role="menu"
+            className="absolute right-0 z-50 mt-1.5 w-60 overflow-hidden rounded-[14px] border border-line2 bg-bg1 shadow-[0_12px_32px_rgba(39,33,74,0.16)]"
+          >
+            <div className="border-b border-line px-3.5 py-2.5">
+              <p className="text-[9.5px] font-bold uppercase tracking-[0.08em] text-fg3">
+                {local ? "Sin cuenta" : "Has entrado como"}
+              </p>
+              <p className="truncate text-[12.5px] font-semibold text-fg0">
+                {local ? "Los datos solo estan en este dispositivo" : (usuario?.email ?? "")}
+              </p>
+            </div>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setAbierto(false);
+                void salir();
+              }}
+              className="block w-full px-3.5 py-2.5 text-left text-[12.5px] font-semibold text-dn transition-colors hover:bg-bg2"
+            >
+              {local ? "Salir y entrar con una cuenta" : "Cerrar sesion"}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

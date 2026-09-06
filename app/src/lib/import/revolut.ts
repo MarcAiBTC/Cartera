@@ -33,18 +33,84 @@ const CODIGOS: Record<string, TipoOperacion | null> = {
   SSO: null,
   MAS: null,
   SC: null,
+
+  // ── Formato nuevo, con el tipo escrito entero ──
+  "BUY - MARKET": "buy",
+  "BUY - LIMIT": "buy",
+  "BUY - STOP": "buy",
+  "SELL - MARKET": "sell",
+  "SELL - LIMIT": "sell",
+  "SELL - STOP": "sell",
+  "CASH TOP-UP": "deposit",
+  "CASH WITHDRAWAL": "withdrawal",
+  DIVIDEND: "dividend",
+  "CUSTODY FEE": "fee",
+  "STOCK SPLIT": null,
+  "MERGER - STOCK": null,
 };
 
 export function esRevolut(t: Tabla): boolean {
   const h = t.cabeceras.join(" ");
+  // El formato antiguo, con codigos en «Activity Type».
   if (h.includes("activity type")) return true;
-  return h.includes("trade date") && h.includes("settle date");
+  if (h.includes("trade date") && h.includes("settle date")) return true;
+
+  // El formato NUEVO de Revolut Invest:
+  //   Date,Ticker,Type,Quantity,Price per share,Total Amount,Currency,FX Rate
+  // No trae ni «activity type» ni «trade date», asi que antes no lo reconocia
+  // nadie y el archivo acababa en el importador generico.
+  if (h.includes("price per share") && h.includes("total amount")) return true;
+
+  // Y el extracto de la cuenta corriente en espanol, que es otro archivo
+  // distinto: «Tipo,Producto,Fecha de inicio,…,Saldo».
+  if (h.includes("fecha de inicio") && h.includes("saldo") && h.includes("producto")) return true;
+
+  return false;
 }
+
+/** Divisas que en realidad son metal: Revolut deja comprar oro y plata como
+ *  si fueran moneda, y en el extracto salen con su codigo ISO. */
+const METALES: Record<string, string> = {
+  XAU: "Oro",
+  XAG: "Plata",
+  XPT: "Platino",
+  XPD: "Paladio",
+};
 
 export function leerRevolut(t: Tabla): Lectura {
   const out = lecturaVacia("revolut-csv", "Revolut");
   const filas: FilaImportada[] = [];
   const descartes: Descarte[] = [];
+
+  // ── El extracto de la cuenta corriente ────────────────────────────────
+  // Es otro archivo distinto del de Inversiones, y tiene un problema que no
+  // se puede arreglar leyendolo mejor: cuando compras oro, la fila dice
+  // cuantas onzas entraron pero NO cuantos euros salieron. Sin ese dato no
+  // hay coste, y sin coste no hay ni ganancia ni aportado.
+  //
+  // Lo unico util que se puede hacer es decir exactamente cuanto metal hay
+  // —la columna Saldo lleva el acumulado— para poder apuntarlo a mano.
+  const saldos = new Map<string, { cantidad: number; veces: number; linea: number }>();
+  for (let i = 0; i < t.filas.length; i++) {
+    const f = t.filas[i];
+    const divisa = (campo(f, "divisa", "currency") ?? "").toUpperCase();
+    if (!METALES[divisa]) continue;
+    const saldo = num(campo(f, "saldo", "balance"));
+    if (saldo == null) continue;
+    // El ultimo saldo de cada metal es el que vale: es acumulado.
+    saldos.set(divisa, { cantidad: saldo, veces: (saldos.get(divisa)?.veces ?? 0) + 1, linea: t.lineas[i] ?? i + 2 });
+  }
+  for (const [divisa, s] of saldos) {
+    descartes.push({
+      linea: s.linea,
+      motivo:
+        `${s.veces} compras de ${METALES[divisa]} (${divisa}). Este extracto dice cuanto ` +
+        `metal entro —te quedan ${s.cantidad} onzas— pero NO cuantos euros pagaste, asi que ` +
+        `no se puede calcular ni el coste ni la ganancia. Anade la posicion en ` +
+        `Historial → Posiciones con esas ${s.cantidad} onzas y lo que te costo`,
+      crudo: `${divisa} · saldo ${s.cantidad}`,
+    });
+  }
 
   t.filas.forEach((f, i) => {
     const linea = t.lineas[i] ?? i + 2;
@@ -66,6 +132,9 @@ export function leerRevolut(t: Tabla): Lectura {
       tipo = clasificar(codigo) ?? clasificar(campo(f, "description", "descripción"));
     }
     if (!tipo) {
+      // Las de metal ya se han contado arriba, en una sola linea por metal.
+      const divisaFila = (campo(f, "divisa", "currency") ?? "").toUpperCase();
+      if (METALES[divisaFila]) return;
       descartes.push({ linea, motivo: `Tipo «${codigo}» no reconocido`, crudo });
       return;
     }
@@ -77,6 +146,13 @@ export function leerRevolut(t: Tabla): Lectura {
     const bruto = num(campo(f, "amount", "importe", "value", "total"));
     const divisa = (campo(f, "currency", "divisa", "ccy") ?? "EUR").toUpperCase();
     const comision = num(campo(f, "fees", "commission", "comisión"));
+
+    // Revolut opera en dolares y dice a que cambio lo hizo. Ese numero vale
+    // mas que el historico de divisas: es el que te aplico de verdad, con su
+    // margen dentro. Viene como «cuantos USD por euro», asi que para pasar a
+    // euros hay que dividir.
+    const fxFila = num(campo(f, "fx rate", "tipo de cambio", "exchange rate"));
+    const cambio = fxFila != null && fxFila > 0 ? 1 / fxFila : undefined;
 
     let total = bruto != null ? Math.abs(bruto) : undefined;
     if (total == null && cantidad != null && precio != null) total = Math.abs(cantidad * precio);
@@ -101,6 +177,7 @@ export function leerRevolut(t: Tabla): Lectura {
       total,
       comision: comision != null ? Math.abs(comision) : undefined,
       divisa,
+      cambio,
       nota: codigo || undefined,
     });
   });
