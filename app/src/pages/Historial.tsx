@@ -53,15 +53,27 @@ export default function Historial() {
 // ════════════════════════════════════════════════════════════════════════
 
 function Movimientos() {
-  const { estado, borrar } = useDatos();
+  const { estado, realizadas, borrar } = useDatos();
   const [tipo, setTipo] = useState<TipoOperacion | "todos">("todos");
   const [anio, setAnio] = useState<string>("todos");
+  const [cuenta, setCuenta] = useState<string>("todas");
   const [editando, setEditando] = useState<Operacion | null>(null);
   const [nueva, setNueva] = useState(false);
 
   const activos = useMemo(
     () => new Map(estado.activos.map((a) => [a.id, a])),
     [estado.activos],
+  );
+
+  const cuentas = useMemo(
+    () => new Map(estado.cuentas.map((c) => [c.id, c])),
+    [estado.cuentas],
+  );
+
+  /** Lo que se gano o se perdio en cada venta, por id de operacion. */
+  const resultados = useMemo(
+    () => new Map(realizadas.map((r) => [r.opId, r])),
+    [realizadas],
   );
 
   const anios = useMemo(
@@ -74,8 +86,14 @@ function Movimientos() {
       estado.operaciones
         .filter((o) => (tipo === "todos" ? true : o.type === tipo))
         .filter((o) => (anio === "todos" ? true : o.date.startsWith(anio)))
+        // «sin-cuenta» son los movimientos apuntados a mano antes de que
+        // hubiera ninguna cuenta: si no salieran en ningun filtro, se
+        // perderian de vista sin que nadie los borrara.
+        .filter((o) =>
+          cuenta === "todas" ? true : cuenta === "sin-cuenta" ? !o.account_id : o.account_id === cuenta,
+        )
         .sort((a, b) => b.date.localeCompare(a.date)),
-    [estado.operaciones, tipo, anio],
+    [estado.operaciones, tipo, anio, cuenta],
   );
 
   // Las cifras de cabecera se calculan sobre lo FILTRADO: si miras 2026, los
@@ -84,17 +102,35 @@ function Movimientos() {
     let entrada = 0;
     let salida = 0;
     let cobros = 0;
+    let resultado = 0;
     for (const o of lista) {
       const eur = o.total_eur ?? o.total;
       if (o.type === "buy" || o.type === "deposit") entrada += eur;
       else if (o.type === "sell" || o.type === "withdrawal") salida += eur;
       else if (o.type === "dividend" || o.type === "interest") cobros += eur;
+      // El resultado de una venta no es lo que cobraste: es lo que cobraste
+      // menos lo que te habia costado. Es la cifra que dice si ganaste.
+      if (o.type === "sell") resultado += resultados.get(o.id)?.resultado ?? 0;
     }
-    return { entrada, salida, cobros };
-  }, [lista]);
+    return { entrada, salida, cobros, resultado, hayVentas: lista.some((o) => o.type === "sell") };
+  }, [lista, resultados]);
 
   return (
     <>
+      {estado.cuentas.length > 0 && (
+        <Selector
+          valor={cuenta}
+          onChange={setCuenta}
+          opciones={[
+            { valor: "todas", texto: "Todas las plataformas" },
+            ...estado.cuentas.map((c) => ({ valor: c.id, texto: c.name || c.broker })),
+            ...(estado.operaciones.some((o) => !o.account_id)
+              ? [{ valor: "sin-cuenta", texto: "Sin plataforma" }]
+              : []),
+          ]}
+        />
+      )}
+
       <div className="grid grid-cols-2 gap-2">
         <Selector
           valor={tipo}
@@ -117,10 +153,17 @@ function Movimientos() {
         />
       </div>
 
-      <Tarjeta className="grid grid-cols-3 gap-2 text-center">
+      <Tarjeta className={`grid ${totales.hayVentas ? "grid-cols-4" : "grid-cols-3"} gap-2 text-center`}>
         <Mini t="Invertido" v={fe(totales.entrada, 0)} />
         <Mini t="Recuperado" v={fe(totales.salida, 0)} />
         <Mini t="Cobrado" v={fe(totales.cobros, 0)} tono="up" />
+        {totales.hayVentas && (
+          <Mini
+            t="Resultado"
+            v={fe(totales.resultado, 0)}
+            tono={totales.resultado >= 0 ? "up" : "dn"}
+          />
+        )}
       </Tarjeta>
 
       <Boton tipo="principal" onClick={() => setNueva(true)} className="w-full">
@@ -142,25 +185,54 @@ function Movimientos() {
               >
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-semibold text-fg0">
-                    {activos.get(o.asset_id ?? "")?.name ?? "Sin activo"}
+                    {/* Un ingreso o unos intereses no pertenecen a ningun
+                        valor, y titular esa fila «Sin activo» no dice nada:
+                        mejor lo que es. */}
+                    {activos.get(o.asset_id ?? "")?.name ?? OP_LBL[o.type]}
                   </span>
                   <span className="text-[11px] text-fg2">
                     {fd(o.date)} · {OP_LBL[o.type]}
                     {o.is_internal_transfer && " · traspaso"}
                     {o.quantity ? ` · ${fn(o.quantity, 4)}` : ""}
-                    {o.source === "import" && " · importado"}
+                  </span>
+                  {/* La plataforma en su propia linea y con marca: con dos
+                      brokers en la misma lista, saber de cual viene cada
+                      movimiento es la mitad de la informacion. */}
+                  <span className="mt-0.5 flex items-center gap-1.5 text-[10.5px] text-fg3">
+                    <span className="rounded-full bg-bg3 px-1.5 py-0.5 font-semibold text-fg2">
+                      {cuentas.get(o.account_id ?? "")?.name ??
+                        cuentas.get(o.account_id ?? "")?.broker ??
+                        "Sin plataforma"}
+                    </span>
+                    {o.source === "import" && <span>importado</span>}
                   </span>
                 </span>
-                <span
-                  className={`shrink-0 text-[13px] font-bold ${
-                    o.type === "dividend" || o.type === "interest"
-                      ? "text-up"
-                      : o.type === "sell" || o.type === "withdrawal"
-                        ? "text-fg1"
-                        : "text-fg0"
-                  }`}
-                >
-                  {fe(o.total_eur ?? o.total, 2)}
+                <span className="shrink-0 text-right">
+                  <span
+                    className={`block text-[13px] font-bold ${
+                      o.type === "dividend" || o.type === "interest"
+                        ? "text-up"
+                        : o.type === "sell" || o.type === "withdrawal"
+                          ? "text-fg1"
+                          : "text-fg0"
+                    }`}
+                  >
+                    {fe(o.total_eur ?? o.total, 2)}
+                  </span>
+                  {/* Lo que de verdad ganaste o perdiste con esa venta: lo
+                      cobrado menos lo que te habia costado el lote. El
+                      importe de arriba no lo dice — vender 200 EUR puede ser
+                      una ganancia o un desastre. */}
+                  {o.type === "sell" && resultados.has(o.id) && (
+                    <span
+                      className={`block text-[11px] font-semibold ${
+                        (resultados.get(o.id)?.resultado ?? 0) >= 0 ? "text-up" : "text-dn"
+                      }`}
+                    >
+                      {(resultados.get(o.id)?.resultado ?? 0) >= 0 ? "+" : ""}
+                      {fe(resultados.get(o.id)?.resultado ?? 0, 2)}
+                    </span>
+                  )}
                 </span>
               </button>
             </li>
@@ -194,11 +266,15 @@ function Movimientos() {
   );
 }
 
-function Mini({ t, v, tono }: { t: string; v: string; tono?: "up" }) {
+function Mini({ t, v, tono }: { t: string; v: string; tono?: "up" | "dn" }) {
   return (
     <div>
       <Etiqueta>{t}</Etiqueta>
-      <p className={`font-disp text-[15px] font-bold ${tono === "up" ? "text-up" : "text-fg0"}`}>
+      <p
+        className={`font-disp text-[15px] font-bold ${
+          tono === "up" ? "text-up" : tono === "dn" ? "text-dn" : "text-fg0"
+        }`}
+      >
         {v}
       </p>
     </div>

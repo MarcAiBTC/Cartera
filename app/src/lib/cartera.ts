@@ -105,6 +105,10 @@ export function estadoPrecio(a: Activo, precios: MapaPrecios): EstadoPrecio {
 /** Una venta ya cerrada, con el coste del lote que se consumió. Es lo que
  *  alimenta tanto la ganancia realizada como la pantalla Fiscal. */
 export interface Realizada {
+  /** La venta que la genero. Emparejar por activo+fecha se rompe con dos
+   *  ventas del mismo valor el mismo dia, que es justo lo que hace un
+   *  extracto cuando la orden se ejecuta en varios trozos. */
+  opId: string;
   assetId: string;
   fecha: string;
   qty: number;
@@ -207,6 +211,7 @@ export function calcularFifo(operaciones: Operacion[]): {
       s.coste = Math.max(0, s.coste - costeConsumido);
 
       realizadas.push({
+        opId: o.id,
         assetId: o.asset_id,
         fecha: o.date,
         qty: o.quantity ?? vendido,
