@@ -5,10 +5,12 @@
 import { useState } from "react";
 import { useSesion } from "../lib/sesion";
 import { useDatos } from "../lib/datos";
+import type { Alcance } from "../lib/almacen";
 import { hoyISO } from "../lib/formato";
 import {
   Aviso,
   Boton,
+  Campo,
   Etiqueta,
   Segmentos,
   Tarjeta,
@@ -151,6 +153,119 @@ export default function Ajustes() {
           {almacen.tipo === "nube" ? "Cerrar sesión" : "Salir del modo local"}
         </Boton>
       </Tarjeta>
+
+      <ZonaPeligrosa onExportar={exportar} />
     </div>
+  );
+}
+
+// ── BORRAR ────────────────────────────────────────────────────────────────
+// Lo unico de la app que no tiene deshacer. Por eso: la cifra de lo que se va
+// por delante, la copia de seguridad a un toque, y una palabra que hay que
+// escribir. Un boton rojo con un «¿seguro?» se pulsa dos veces sin leerlo.
+
+const PALABRA = "BORRAR";
+
+function ZonaPeligrosa({ onExportar }: { onExportar: () => void }) {
+  const { estado, vaciar } = useDatos();
+  const [alcance, setAlcance] = useState<Alcance | null>(null);
+  const [escrito, setEscrito] = useState("");
+  const [borrando, setBorrando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const cuentas = estado.cuentas.length;
+  const activos = estado.activos.length;
+  const operaciones = estado.operaciones.length;
+  const extras = estado.seguimiento.length + estado.objetivos.length;
+  const vacia = cuentas + activos + operaciones + extras === 0;
+
+  async function confirmar() {
+    if (!alcance || escrito.trim().toUpperCase() !== PALABRA) return;
+    setBorrando(true);
+    setError(null);
+    try {
+      await vaciar(alcance);
+      setAlcance(null);
+      setEscrito("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se ha podido borrar");
+    } finally {
+      setBorrando(false);
+    }
+  }
+
+  return (
+    <Tarjeta>
+      <TituloSeccion nota="Esto no se puede deshacer. Exporta antes si tienes dudas.">
+        Borrar datos
+      </TituloSeccion>
+
+      {vacia ? (
+        <p className="text-[12px] text-fg2">No hay nada que borrar.</p>
+      ) : !alcance ? (
+        <div className="flex flex-col gap-2">
+          <Boton tipo="suave" onClick={() => setAlcance("cartera")}>
+            Vaciar la cartera
+          </Boton>
+          <p className="text-[11.5px] leading-relaxed text-fg2">
+            Se van {operaciones} movimientos, {activos} activos y {cuentas}{" "}
+            {cuentas === 1 ? "cuenta" : "cuentas"}. Se quedan tus objetivos, tu lista de
+            seguimiento y los ajustes: eso no viene en ningun extracto y volver a montarlo
+            cuesta.
+          </p>
+
+          <Boton tipo="peligro" onClick={() => setAlcance("todo")} className="mt-1">
+            Borrarlo todo y empezar de cero
+          </Boton>
+          <p className="text-[11.5px] leading-relaxed text-fg2">
+            Todo lo anterior y ademas el seguimiento, los objetivos y el cashflow. La cuenta
+            sigue existiendo: lo que se vacia son los datos.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <Aviso tono="error">
+            {alcance === "cartera"
+              ? `Vas a borrar ${operaciones} movimientos, ${activos} activos y ${cuentas} ${cuentas === 1 ? "cuenta" : "cuentas"}.`
+              : `Vas a borrar TODO: ${operaciones} movimientos, ${activos} activos, ${cuentas} ${cuentas === 1 ? "cuenta" : "cuentas"} y ${extras} entradas de seguimiento y objetivos.`}{" "}
+            No hay vuelta atras.
+          </Aviso>
+
+          <Boton tipo="suave" onClick={onExportar}>
+            Descargar una copia antes
+          </Boton>
+
+          <Campo
+            etiqueta={`Escribe ${PALABRA} para confirmar`}
+            valor={escrito}
+            onChange={setEscrito}
+            placeholder={PALABRA}
+          />
+
+          {error && <Aviso tono="error">{error}</Aviso>}
+
+          <div className="flex gap-2">
+            <Boton
+              tipo="suave"
+              onClick={() => {
+                setAlcance(null);
+                setEscrito("");
+                setError(null);
+              }}
+            >
+              Cancelar
+            </Boton>
+            <Boton
+              tipo="peligro"
+              className="flex-1"
+              disabled={borrando || escrito.trim().toUpperCase() !== PALABRA}
+              onClick={() => void confirmar()}
+            >
+              {borrando ? "Borrando…" : "Borrar definitivamente"}
+            </Boton>
+          </div>
+        </div>
+      )}
+    </Tarjeta>
   );
 }

@@ -53,7 +53,10 @@ export default function Historial() {
 // ════════════════════════════════════════════════════════════════════════
 
 function Movimientos() {
-  const { estado, realizadas, borrar } = useDatos();
+  const { estado, realizadas, borrar, borrarVarios } = useDatos();
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [modoSeleccion, setModoSeleccion] = useState(false);
+  const [borrando, setBorrando] = useState(false);
   const [tipo, setTipo] = useState<TipoOperacion | "todos">("todos");
   const [anio, setAnio] = useState<string>("todos");
   const [cuenta, setCuenta] = useState<string>("todas");
@@ -115,6 +118,26 @@ function Movimientos() {
     return { entrada, salida, cobros, resultado, hayVentas: lista.some((o) => o.type === "sell") };
   }, [lista, resultados]);
 
+  async function borrarSeleccion() {
+    if (seleccion.size === 0) return;
+    setBorrando(true);
+    try {
+      await borrarVarios("operations", [...seleccion]);
+      setSeleccion(new Set());
+      setModoSeleccion(false);
+    } finally {
+      setBorrando(false);
+    }
+  }
+
+  const alterna = (id: string) =>
+    setSeleccion((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
   return (
     <>
       {estado.cuentas.length > 0 && (
@@ -166,9 +189,32 @@ function Movimientos() {
         )}
       </Tarjeta>
 
-      <Boton tipo="principal" onClick={() => setNueva(true)} className="w-full">
-        Apuntar un movimiento
-      </Boton>
+      {modoSeleccion && (
+        <BarraSeleccion
+          n={seleccion.size}
+          total={lista.length}
+          que="movimientos"
+          borrando={borrando}
+          onTodos={() => setSeleccion(new Set(lista.map((o) => o.id)))}
+          onNinguno={() => setSeleccion(new Set())}
+          onBorrar={() => void borrarSeleccion()}
+        />
+      )}
+
+      <div className="flex gap-2">
+        <Boton tipo="principal" onClick={() => setNueva(true)} className="flex-1">
+          Apuntar un movimiento
+        </Boton>
+        <Boton
+          tipo="suave"
+          onClick={() => {
+            setModoSeleccion((v) => !v);
+            setSeleccion(new Set());
+          }}
+        >
+          {modoSeleccion ? "Cancelar" : "Seleccionar"}
+        </Boton>
+      </div>
 
       {lista.length === 0 ? (
         <Vacio
@@ -180,9 +226,23 @@ function Movimientos() {
           {lista.slice(0, 300).map((o) => (
             <li key={o.id}>
               <button
-                onClick={() => setEditando(o)}
-                className="tile flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-bg2"
+                onClick={() => (modoSeleccion ? alterna(o.id) : setEditando(o))}
+                className={`tile flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-bg2 ${
+                  modoSeleccion && seleccion.has(o.id) ? "ring-2 ring-dn" : ""
+                }`}
               >
+                {modoSeleccion && (
+                  <span
+                    aria-hidden
+                    className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-[6px] border text-[10px] font-bold ${
+                      seleccion.has(o.id)
+                        ? "border-dn bg-dn text-white"
+                        : "border-line3 text-transparent"
+                    }`}
+                  >
+                    ✓
+                  </span>
+                )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-semibold text-fg0">
                     {/* Un ingreso o unos intereses no pertenecen a ningun
@@ -263,6 +323,47 @@ function Movimientos() {
         }
       />
     </>
+  );
+}
+
+
+// ── SELECCIONAR PARA BORRAR ──────────────────────────────────────────────
+// Borrar de uno en uno una importacion de doscientas lineas no es una opcion,
+// y vaciar la cartera entera para quitar cuatro filas, tampoco. Esto es el
+// termino medio: marcar y borrar lo marcado.
+
+function BarraSeleccion({
+  n,
+  total,
+  onTodos,
+  onNinguno,
+  onBorrar,
+  borrando,
+  que,
+}: {
+  n: number;
+  total: number;
+  onTodos: () => void;
+  onNinguno: () => void;
+  onBorrar: () => void;
+  borrando: boolean;
+  que: string;
+}) {
+  return (
+    <div className="sticky top-[46px] z-20 flex items-center gap-2 rounded-[14px] border border-line2 bg-bg1 px-3 py-2 shadow-[0_6px_18px_rgba(39,33,74,0.10)]">
+      <span className="flex-1 text-[12px] font-semibold text-fg1">
+        {n === 0 ? `Marca los ${que} que quieras borrar` : `${n} de ${total}`}
+      </span>
+      <button
+        onClick={n === total ? onNinguno : onTodos}
+        className="rounded-full bg-bg3 px-2.5 py-1 text-[11px] font-semibold text-fg1 transition-colors hover:bg-bg4"
+      >
+        {n === total ? "Ninguno" : "Todos"}
+      </button>
+      <Boton tipo="peligro" disabled={n === 0 || borrando} onClick={onBorrar}>
+        {borrando ? "Borrando…" : `Borrar ${n || ""}`.trim()}
+      </Boton>
+    </div>
   );
 }
 
@@ -446,15 +547,69 @@ function FormOperacion({
 // ════════════════════════════════════════════════════════════════════════
 
 function Posiciones() {
-  const { posiciones, borrar } = useDatos();
+  const { estado, posiciones, borrar, borrarVarios } = useDatos();
   const [editando, setEditando] = useState<Activo | null>(null);
   const [nuevo, setNuevo] = useState(false);
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [modoSeleccion, setModoSeleccion] = useState(false);
+  const [borrando, setBorrando] = useState(false);
+
+  async function borrarSeleccion() {
+    if (seleccion.size === 0) return;
+    setBorrando(true);
+    try {
+      // Las operaciones primero: un activo con movimientos colgando no se
+      // puede borrar, y si no se limpian quedaria un historial huerfano que
+      // no se ve en ninguna pantalla.
+      const ids = [...seleccion];
+      const ops = estado.operaciones
+        .filter((o) => o.asset_id != null && seleccion.has(o.asset_id))
+        .map((o) => o.id);
+      if (ops.length) await borrarVarios("operations", ops);
+      await borrarVarios("assets", ids);
+      setSeleccion(new Set());
+      setModoSeleccion(false);
+    } finally {
+      setBorrando(false);
+    }
+  }
+
+  const alterna = (id: string) =>
+    setSeleccion((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
 
   return (
     <>
-      <Boton tipo="principal" onClick={() => setNuevo(true)} className="w-full">
-        Añadir un activo o una cuenta
-      </Boton>
+      {modoSeleccion && (
+        <BarraSeleccion
+          n={seleccion.size}
+          total={posiciones.length}
+          que="activos"
+          borrando={borrando}
+          onTodos={() => setSeleccion(new Set(posiciones.map((p) => p.activo.id)))}
+          onNinguno={() => setSeleccion(new Set())}
+          onBorrar={() => void borrarSeleccion()}
+        />
+      )}
+
+      <div className="flex gap-2">
+        <Boton tipo="principal" onClick={() => setNuevo(true)} className="flex-1">
+          Añadir un activo o una cuenta
+        </Boton>
+        <Boton
+          tipo="suave"
+          onClick={() => {
+            setModoSeleccion((v) => !v);
+            setSeleccion(new Set());
+          }}
+        >
+          {modoSeleccion ? "Cancelar" : "Seleccionar"}
+        </Boton>
+      </div>
 
       {posiciones.length === 0 ? (
         <Vacio titulo="Sin posiciones" texto="Importa un archivo o añade la primera a mano." />
@@ -463,9 +618,23 @@ function Posiciones() {
           {posiciones.map((p) => (
             <li key={p.activo.id}>
               <button
-                onClick={() => setEditando(p.activo)}
-                className="tile flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-bg2"
+                onClick={() => (modoSeleccion ? alterna(p.activo.id) : setEditando(p.activo))}
+                className={`tile flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-bg2 ${
+                  modoSeleccion && seleccion.has(p.activo.id) ? "ring-2 ring-dn" : ""
+                }`}
               >
+                {modoSeleccion && (
+                  <span
+                    aria-hidden
+                    className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-[6px] border text-[10px] font-bold ${
+                      seleccion.has(p.activo.id)
+                        ? "border-dn bg-dn text-white"
+                        : "border-line3 text-transparent"
+                    }`}
+                  >
+                    ✓
+                  </span>
+                )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-semibold text-fg0">
                     {p.activo.name}

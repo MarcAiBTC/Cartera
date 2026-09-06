@@ -10,7 +10,14 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { almacenLocal, almacenNube, CLAVE_ESTADO, type Almacen, type Tabla } from "./almacen";
+import {
+  almacenLocal,
+  almacenNube,
+  CLAVE_ESTADO,
+  type Alcance,
+  type Almacen,
+  type Tabla,
+} from "./almacen";
 import { cargarMercado, MERCADO_VACIO, type DatosMercado } from "./precios";
 import { useSesion } from "./sesion";
 import { hoyISO } from "./formato";
@@ -42,6 +49,8 @@ export interface EstadoDatos {
   insertar<T extends { id: string }>(tabla: Tabla, filas: Partial<T>[]): Promise<T[]>;
   actualizar<T extends { id: string }>(tabla: Tabla, id: string, cambios: Partial<T>): Promise<T>;
   borrar(tabla: Tabla, id: string): Promise<void>;
+  borrarVarios(tabla: Tabla, ids: string[]): Promise<void>;
+  vaciar(alcance: Alcance): Promise<void>;
   guardarCashflow(data: Record<string, unknown>): Promise<void>;
   guardarAjustes(cambios: Partial<Ajustes>): Promise<void>;
 }
@@ -152,6 +161,29 @@ export function ProveedorDatos({ children }: { children: ReactNode }) {
     });
   }, [almacen]);
 
+  const borrarVarios = useCallback(
+    async (tabla: Tabla, ids: string[]) => {
+      await almacen.borrarVarios(tabla, ids);
+      const fuera = new Set(ids);
+      setEstado((e) => {
+        const clave = CLAVE_ESTADO[tabla];
+        const lista = e[clave] as unknown as { id: string }[];
+        return { ...e, [clave]: lista.filter((x) => !fuera.has(x.id)) };
+      });
+    },
+    [almacen],
+  );
+
+  const vaciar = useCallback(
+    async (alcance: Alcance) => {
+      await almacen.vaciar(alcance);
+      // Recargar y no vaciar el estado a mano: asi lo que se ve es lo que ha
+      // quedado de verdad en la base, no lo que creemos que deberia quedar.
+      await recargar();
+    },
+    [almacen, recargar],
+  );
+
   const guardarCashflow = useCallback(async (data: Record<string, unknown>) => {
     await almacen.guardarCashflow(data);
     setEstado((e) => ({ ...e, cashflow: data }));
@@ -183,6 +215,8 @@ export function ProveedorDatos({ children }: { children: ReactNode }) {
       insertar,
       actualizar,
       borrar,
+      borrarVarios,
+      vaciar,
       guardarCashflow,
       guardarAjustes,
       ...derivado,
@@ -198,6 +232,8 @@ export function ProveedorDatos({ children }: { children: ReactNode }) {
       insertar,
       actualizar,
       borrar,
+      borrarVarios,
+      vaciar,
       guardarCashflow,
       guardarAjustes,
       derivado,
