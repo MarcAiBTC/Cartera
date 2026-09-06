@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacidad · Cartera</title>
+    <meta name="description" content="Qué datos guarda Cartera y qué hace con ellos" />
+    <meta name="theme-color" content="#f3f1fb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e0c18" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/icono.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&family=Space+Grotesk:wght@700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/legal.css" />
+  </head>
+  <body>
+    <main>
+      <div class="marca"><img src="/icono.png" alt="" /> Cartera</div>
+
+      <h1>Privacidad</h1>
+      <p class="fecha">Última actualización: 6 de septiembre de 2026</p>
+
+      <p>
+        Cartera es una aplicación personal para llevar la cuenta de las propias
+        inversiones. No es un negocio ni un servicio abierto: la usan unas pocas
+        personas que tienen cuenta. Esta página cuenta, sin rodeos, qué datos
+        guarda y qué hace con ellos.
+      </p>
+
+      <h2>Qué se guarda</h2>
+      <p>Dos cosas, y nada más:</p>
+      <ul>
+        <li>
+          <strong>Tu correo electrónico</strong>, para saber quién eres al
+          entrar. Si entras con Google, Google facilita tu correo, tu nombre y
+          la foto de tu perfil. Nada más: Cartera no pide ni recibe acceso a tu
+          Gmail, a tu Drive ni a ningún otro servicio de Google.
+        </li>
+        <li>
+          <strong>Lo que tú apuntas</strong>: cuentas, activos, operaciones,
+          seguimiento, objetivos, aportaciones y preferencias.
+        </li>
+      </ul>
+      <p>
+        No se pide documento de identidad, ni teléfono, ni dirección, ni datos
+        bancarios. La aplicación <strong>nunca se conecta a tu banco ni a tu
+        bróker</strong>: los movimientos entran porque tú subes un archivo
+        exportado o los escribes a mano.
+      </p>
+
+      <h2>Quién puede verlos</h2>
+      <p>
+        Sólo tú. Cada fila de la base de datos lleva tu identificador de usuario
+        y la propia base de datos rechaza cualquier lectura que no venga del
+        dueño de esa fila. Dos personas con cuenta en la misma instalación no se
+        ven la cartera la una a la otra.
+      </p>
+
+      <h2>Dónde vive</h2>
+      <div class="caja">
+        <ul>
+          <li><strong>Supabase</strong> — guarda la base de datos y gestiona el acceso.</li>
+          <li><strong>Vercel</strong> — sirve la página y ejecuta las tareas que actualizan los precios.</li>
+          <li><strong>Google</strong> — sólo si eliges entrar con Google, y sólo para comprobar que la cuenta es tuya.</li>
+        </ul>
+      </div>
+      <p>
+        Son la infraestructura donde se apoya la aplicación, no destinatarios de
+        tus datos: nadie ahí los usa para nada propio. No hay más terceros.
+      </p>
+
+      <h2>Los precios</h2>
+      <p>
+        Para saber cuánto vale cada cosa, un proceso del servidor consulta
+        cotizaciones a Yahoo Finanzas y a CoinGecko. Les manda símbolos
+        —<code>AAPL</code>, <code>bitcoin</code>— y nunca quién eres, cuánto
+        tienes ni qué has comprado. Esas consultas son idénticas para todo el
+        mundo.
+      </p>
+
+      <h2>Lo que no se hace</h2>
+      <ul>
+        <li>No hay analítica, ni estadísticas de uso, ni píxeles de seguimiento.</li>
+        <li>No hay publicidad ni cookies publicitarias.</li>
+        <li>No se vende, alquila ni cede ningún dato a nadie.</li>
+      </ul>
+      <p>
+        Lo único que se guarda en tu navegador es tu sesión —para no tener que
+        entrar cada vez— y si prefieres el tema claro o el oscuro.
+      </p>
+
+      <h2>Cuánto tiempo</h2>
+      <p>
+        Mientras tengas cuenta. Al borrar la cuenta se borra todo lo que cuelga
+        de ella, en el mismo momento y sin copias aparte.
+      </p>
+
+      <h2>Tus derechos</h2>
+      <p>
+        Puedes acceder a tus datos, corregirlos, llevártelos o borrarlos.
+        Llevártelos no hace falta ni pedirlo: en <strong>Ajustes → Exportar a
+        JSON</strong> te descargas todo tal cual está guardado. Para lo demás,
+        escribe al correo de abajo.
+      </p>
+
+      <footer>
+        <p>
+          Responsable del tratamiento y contacto:
+          <a href="mailto:kosmostoks@gmail.com">kosmostoks@gmail.com</a>
+        </p>
+        <p><a href="/terminos">Condiciones de uso</a> · <a href="/">Volver a la aplicación</a></p>
+      </footer>
+    </main>
+  </body>
+</html>

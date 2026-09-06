@@ -1,0 +1,81 @@
+/* Hoja compartida por privacidad.html y terminos.html. Son páginas estáticas
+   fuera de React —Google las tiene que poder abrir sin cargar la app entera—
+   así que repiten los colores de src/styles/tokens.css en vez de importarlos. */
+
+:root {
+  color-scheme: light;
+  --bg0: #f3f1fb;
+  --bg1: #ffffff;
+  --line: rgba(39, 33, 74, 0.08);
+  --fg0: #28234a;
+  --fg1: #4e4870;
+  --fg2: #736d95;
+  --blue: #6d7df6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg0: #0e0c18;
+    --bg1: #171528;
+    --line: rgba(214, 208, 245, 0.1);
+    --fg0: #eeebfa;
+    --fg1: #c2bcdd;
+    --fg2: #8f88ad;
+    --blue: #8d99ff;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 2.5rem 1.25rem 5rem;
+  background: var(--bg0);
+  color: var(--fg1);
+  font: 400 16px/1.65 Manrope, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+main { max-width: 42rem; margin: 0 auto; }
+
+.marca {
+  display: flex; align-items: center; gap: 0.6rem;
+  font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: 0.75rem; color: var(--fg2); margin-bottom: 2.5rem;
+}
+.marca img { width: 28px; height: 28px; border-radius: 8px; }
+
+h1 {
+  font: 700 clamp(2rem, 7vw, 2.75rem)/1.1 "Space Grotesk", Manrope, ui-sans-serif, system-ui, sans-serif;
+  color: var(--fg0); letter-spacing: -0.02em; margin: 0 0 0.5rem;
+}
+
+.fecha { color: var(--fg2); font-size: 0.875rem; margin: 0 0 2.5rem; }
+
+h2 {
+  font: 700 1.125rem/1.3 Manrope, ui-sans-serif, system-ui, sans-serif;
+  color: var(--fg0); margin: 2.5rem 0 0.75rem;
+}
+
+p, li { margin: 0 0 0.9rem; }
+ul { padding-left: 1.25rem; margin: 0 0 0.9rem; }
+li::marker { color: var(--fg2); }
+strong { color: var(--fg0); font-weight: 600; }
+
+a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+.caja {
+  background: var(--bg1);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1.25rem 1.4rem;
+  margin: 1.5rem 0;
+}
+.caja p:last-child, .caja ul:last-child { margin-bottom: 0; }
+
+footer {
+  margin-top: 3.5rem; padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.875rem; color: var(--fg2);
+}
