@@ -25,7 +25,7 @@ import {
   type Mapa,
   type Plan,
 } from "../lib/import";
-import type { Activo, Cuenta, Operacion } from "../lib/tipos";
+import type { Activo, Cuenta, EntradaCatalogo, Operacion } from "../lib/tipos";
 import { OP_LBL } from "../lib/tipos";
 import { fd, fe, fn } from "../lib/formato";
 import {
@@ -86,6 +86,13 @@ export default function Importar() {
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [hecho, setHecho] = useState<{ ops: number; activos: number } | null>(null);
+  // Alias ISIN -> simbolo que ha resuelto el servidor para ESTE archivo. El
+  // catalogo solo trae el alias de los simbolos curados a mano, y todos los
+  // brokers europeos exportan ISIN: sin esto, cada valor importado nace sin
+  // cotizacion. Yahoo no se puede consultar desde aqui (no manda CORS), asi
+  // que lo hace /api/isin.
+  const [resueltos, setResueltos] = useState<EntradaCatalogo[]>([]);
+  const [resolviendo, setResolviendo] = useState(false);
 
   // ── El plan se recalcula solo con cada cambio: no hay un botón de
   //    «previsualizar» que se pueda quedar desincronizado del formulario.
@@ -95,10 +102,66 @@ export default function Importar() {
     return planificar(lectura, {
       estado,
       fx: mercado.fx,
-      catalogo: mercado.catalogo,
+      // Los alias recien resueltos van DELANTE: son mas frescos que el
+      // catalogo que se cargo al abrir la app.
+      catalogo: [...resueltos, ...mercado.catalogo],
       cuentaId: cuentaId || undefined,
     });
-  }, [entrada, formato, mapa, estado, mercado, cuentaId]);
+  }, [entrada, formato, mapa, estado, mercado, cuentaId, resueltos]);
+
+  /** Pregunta al servidor por los ISIN que el catalogo no sabe traducir. */
+  async function resolverIsines(e: Entrada, f: Formato) {
+    try {
+      const lectura = leer(e, { formato: f, mapa: e.tabla ? adivinarMapa(e.tabla) : {} });
+      const conocidos = new Set(
+        mercado.catalogo.map((c) => (c.isin ?? "").toUpperCase()).filter(Boolean),
+      );
+      const faltan = [
+        ...new Set(
+          lectura.filas
+            .map((x) => (x.isin ?? "").toUpperCase())
+            .filter((i) => i && !conocidos.has(i)),
+        ),
+      ];
+      if (faltan.length === 0) return;
+
+      setResolviendo(true);
+      // De 40 en 40, que es el tope de la ruta.
+      const nuevos: EntradaCatalogo[] = [];
+      for (let i = 0; i < faltan.length; i += 40) {
+        const r = await fetch("/api/isin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isines: faltan.slice(i, i + 40) }),
+        });
+        if (!r.ok) break;
+        const j = (await r.json()) as {
+          resultados?: { isin: string; symbol: string | null; name: string | null }[];
+        };
+        for (const x of j.resultados ?? []) {
+          if (!x.symbol) continue;
+          nuevos.push({
+            symbol: x.symbol,
+            name: x.name,
+            isin: x.isin,
+            ticker: x.symbol,
+            yahoo: x.symbol,
+            coingecko: null,
+            currency: null,
+            cat: null,
+            underlying: null,
+            retired: false,
+          });
+        }
+      }
+      if (nuevos.length) setResueltos(nuevos);
+    } catch {
+      // Sin conexion con el servidor se importa igual: los valores entran sin
+      // cotizacion y se pueden emparejar a mano. Peor seria no importar.
+    } finally {
+      setResolviendo(false);
+    }
+  }
 
   async function tomar(f: File) {
     setError(null);
@@ -123,10 +186,12 @@ export default function Importar() {
       );
     } else {
       setError(null);
+      void resolverIsines(e, f);
     }
   }
 
   function limpiar() {
+    setResueltos([]);
     setEntrada(null);
     setFormato(null);
     setNombreArchivo("");
@@ -301,6 +366,12 @@ export default function Importar() {
               onChange={(f) => setFormato(f as Formato)}
               opciones={FORMATOS.map((f) => ({ valor: f, texto: FORMATO_LBL[f] }))}
             />
+
+            {resolviendo && (
+              <p className="text-[12px] text-fg2">
+                Buscando el símbolo de cotización de los ISIN que trae el archivo…
+              </p>
+            )}
 
             <Selector
               etiqueta="Cuenta destino"
