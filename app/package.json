@@ -14,7 +14,8 @@
     "migrar": "node --env-file-if-exists=.env scripts/migrar.mjs",
     "sembrar-catalogo": "node --env-file-if-exists=.env scripts/sembrar-catalogo.mjs",
     "preparar": "node --env-file-if-exists=.env scripts/preparar.mjs",
-    "comprobar": "node --env-file-if-exists=.env scripts/comprobar.mjs"
+    "comprobar": "node --env-file-if-exists=.env scripts/comprobar.mjs",
+    "deshacer-importacion": "node --env-file-if-exists=.env scripts/deshacer-importacion.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",
