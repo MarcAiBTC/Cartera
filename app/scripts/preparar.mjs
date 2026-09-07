@@ -14,13 +14,13 @@
 // al catálogo en vez de fallar. Eso es a propósito — la mitad de las veces que
 // se ejecuta esto es porque algo salió mal a medias.
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import pg from "pg";
 
 const RAIZ = fileURLToPath(new URL("../", import.meta.url));
-const ESQUEMA = RAIZ + "supabase/migrations/0001_esquema.sql";
+const MIGRACIONES = RAIZ + "supabase/migrations/";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -37,9 +37,9 @@ datos:
 ────────────────────────────────────────────────────────────────────────
 
 Si no lo encuentras, hay otra forma sin DATABASE_URL: pegar el esquema a
-mano. Copia el archivo al portapapeles con
+mano. Copia los archivos al portapapeles, uno detrás de otro y por orden:
 
-  Get-Content supabase\\migrations\\0001_esquema.sql -Raw | Set-Clipboard
+  Get-Content supabase\\migrations\\*.sql -Raw | Set-Clipboard
 
 y pégalo en el SQL Editor de Supabase (barra izquierda, icono «SQL»), botón
 «Run». Después vuelve aquí y ejecuta  npm run sembrar-catalogo
@@ -48,8 +48,13 @@ y pégalo en el SQL Editor de Supabase (barra izquierda, icono «SQL»), botón
 }
 
 // ── 1 · El esquema ───────────────────────────────────────────────────────
+// Todas las migraciones por orden de nombre, no sólo la primera: el buzón de
+// entrada llegó en la 0002, y quien preparó la base antes tiene que poder
+// volver a ejecutar esto y que se le añada.
 
-const sql = readFileSync(ESQUEMA, "utf8");
+const migraciones = readdirSync(MIGRACIONES)
+  .filter((f) => f.endsWith(".sql"))
+  .sort();
 
 // Supabase exige TLS. El certificado del pooler no valida contra las CA del
 // sistema, y aquí se conecta a un servidor cuya dirección viene de un archivo
@@ -65,19 +70,21 @@ try {
   process.exit(1);
 }
 
-try {
-  await cliente.query(sql);
-  console.log("Esquema aplicado: tablas, RLS y políticas.");
-} catch (e) {
-  // 42P07 = la tabla ya existe. Volver a ejecutar el script no es un error,
-  // es lo normal cuando algo falló a mitad y se reintenta.
-  if (e.code === "42P07" || /ya existe|already exists/i.test(e.message)) {
-    console.log("El esquema ya estaba aplicado; se deja como está.");
-  } else {
-    console.error(`\nEl esquema ha fallado: ${e.message}`);
-    if (e.position) console.error(`  cerca del carácter ${e.position}`);
-    await cliente.end();
-    process.exit(1);
+for (const archivo of migraciones) {
+  try {
+    await cliente.query(readFileSync(MIGRACIONES + archivo, "utf8"));
+    console.log(`  ${archivo} · aplicada`);
+  } catch (e) {
+    // 42P07 = la tabla ya existe. Volver a ejecutar el script no es un error,
+    // es lo normal cuando algo falló a mitad y se reintenta.
+    if (e.code === "42P07" || /ya existe|already exists/i.test(e.message)) {
+      console.log(`  ${archivo} · ya estaba, se deja como está`);
+    } else {
+      console.error(`\n${archivo} ha fallado: ${e.message}`);
+      if (e.position) console.error(`  cerca del carácter ${e.position}`);
+      await cliente.end();
+      process.exit(1);
+    }
   }
 }
 
@@ -86,6 +93,7 @@ try {
 const ESPERADAS = [
   "accounts", "assets", "operations", "snapshots", "watchlist", "targets",
   "cashflow", "settings", "prices", "fx", "fx_history", "catalog", "benchmark",
+  "upload_keys", "inbox",
 ];
 
 const { rows } = await cliente.query(

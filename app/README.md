@@ -10,7 +10,10 @@ obligaba a teclear cada compra a mano. Lo que cambia:
   Lo que apuntas en el móvil está en el portátil.
 - **Se carga el archivo del bróker.** Trade Republic, Revolut, MyInvestor y
   cualquier CSV o Excel. La app detecta el formato, enseña qué va a entrar y
-  sólo entonces guarda.
+  sólo entonces guarda. Se pueden soltar varios de golpe y van en cola.
+- **Y desde el móvil, sin descargar nada.** En la app del bróker: compartir el
+  extracto y elegir «Enviar a Cartera». El archivo aterriza en el buzón y está
+  esperando la próxima vez que abras la app. Se monta una vez, en Ajustes.
 - **Los precios los trae el servidor.** Un cron de Vercel llama a Yahoo y a
   CoinGecko y escribe en Supabase. Desde el navegador no se puede: Yahoo no
   manda cabeceras CORS y ningún proxy público aguanta.
@@ -75,9 +78,13 @@ los ~528 símbolos verificados que llevaba dentro la app anterior, con su alias
 ISIN → símbolo de Yahoo. Ese alias es lo que hace que una compra importada de
 Trade Republic —que sólo trae el ISIN— encuentre su precio.
 
-Se puede ejecutar más de una vez sin romper nada. Si prefieres aplicar el
-esquema a mano, pega `supabase/migrations/0001_esquema.sql` en el SQL Editor de
-Supabase y luego lanza sólo `npm run sembrar-catalogo`.
+Aplica **todas** las migraciones de `supabase/migrations/` por orden de nombre,
+así que si ya tenías la base montada antes del buzón, volver a ejecutarlo es lo
+que añade las tablas nuevas. Se puede ejecutar más de una vez sin romper nada.
+
+Si prefieres aplicar el esquema a mano, pega los archivos de
+`supabase/migrations/` en el SQL Editor de Supabase, uno detrás de otro y por
+orden, y luego lanza sólo `npm run sembrar-catalogo`.
 
 ### 4 · Migrar la cartera de la app anterior
 
@@ -97,12 +104,53 @@ que hacen falta para cuadrar.
 
 ---
 
+## El buzón: mandar el extracto desde el móvil
+
+En el iPhone, sacar el CSV del bróker y meterlo en la cartera eran dos mundos:
+la app de Trade Republic lo genera y lo ofrece en la hoja de compartir, y para
+que llegara aquí había que guardarlo en Archivos, abrir Safari, entrar en la
+cartera y buscarlo. Seis pasos y tres apps, cada mes.
+
+El buzón lo deja en uno. Cómo funciona:
+
+    app del bróker → Compartir → «Enviar a Cartera»   (un Atajo de iOS)
+          ↓
+    POST /api/entrada?k=CLAVE     guarda el archivo CRUDO en la tabla inbox
+          ↓
+    la cartera enseña «te esperan 2 archivos», con su marca en la pestaña Añadir
+          ↓
+    tocas Revisar → la vista previa de siempre → Importar
+
+**No importa nada por su cuenta, a propósito.** El archivo se guarda tal y como
+llegó y pasa por la misma vista previa. Que subir sea fácil no es excusa para
+que la cartera se llene de operaciones que nadie ha mirado — y guardar el
+archivo crudo en vez de las operaciones ya interpretadas significa que, si
+mañana mejora un adaptador, el mismo archivo se relee mejor.
+
+**Por qué un Atajo y no el manifiesto.** La web tiene un mecanismo estándar para
+esto, el *share target* del manifiesto: se declara y la PWA aparece en la hoja
+de compartir del sistema. Android lo implementa; **iOS no**. Con un Atajo se
+consigue lo mismo y se configura en dos minutos. Las instrucciones están dentro
+de la app, en **Ajustes → Enviar desde el móvil**, porque quien las necesita
+está en el móvil y no delante del repositorio.
+
+**La clave.** El Atajo lleva encima un enlace con una clave de 128 bits, y esa
+clave tiene **un solo permiso: dejar un archivo en el buzón**. No lee la
+cartera, no escribe operaciones y no borra nada. Lo peor que puede hacer quien
+la consiga es dejarte basura que se descarta de un toque, y cambiarla es un
+botón. Vive en la tabla `upload_keys`, una fila por usuario.
+
+Los topes están en `api/entrada.ts`: 4 MB por archivo y 30 sin importar. El
+segundo es contra un Atajo en bucle, no contra ti.
+
+---
+
 ## En local
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # 30 pruebas del cálculo y de los importadores
+npm test           # 73 pruebas del cálculo, los importadores y el buzón
 npm run build
 ```
 
@@ -133,13 +181,14 @@ src/
     cartera.ts      todo el dinero se calcula aquí, y sólo aquí
     import/         un adaptador por bróker + el genérico
     almacen.ts      Supabase o este dispositivo, misma interfaz
+    buzon.ts        los archivos que llegan del móvil y la clave de subida
     datos.tsx       el estado cargado y las escrituras
     precios.ts      lectura de precios: Supabase, y el feed como respaldo
   components/       piezas comunes y los tres gráficos, en SVG a mano
   pages/            Inicio · Análisis · Objetivo · Watchlist · Historial ·
                     Cashflow · Fiscal · Importar · Ajustes
-api/                los tres crons de Vercel
-supabase/           el esquema
+api/                los tres crons de Vercel + /api/entrada, el buzón
+supabase/           el esquema, una migración por archivo
 ```
 
 ### Tres reglas que no se pueden perder

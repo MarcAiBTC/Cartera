@@ -2,10 +2,11 @@
 // Tema, cuenta y datos. La exportación no es un adorno: es la garantía de que
 // los datos son tuyos y de que puedes salirte de aquí cuando quieras.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSesion } from "../lib/sesion";
 import { useDatos } from "../lib/datos";
 import type { Alcance } from "../lib/almacen";
+import { claveSubida, crearClaveSubida, enlaceSubida, type ClaveSubida } from "../lib/buzon";
 import { hoyISO } from "../lib/formato";
 import {
   Aviso,
@@ -112,6 +113,8 @@ export default function Ajustes() {
         </div>
       </Tarjeta>
 
+      {almacen.tipo === "nube" && <EnviarDesdeElMovil />}
+
       <Tarjeta>
         <TituloSeccion nota="Los precios los escribe un proceso del servidor: el navegador no puede pedírselos a Yahoo por sus reglas de CORS.">
           Precios
@@ -156,6 +159,188 @@ export default function Ajustes() {
 
       <ZonaPeligrosa onExportar={exportar} />
     </div>
+  );
+}
+
+// ── ENVIAR DESDE EL MÓVIL ─────────────────────────────────────────────────
+// El camino corto para el iPhone. iOS no admite el «share target» de la web
+// —Android sí, y ahí bastaría el manifiesto—, así que el sitio de la hoja de
+// compartir se gana con un Atajo: recibe el archivo, lo manda a /api/entrada y
+// ya está esperando en la cartera cuando la abres.
+//
+// Son dos minutos de configuración, una sola vez, y a cambio se ahorran cinco
+// pasos cada mes. Las instrucciones van aquí dentro y no en un README: quien
+// las necesita está en el móvil, no delante del repositorio.
+
+function EnviarDesdeElMovil() {
+  const { recargarBuzon } = useDatos();
+  const [clave, setClave] = useState<ClaveSubida | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [copiado, setCopiado] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cambiando, setCambiando] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        setClave(await claveSubida());
+      } catch {
+        setError("No se ha podido leer la clave de subida.");
+      } finally {
+        setCargando(false);
+      }
+    })();
+  }, []);
+
+  async function generar() {
+    setError(null);
+    try {
+      setClave(await crearClaveSubida());
+      setCambiando(false);
+      // La clave anterior deja de valer en el mismo instante: si había algo a
+      // medio camino, mejor enterarse ahora.
+      await recargarBuzon();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se ha podido crear la clave.");
+    }
+  }
+
+  async function copiar(texto: string) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      // Safari sin permiso de portapapeles: el enlace está a la vista y se
+      // puede seleccionar a mano, que es peor pero no deja a nadie tirado.
+      setError("Este navegador no deja copiar solo. Selecciona el enlace y cópialo a mano.");
+    }
+  }
+
+  const enlace = clave ? enlaceSubida(clave.token) : "";
+
+  return (
+    <Tarjeta>
+      <TituloSeccion nota="Para no tener que descargar el extracto, buscarlo en Archivos y subirlo.">
+        Enviar desde el móvil
+      </TituloSeccion>
+
+      {cargando ? (
+        <p className="text-[12.5px] text-fg2">…</p>
+      ) : !clave ? (
+        <>
+          <p className="text-[12.5px] leading-relaxed text-fg1">
+            Crea un enlace privado y añádelo a un Atajo del iPhone. Después, dentro de la app de
+            Trade Republic o de Revolut, compartir el extracto y elegir «Enviar a Cartera» lo deja
+            esperando aquí.
+          </p>
+          <div className="mt-3">
+            <Boton tipo="principal" onClick={() => void generar()}>
+              Crear el enlace
+            </Boton>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-[12.5px] leading-relaxed text-fg1">
+            Éste es tu enlace privado. Con él sólo se pueden <strong>dejar archivos</strong> en el
+            buzón: no lee tu cartera, no escribe operaciones y no borra nada.
+          </p>
+
+          <p className="mt-2.5 rounded-field border border-line2 bg-bg2 p-2.5 font-mono text-[10.5px] break-all text-fg1 select-all">
+            {enlace}
+          </p>
+
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <Boton tipo="principal" onClick={() => void copiar(enlace)}>
+              {copiado ? "Copiado ✓" : "Copiar el enlace"}
+            </Boton>
+            {/* Las clases son las de `Boton tipo="suave"` copiadas a mano: esto
+                tiene que ser un enlace de verdad para que abra en otra pestaña,
+                y `Boton` sólo pinta botones. */}
+            <a
+              href={enlace}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-field bg-bg2 px-4 py-2.5 text-[13px] font-bold text-fg1 transition-all hover:bg-bg3"
+            >
+              Probarlo
+            </a>
+          </div>
+
+          <p className="mt-2 text-[11px] text-fg2">
+            {clave.last_used_at
+              ? `Usado ${clave.uses} ${clave.uses === 1 ? "vez" : "veces"}; la última, el ${new Date(clave.last_used_at).toLocaleDateString("es-ES")}.`
+              : "Todavía no se ha usado."}
+          </p>
+
+          <details className="mt-3 rounded-tile bg-bg2 px-3.5 py-3">
+            <summary className="cursor-pointer list-none text-[12.5px] font-bold text-fg0">
+              Cómo montar el Atajo en el iPhone
+            </summary>
+            <ol className="mt-2.5 flex list-decimal flex-col gap-1.5 pl-4 text-[12px] leading-relaxed text-fg1">
+              <li>Copia el enlace de arriba.</li>
+              <li>
+                Abre <strong>Atajos</strong> y toca <strong>+</strong> para crear uno nuevo.
+              </li>
+              <li>
+                Arriba, en la <strong>ⓘ</strong> de la barra inferior, activa{" "}
+                <strong>«Mostrar en la hoja de compartir»</strong> y deja marcado sólo{" "}
+                <strong>Archivos</strong> como tipo de entrada.
+              </li>
+              <li>
+                Añade la acción <strong>«Obtener contenido de la URL»</strong> y pega el enlace.
+              </li>
+              <li>
+                Despliega esa acción: <strong>Método → POST</strong>,{" "}
+                <strong>Cuerpo de la solicitud → Archivo</strong>, y en el campo del archivo elige{" "}
+                <strong>«Entrada del atajo»</strong>.
+              </li>
+              <li>
+                Ponle de nombre <strong>Enviar a Cartera</strong> y guarda.
+              </li>
+            </ol>
+            <p className="mt-2.5 text-[11.5px] leading-relaxed text-fg2">
+              Ya está. En Trade Republic: Perfil → Extractos → exportar, y cuando salga la hoja de
+              compartir, «Enviar a Cartera». El archivo aparece en la pestaña Añadir la próxima vez
+              que abras la app.
+            </p>
+          </details>
+
+          <div className="mt-3 border-t border-line pt-3">
+            {cambiando ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-[11.5px] leading-relaxed text-fg2">
+                  El enlace de ahora dejará de funcionar y tendrás que pegar el nuevo en el Atajo.
+                  Los archivos que ya estén en el buzón se quedan.
+                </p>
+                <div className="flex gap-2">
+                  <Boton tipo="peligro" onClick={() => void generar()}>
+                    Sí, cambiar la clave
+                  </Boton>
+                  <Boton tipo="suave" onClick={() => setCambiando(false)}>
+                    Dejarlo
+                  </Boton>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setCambiando(true)}
+                className="text-[11.5px] font-semibold text-fg2 underline-offset-4 hover:text-fg0 hover:underline"
+              >
+                Cambiar la clave
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {error && (
+        <div className="mt-3">
+          <Aviso tono="error">{error}</Aviso>
+        </div>
+      )}
+    </Tarjeta>
   );
 }
 

@@ -19,6 +19,7 @@ import {
   type Tabla,
 } from "./almacen";
 import { cargarMercado, MERCADO_VACIO, type DatosMercado } from "./precios";
+import { cargarBuzon, type EntradaBuzon } from "./buzon";
 import { useSesion } from "./sesion";
 import { hoyISO } from "./formato";
 import {
@@ -44,7 +45,10 @@ export interface EstadoDatos {
   resumen: Resumen;
   categorias: Grupo[];
   almacen: Almacen;
+  /** Los archivos que han llegado desde el móvil y siguen sin importar. */
+  buzon: EntradaBuzon[];
   recargar(): Promise<void>;
+  recargarBuzon(): Promise<void>;
   refrescarPrecios(): Promise<void>;
   insertar<T extends { id: string }>(tabla: Tabla, filas: Partial<T>[]): Promise<T[]>;
   actualizar<T extends { id: string }>(tabla: Tabla, id: string, cambios: Partial<T>): Promise<T>;
@@ -65,6 +69,7 @@ export function ProveedorDatos({ children }: { children: ReactNode }) {
   const sesion = useSesion();
   const [estado, setEstado] = useState<EstadoCartera>(ESTADO_VACIO);
   const [mercado, setMercado] = useState<DatosMercado>(MERCADO_VACIO);
+  const [buzon, setBuzon] = useState<EntradaBuzon[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,28 +103,51 @@ export function ProveedorDatos({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // El buzón se lee aparte de la cartera y no rompe nada si falla: un archivo
+  // que no aparece es una molestia, y dejar la app sin arrancar por eso sería
+  // mucho peor. También explica por qué no vive dentro de `Almacen`: sólo
+  // existe con cuenta, y el modo «este dispositivo» no tiene servidor al que
+  // mandarle nada.
+  const recargarBuzon = useCallback(async () => {
+    if (!sesion.usuario) {
+      setBuzon([]);
+      return;
+    }
+    try {
+      setBuzon(await cargarBuzon());
+    } catch (e) {
+      console.warn("[buzon] no se ha podido leer", e);
+    }
+  }, [sesion.usuario]);
+
   useEffect(() => {
     if (!sesion.activa) {
       setEstado(ESTADO_VACIO);
+      setBuzon([]);
       setCargando(false);
       return;
     }
     void recargar();
-  }, [sesion.activa, sesion.usuario, recargar]);
+    void recargarBuzon();
+  }, [sesion.activa, sesion.usuario, recargar, recargarBuzon]);
 
   useEffect(() => {
     void refrescarPrecios();
     const t = setInterval(() => void refrescarPrecios(), REFRESCO_MS);
-    // Al volver a la pestaña, los precios pueden llevar horas parados.
+    // Al volver a la pestaña, los precios pueden llevar horas parados —y en el
+    // móvil es justo el momento en que acabas de compartir un extracto desde
+    // la app del bróker, así que el buzón se mira en el mismo viaje.
     const alVolver = () => {
-      if (document.visibilityState === "visible") void refrescarPrecios();
+      if (document.visibilityState !== "visible") return;
+      void refrescarPrecios();
+      void recargarBuzon();
     };
     document.addEventListener("visibilitychange", alVolver);
     return () => {
       clearInterval(t);
       document.removeEventListener("visibilitychange", alVolver);
     };
-  }, [refrescarPrecios]);
+  }, [refrescarPrecios, recargarBuzon]);
 
   // ── Escrituras ─────────────────────────────────────────────────────────
   // Se escribe primero y se refleja después con lo que devuelve el almacén:
@@ -210,7 +238,9 @@ export function ProveedorDatos({ children }: { children: ReactNode }) {
       estado,
       mercado,
       almacen,
+      buzon,
       recargar,
+      recargarBuzon,
       refrescarPrecios,
       insertar,
       actualizar,
@@ -227,7 +257,9 @@ export function ProveedorDatos({ children }: { children: ReactNode }) {
       estado,
       mercado,
       almacen,
+      buzon,
       recargar,
+      recargarBuzon,
       refrescarPrecios,
       insertar,
       actualizar,
