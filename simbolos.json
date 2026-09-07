@@ -14,8 +14,14 @@
  {"sym": "PHAG.MI",       "isin": "JE00B1VS3333", "ticker": "PHAG", "nombre": "WisdomTree Physical Silver"},
  {"sym": "0P00000JGA.F", "isin": "ES0152769032", "nombre": "ING Fondo Naranja S&P 500 FI"},
  {"sym": "MSTR",          "ticker": "MSTR", "nombre": "Strategy Inc"},
- {"sym": "AMZN",          "ticker": "AMZN", "nombre": "Amazon"},
- {"sym": "CABK.MC",       "ticker": "48CA", "nombre": "CaixaBank"},
+ {"sym": "AMZN",          "isin": "US0231351067", "ticker": "AMZN", "nombre": "Amazon"},
+ {"sym": "CABK.MC",       "isin": "ES0140609019", "ticker": "48CA", "nombre": "CaixaBank"},
  {"sym": "GC=F",          "ticker": "XAU",  "nombre": "Oro spot (futuro COMEX)"},
- {"sym": "GLD",           "ticker": "GLD",  "nombre": "SPDR Gold Shares (watchlist)"}
+ {"sym": "GLD",           "ticker": "GLD",  "nombre": "SPDR Gold Shares (watchlist)"},
+
+ {"sym": "ADA",           "cg": "cardano",  "ticker": "ADA",  "nombre": "Cardano"},
+ {"sym": "IBE.MC",        "isin": "ES0144580Y14", "ticker": "IBE",  "nombre": "Iberdrola"},
+ {"sym": "NESN.SW",       "isin": "CH0038863350", "ticker": "NESN", "nombre": "Nestle"},
+ {"sym": "ISLN.L",        "isin": "IE00B4NCWG09", "ticker": "ISLN", "nombre": "iShares Physical Silver"},
+ {"sym": "3GOL.L",        "isin": "IE00B8HGT870", "ticker": "3GOL", "nombre": "WisdomTree Gold 3x Daily Leveraged"}
 ]

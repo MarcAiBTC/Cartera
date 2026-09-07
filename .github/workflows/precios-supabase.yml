@@ -40,14 +40,43 @@ jobs:
           URL: ${{ secrets.VERCEL_APP_URL }}
           SECRETO: ${{ secrets.CRON_SECRET }}
         run: |
-          if [ -z "$URL" ] || [ -z "$SECRETO" ]; then
-            echo "Faltan los secretos VERCEL_APP_URL o CRON_SECRET del repositorio."
-            exit 1
+          # El diagnóstico, primero y sin filtrar nada: este job estuvo
+          # fallando en TODAS sus ejecuciones y en la pestaña Actions sólo se
+          # veía «failure», así que los precios llevaban un día parados sin
+          # que nadie supiera por qué. Decir cuál de los dos secretos falta
+          # —sin enseñar su valor— cuesta tres líneas.
+          falta=0
+          if [ -z "$URL" ]; then
+            echo "::error::Falta el secreto VERCEL_APP_URL del repositorio (la dirección de la app, sin barra final: https://tu-app.vercel.app)."
+            falta=1
           fi
+          if [ -z "$SECRETO" ]; then
+            echo "::error::Falta el secreto CRON_SECRET del repositorio. Tiene que ser EL MISMO valor que la variable CRON_SECRET de Vercel."
+            falta=1
+          fi
+          # `if` y no `[ … ] && exit 1`: bajo `set -e` —que es como Actions
+          # ejecuta esto— una lista con && que acaba en falso puede tumbar el
+          # job aunque no falte nada, y el fallo pareceria otra cosa.
+          if [ "$falta" = 1 ]; then exit 1; fi
+
+          echo "Pidiendo precios a $URL/api/precios"
 
           # --fail-with-body: que un 401 o un 500 rompan el job Y enseñen el
           # motivo. Con --fail a secas se pierde el cuerpo de la respuesta y no
           # se sabe si es el secreto o Supabase.
-          curl --fail-with-body --silent --show-error --max-time 300 \
+          codigo=$(curl --silent --show-error --max-time 300 \
+            --write-out '%{http_code}' --output /tmp/respuesta.json \
             -H "Authorization: Bearer $SECRETO" \
-            "$URL/api/precios"
+            "$URL/api/precios") || true
+
+          echo "HTTP $codigo"
+          cat /tmp/respuesta.json 2>/dev/null || true
+          echo
+
+          case "$codigo" in
+            200) exit 0 ;;
+            401) echo "::error::401: el CRON_SECRET de GitHub no coincide con el de Vercel."; exit 1 ;;
+            404) echo "::error::404: en $URL no hay ninguna ruta /api/precios. ¿Es la dirección correcta de la app y está desplegada?"; exit 1 ;;
+            000) echo "::error::No se ha podido contactar con $URL. Comprueba la dirección o si el despliegue está caído."; exit 1 ;;
+            *)   echo "::error::La ruta ha contestado $codigo."; exit 1 ;;
+          esac
