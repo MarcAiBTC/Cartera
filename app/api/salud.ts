@@ -19,7 +19,12 @@ export const config = { maxDuration: 10 };
 
 const hay = (n: string): boolean => Boolean((process.env[n] ?? "").trim());
 
-export default function handler(req: Request): Response {
+// `export function GET`, no `export default`: es la diferencia entre que esto
+// funcione y que no. Vercel ejecuta un `export default` como handler clásico
+// de Node —`(req, res)`— y entonces el `Response` que devolvemos no lo mira
+// nadie: la peticion se queda colgada hasta el timeout. Con el nombre del
+// metodo, Vercel usa la firma web y todo encaja.
+export function GET(req: Request): Response {
   const variables = {
     SUPABASE_URL: hay("SUPABASE_URL"),
     VITE_SUPABASE_URL: hay("VITE_SUPABASE_URL"),
