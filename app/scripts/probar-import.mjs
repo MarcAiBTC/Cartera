@@ -6,21 +6,38 @@
 //   npx vite-node scripts/probar-import.mjs <archivo>
 
 import { readFileSync } from "node:fs";
+import XLSX from "xlsx";
 import { tabular } from "../src/lib/import/csv.ts";
-import { detectar, leer } from "../src/lib/import/index.ts";
+import { desdeMatriz, detectar, leer } from "../src/lib/import/index.ts";
 
 const ruta = process.argv[2];
 if (!ruta) {
-  console.error("uso: npx vite-node scripts/probar-import.mjs <archivo.csv>");
+  console.error("uso: npx vite-node scripts/probar-import.mjs <archivo.csv|.xlsx> [formato]");
   process.exit(1);
 }
 
-const txt = readFileSync(ruta, "utf8");
-const entrada = { nombre: ruta, texto: txt, tabla: tabular(txt) };
+// El Excel se lee igual que en la app: la hoja tal cual, en filas de celdas,
+// que es lo que deja saltarse el titular y el saldo de encima de la tabla.
+const entrada = /\.(xlsx|xls|xlsm|ods)$/i.test(ruta)
+  ? (() => {
+      // `readFile` no llega al disco desde el build ESM: se le da el búfer.
+      const libro = XLSX.read(readFileSync(ruta), { type: "buffer", cellDates: true });
+      const hoja = libro.Sheets[libro.SheetNames[0]];
+      return {
+        nombre: ruta,
+        tabla: desdeMatriz(XLSX.utils.sheet_to_json(hoja, { header: 1, raw: false, defval: "" })),
+      };
+    })()
+  : (() => {
+      const txt = readFileSync(ruta, "utf8");
+      return { nombre: ruta, texto: txt, tabla: tabular(txt) };
+    })();
+
+console.log("cabeceras:", entrada.tabla.cabeceras.join(" | "));
 console.log("formato detectado:", detectar(entrada));
 console.log("filas en el archivo:", entrada.tabla.filas.length);
 
-const l = leer(entrada);
+const l = leer(entrada, process.argv[3] ? { formato: process.argv[3] } : {});
 console.log("\noperaciones:", l.filas.length, " descartes:", l.descartes.length);
 
 const por = new Map();
@@ -29,16 +46,28 @@ console.log("\n-- por tipo --");
 for (const [k, v] of [...por].sort()) console.log(`  ${String(v).padStart(4)}  ${k}`);
 
 console.log("\n-- activos que se crearian --");
+// Los mismos que crearia `planificar`: solo lo que toca un valor, y con el
+// nombre como ultimo recurso cuando el archivo no trae ni ISIN ni ticker.
+const TOCA_UN_VALOR = new Set(["buy", "sell", "dividend"]);
 const act = new Map();
 for (const f of l.filas) {
-  if (!f.isin && !f.ticker) continue;
-  const k = f.isin || f.ticker;
-  if (!act.has(k)) act.set(k, f);
+  if (!TOCA_UN_VALOR.has(f.tipo)) continue;
+  const k = (f.isin || f.ticker || f.nombre || "").toUpperCase();
+  if (!k) continue;
+  const a = act.get(k) ?? { ...f, ops: 0, titulos: 0, euros: 0, sinTitulos: 0 };
+  a.ops += 1;
+  a.euros += f.total;
+  if (f.cantidad != null) a.titulos += f.cantidad;
+  else a.sinTitulos += 1;
+  act.set(k, a);
 }
 console.log("total:", act.size);
 for (const [, a] of act)
   console.log(
-    `  ${(a.nombre ?? "").padEnd(24)} isin=${(a.isin ?? "-").padEnd(13)} tick=${(a.ticker ?? "-").padEnd(5)} ${a.categoria}`,
+    `  ${(a.nombre ?? "").padEnd(31)} isin=${(a.isin ?? "-").padEnd(13)} ` +
+      `${String(a.ops).padStart(3)} ops  ${a.euros.toFixed(2).padStart(9)} EUR  ` +
+      `${a.titulos.toFixed(4).padStart(12)} tit` +
+      (a.sinTitulos ? `  (${a.sinTitulos} SIN titulos)` : ""),
   );
 
 console.log("\n-- descartes --");

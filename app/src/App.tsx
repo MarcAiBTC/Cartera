@@ -45,6 +45,8 @@ const PESTANAS: Pestana[] = [
 ];
 
 function Navegacion() {
+  const { buzon } = useDatos();
+
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-center pb-[max(10px,env(safe-area-inset-bottom))]">
       <ul className="flex w-[min(100%-16px,520px)] items-stretch gap-1 rounded-sheet border border-line bg-[color-mix(in_srgb,var(--bg1)_88%,transparent)] p-1.5 shadow-e2 backdrop-blur-xl">
@@ -54,13 +56,24 @@ function Navegacion() {
               to={p.a}
               end={p.a === "/"}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-0.5 rounded-tile py-1.5 text-[10px] font-bold transition-colors ${
+                `relative flex flex-col items-center gap-0.5 rounded-tile py-1.5 text-[10px] font-bold transition-colors ${
                   isActive ? "bg-bg2 text-blue" : "text-fg2 hover:text-fg0"
                 }`
               }
             >
               {p.icono}
               {p.texto}
+              {/* Lo que has compartido desde la app del bróker y todavía no has
+                  mirado. Sin esta marca, el buzón sería un sitio al que hay
+                  que acordarse de entrar, y entonces no sirve de nada. */}
+              {p.a === "/importar" && buzon.length > 0 && (
+                <span
+                  aria-label={`${buzon.length} ${buzon.length === 1 ? "archivo esperando" : "archivos esperando"}`}
+                  className="absolute top-0.5 right-[22%] flex h-4 min-w-4 items-center justify-center rounded-full bg-blue px-1 text-[9px] leading-none font-bold text-white"
+                >
+                  {buzon.length}
+                </span>
+              )}
             </NavLink>
           </li>
         ))}
@@ -94,9 +107,12 @@ function BarraSuperior() {
       </div>
 
       <div className="flex items-center gap-2 text-[10px] font-semibold text-fg2">
+        {/* Antes esto era `hidden sm:inline`, o sea invisible justo donde se
+            usa la app: el móvil. Y es la única señal de que los precios que
+            estás mirando son de hace días. */}
         <span
           title={mercado.actualizado ? `Última actualización: ${mercado.actualizado}` : undefined}
-          className="hidden sm:inline"
+          className={edad != null && edad >= 30 * 3600e3 ? "text-dn" : undefined}
         >
           {frescura}
         </span>

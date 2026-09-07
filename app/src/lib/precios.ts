@@ -48,14 +48,40 @@ async function desdeNube(): Promise<DatosMercado> {
   const tasas: MapaFx = { EUR: 1 };
   for (const f of fx.data ?? []) tasas[String(f.currency).toUpperCase()] = Number(f.eur_rate);
 
+  const catalogo = (cat.data ?? []) as EntradaCatalogo[];
+  aliasDelCatalogo(precios, catalogo);
+
   const fechas = (pr.data ?? []).map((p) => p.updated_at).sort();
   return {
     precios,
     fx: tasas,
-    catalogo: (cat.data ?? []) as EntradaCatalogo[],
+    catalogo,
     actualizado: fechas.at(-1) ?? null,
     origen: "nube",
   };
+}
+
+/** Deja el precio de cada valor también bajo su ISIN.
+ *
+ *  La tabla `prices` está indexada por el símbolo de Yahoo —«CABK.MC»— y un
+ *  valor importado de un bróker europeo llega identificado por su ISIN
+ *  —«ES0140609019»—. Si en el momento de importar no se pudo traducir el uno
+ *  al otro, el activo se quedaba guardado sin `ticker` y MUDO PARA SIEMPRE:
+ *  ningún precio volvía a buscarle las vueltas, aunque el catálogo supiera
+ *  perfectamente de qué valor se trataba.
+ *
+ *  Con el alias puesto, `buscaPrecio` lo encuentra por el ISIN y el activo
+ *  cotiza aunque el `ticker` esté vacío. Es lo que hace que un fallo de un día
+ *  no deje una posición rota para siempre. */
+function aliasDelCatalogo(precios: MapaPrecios, catalogo: EntradaCatalogo[]): void {
+  for (const c of catalogo) {
+    const simbolo = (c.yahoo ?? c.symbol ?? c.ticker ?? "").toUpperCase();
+    const p = simbolo ? precios[simbolo] : undefined;
+    if (!p) continue;
+    // Sólo se rellenan huecos: un precio escrito con esa clave manda sobre el
+    // alias, que es una deducción.
+    if (c.isin && !precios[c.isin.toUpperCase()]) precios[c.isin.toUpperCase()] = p;
+  }
 }
 
 /** Forma de los JSON que publica el repositorio antiguo. */
@@ -157,7 +183,16 @@ export async function cargarMercado(): Promise<DatosMercado> {
         // fetch de distancia. Gana el más reciente de los dos.
         const feed = await desdeFeed();
         const edadFeed = feed.actualizado ? Date.now() - Date.parse(feed.actualizado) : Infinity;
-        return edadFeed < edad ? feed : d;
+        if (edadFeed >= edad) return d;
+
+        // Ganan los precios del feed, pero NO su catálogo: el feed no trae
+        // ninguno y devolverlo tal cual dejaba la app sin la tabla que
+        // traduce ISIN → símbolo. Con el catálogo vacío, cada valor importado
+        // por ISIN —o sea, todos los europeos— se guardaba sin `ticker` y
+        // nacía sin cotización. Un cron atrasado no tiene por qué romper una
+        // importación: el catálogo es de Supabase y está perfectamente al día.
+        aliasDelCatalogo(feed.precios, d.catalogo);
+        return { ...feed, catalogo: d.catalogo };
       }
       // Una tabla `prices` vacía es el estado normal hasta que el cron corre
       // por primera vez: mientras tanto, mejor el feed que ningún precio.

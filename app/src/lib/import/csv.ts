@@ -69,18 +69,73 @@ export interface Tabla {
   separador: string;
 }
 
+/** ¿Esta celda es un dato y no el nombre de una columna? Una fecha o un
+ *  importe nunca titulan una tabla. */
+function pareceDato(v: string): boolean {
+  const t = v.trim();
+  if (!t) return false;
+  if (num(t) != null) return true;
+  return /\d/.test(t) && fecha(t) != null;
+}
+
+/** Cuál de las primeras filas es la cabecera.
+ *
+ *  Los extractos que salen de la web de un banco no empiezan por la tabla:
+ *  encima traen el titular, el número de cuenta, el saldo y a veces un título
+ *  suelto. El Excel de movimientos de MyInvestor gasta ocho filas en eso. Dar
+ *  por hecho que la cabecera es la primera línea deja las columnas llamadas
+ *  «TITULAR:» y entonces no casa ni una.
+ *
+ *  Gana la primera fila con más celdas llenas que, además, no parezca un
+ *  movimiento. Se mira sólo el principio: una cabecera no está en la línea
+ *  cuarenta, y si el archivo empieza directamente por la tabla —que es lo
+ *  normal— la ganadora es la fila 0 y no cambia nada. */
+export function filaCabecera(filas: string[][], mirar = 20): number {
+  let mejor = 0;
+  let mejorLlenas = -1;
+
+  for (let i = 0; i < Math.min(filas.length, mirar); i++) {
+    const llenas = filas[i].filter((c) => c.trim() !== "");
+    // Con una sola celda es un título («Movimientos»), no una cabecera.
+    if (llenas.length < 2) continue;
+    // Mitad o más de fechas e importes: eso es una fila de datos.
+    if (llenas.filter(pareceDato).length * 2 >= llenas.length) continue;
+    if (llenas.length > mejorLlenas) {
+      mejorLlenas = llenas.length;
+      mejor = i;
+    }
+  }
+  return mejor;
+}
+
+/** Normaliza los nombres de columna y bautiza las que vienen sin nombre.
+ *
+ *  Una columna vacía en medio de la tabla —MyInvestor deja una entre el
+ *  concepto y el importe— acabaría llamándose «», y dos columnas con el mismo
+ *  nombre se pisan la una a la otra. `columna 4` no lo busca ningún adaptador,
+ *  que es justo lo que se quiere. */
+export function nombrarColumnas(crudas: string[]): string[] {
+  const vistas = new Set<string>();
+  return crudas.map((c, i) => {
+    const base = c.replace(/^"|"$/g, "").toLowerCase().trim();
+    let nombre = base || `columna ${i + 1}`;
+    while (vistas.has(nombre)) nombre = `${nombre} ${i + 1}`;
+    vistas.add(nombre);
+    return nombre;
+  });
+}
+
 /** Convierte el texto en filas con nombre. Las cabeceras se normalizan a
  *  minúsculas y sin comillas para que los adaptadores no tengan que repetir
  *  la misma limpieza. */
 export function tabular(texto: string): Tabla {
   const lineas = limpiar(texto).split("\n");
   const sep = separador(lineas);
-  const primera = lineas.findIndex((l) => l.trim());
-  if (primera < 0) return { cabeceras: [], filas: [], lineas: [], separador: sep };
+  if (!lineas.some((l) => l.trim())) return { cabeceras: [], filas: [], lineas: [], separador: sep };
 
-  const cabeceras = partir(lineas[primera], sep).map((c) =>
-    c.replace(/^"|"$/g, "").toLowerCase().trim(),
-  );
+  const primera = filaCabecera(lineas.map((l) => (l.trim() ? partir(l, sep) : [])));
+
+  const cabeceras = nombrarColumnas(partir(lineas[primera], sep));
 
   const filas: Record<string, string>[] = [];
   const nums: number[] = [];

@@ -9,6 +9,7 @@ export type Formato =
   | "myinvestor-json"
   | "myinvestor-tabla"
   | "myinvestor-cuenta"
+  | "myinvestor-efectivo"
   | "generico-csv"
   | "generico-json"
   | "desconocido";
@@ -17,8 +18,9 @@ export const FORMATO_LBL: Record<Formato, string> = {
   "traderepublic-csv": "Trade Republic · CSV",
   "revolut-csv": "Revolut · extracto de cuenta",
   "myinvestor-json": "MyInvestor · JSON",
-  "myinvestor-tabla": "MyInvestor · movimientos",
-  "myinvestor-cuenta": "MyInvestor · extracto de cuenta",
+  "myinvestor-tabla": "MyInvestor · fondos (consulta de operaciones)",
+  "myinvestor-cuenta": "MyInvestor · cuenta corriente",
+  "myinvestor-efectivo": "MyInvestor · cuenta corriente (sólo el dinero)",
   "generico-csv": "Genérico · CSV/Excel",
   "generico-json": "Genérico · JSON",
   desconocido: "Formato no reconocido",

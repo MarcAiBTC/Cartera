@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 import { tabular } from "../src/lib/import/csv";
+import { desdeMatriz, detectar } from "../src/lib/import";
 import { esRevolut, leerRevolut } from "../src/lib/import/revolut";
 import {
   esMyInvestorMovimientos,
@@ -91,17 +92,56 @@ describe("MyInvestor · extracto de cuenta", () => {
     expect(esMyInvestorMovimientos(t)).toBe(true);
   });
 
-  it("saca las participaciones del valor liquidativo pegado al concepto", () => {
-    // «PICTET-CHINA IX P EUR @ 0.0368» son 30 caracteres justos: el precio
-    // sobrevive al corte, y 4,99 € a 0,0368 son 135,6 participaciones.
+  it("el número de detrás del «@» son PARTICIPACIONES, no el valor liquidativo", () => {
+    // 4,99 € por 0,0368 participaciones de un fondo que vale ~135 €. Leerlo
+    // al revés daba 135,6 participaciones: el fondo entraba 3.600 veces más
+    // grande de lo que es.
     const { filas } = leerMyInvestorMovimientos(
       MI("30/07/2026;31/07/2026;PICTET-CHINA IX P EUR @ 0.0368;-4,99;EUR"),
     );
     expect(filas[0].tipo).toBe("buy");
     expect(filas[0].nombre).toBe("PICTET-CHINA IX P EUR");
-    expect(filas[0].precio).toBeCloseTo(0.0368, 6);
-    expect(filas[0].cantidad).toBeCloseTo(4.99 / 0.0368, 4);
+    expect(filas[0].cantidad).toBeCloseTo(0.0368, 6);
+    expect(filas[0].precio).toBeCloseTo(4.99 / 0.0368, 2);
     expect(filas[0].categoria).toBe("fondo");
+  });
+
+  it("un ETC entero: «@ 1» con 55,99 € es una unidad a 55,99 €", () => {
+    const { filas } = leerMyInvestorMovimientos(
+      MI("13/08/2025;15/08/2025;ETC ISHARES PHYSICAL GOLD @ 1;-55,99;EUR"),
+    );
+    expect(filas[0].cantidad).toBe(1);
+    expect(filas[0].precio).toBeCloseTo(55.99, 2);
+  });
+
+  it("no se fía de un número que el corte ha partido por la mitad", () => {
+    // «PICTET CHINA INDEX P ACC @ 0.0» son 0,0368 participaciones a las que
+    // el corte se ha comido tres cifras, y «… @ 1» a 30 caracteres pudo ser
+    // «1.85». Antes que un número inventado, ninguno.
+    const { filas } = leerMyInvestorMovimientos(
+      MI(
+        "08/09/2025;09/09/2025;PICTET CHINA INDEX P ACC @ 0.0;-4,99;EUR",
+        "02/06/2026;03/06/2026;VANGUARD US 500 STOCK EUR @ 0.;-50;EUR",
+        "01/07/2026;02/07/2026;ABCDEFGHIJKLMNOPQRSTUVWXY @ 12;-50;EUR",
+      ),
+    );
+    expect(filas).toHaveLength(3);
+    expect(filas.every((f) => f.cantidad === undefined && f.precio === undefined)).toBe(true);
+    // Y el dinero sigue siendo el correcto.
+    expect(filas.map((f) => f.total)).toEqual([4.99, 50, 50]);
+  });
+
+  it("«sólo el dinero» deja fuera los fondos y se queda con la caja", () => {
+    const t = MI(
+      "30/07/2026;31/07/2026;PICTET-CHINA IX P EUR @ 0.0368;-4,99;EUR",
+      "30/07/2026;30/07/2026;Envio de dinero - imaginBank;250;EUR",
+      "12/07/2026;11/07/2026;PERIODO 11/06/2026 11/07/2026;0,06;EUR",
+    );
+    expect(leerMyInvestorMovimientos(t).filas).toHaveLength(3);
+
+    const solo = leerMyInvestorMovimientos(t, { soloEfectivo: true });
+    expect(solo.formato).toBe("myinvestor-efectivo");
+    expect(solo.filas.map((f) => f.tipo)).toEqual(["deposit", "interest"]);
   });
 
   it("avisa una vez por fondo cuando el corte se come el precio", () => {
@@ -154,5 +194,55 @@ describe("MyInvestor · extracto de cuenta", () => {
     const { filas, descartes } = leerMyInvestorMovimientos(MI("11/09/2023;11/09/2023;;0;EUR"));
     expect(filas).toHaveLength(0);
     expect(descartes).toHaveLength(1);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+//  MYINVESTOR · el mismo extracto, pero en Excel
+// ════════════════════════════════════════════════════════════════════════
+// La hoja no empieza por la tabla: gasta ocho filas en el titular, el número
+// de cuenta y el saldo. Leída dando por hecho que la cabecera es la primera
+// fila, las columnas se llamaban «TITULAR:» y el archivo entero acababa en el
+// importador genérico sin reconocer ni una línea.
+
+const HOJA: string[][] = [
+  ["", "", "TITULAR:", "MARC ALVAREZ AZANON", "", ""],
+  ["", "", "CUENTA:", "6650673555", "", ""],
+  ["", "", "Saldo:", "218,32€", "", ""],
+  ["", "", "", "", "", ""],
+  ["", "", "", "", "", ""],
+  ["Movimientos", "", "", "", "", ""],
+  ["", "", "", "", "", ""],
+  ["Fecha Operación", "Fecha Valor", "Movimiento", "", "Importe", "Saldo"],
+  ["08/09/2025", "10/09/2025", "FIDELITY PHYSICAL BITCOIN ET @", "", "-9.30€", "262.41€"],
+  ["12/09/2025", "11/09/2025", "PERIODO 11/08/2025 11/09/2025", "", "0.06€", "257.48€"],
+  ["30/07/2026", "30/07/2026", "Envio de dinero - imaginBank", "", "250€", "507.48€"],
+];
+
+describe("MyInvestor · el Excel de la cuenta", () => {
+  it("salta el titular y el saldo y encuentra la cabecera de verdad", () => {
+    const t = desdeMatriz(HOJA);
+    expect(t.cabeceras).toContain("fecha operación");
+    expect(t.cabeceras).toContain("movimiento");
+    expect(t.filas).toHaveLength(3);
+    // La columna sin nombre no se queda en blanco ni pisa a otra.
+    expect(t.cabeceras).toContain("columna 4");
+    // Y la línea que se señala es la de Excel, no la del array.
+    expect(t.lineas[0]).toBe(9);
+  });
+
+  it("se reconoce como extracto de MyInvestor aunque las columnas se llamen distinto", () => {
+    const t = desdeMatriz(HOJA);
+    expect(esMyInvestorMovimientos(t)).toBe(true);
+    expect(detectar({ nombre: "Movimientos.xlsx", tabla: t })).toBe("myinvestor-cuenta");
+  });
+
+  it("lee las tres filas con su importe, con el € pegado y el punto decimal", () => {
+    const { filas } = leerMyInvestorMovimientos(desdeMatriz(HOJA));
+    expect(filas.map((f) => f.tipo)).toEqual(["buy", "interest", "deposit"]);
+    expect(filas.map((f) => f.total)).toEqual([9.3, 0.06, 250]);
+    expect(filas[0].fecha).toBe("2025-09-08");
+    // El saldo de la última columna no se cuela como importe.
+    expect(filas[2].total).toBe(250);
   });
 });

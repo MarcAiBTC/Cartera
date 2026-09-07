@@ -6,14 +6,24 @@
 // va a entrar —incluido lo que se va a descartar y por qué— y sólo entonces se
 // escribe. Importar a ciegas un extracto de cinco años es la mejor manera de
 // meter cien líneas mal y no enterarse hasta meses después.
+//
+// El archivo puede llegar por tres caminos, y los tres acaban en el mismo
+// sitio:
+//
+//   · el buzón   compartido desde la app del bróker en el móvil. Es el corto:
+//                el archivo ya está aquí cuando abres la cartera.
+//   · el selector  arrastrado o elegido, uno o varios a la vez.
+//   · pegado     para cuando sólo tienes unas líneas sueltas.
 
 import { useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useDatos } from "../lib/datos";
+import { comoArchivo, descartar, marcarImportada, type EntradaBuzon } from "../lib/buzon";
 import {
   adivinarMapa,
   desdeTexto,
   detectar,
+  efectivoPendiente,
   ETIQUETA_CAMPO,
   FORMATO_LBL,
   leer,
@@ -28,6 +38,7 @@ import {
 import type { Activo, Cuenta, EntradaCatalogo, Operacion } from "../lib/tipos";
 import { OP_LBL } from "../lib/tipos";
 import { fd, fe, fn } from "../lib/formato";
+import { hayNube } from "../lib/supabase";
 import {
   Aviso,
   Boton,
@@ -42,7 +53,7 @@ import {
 const AYUDA: { broker: string; pasos: string; ojo?: string }[] = [
   {
     broker: "Trade Republic",
-    pasos: "En la app: Perfil → Extractos → «Exportación de transacción», eliges las fechas y descargas el CSV.",
+    pasos: "En la app: Perfil → Extractos → «Exportación de transacción», eliges las fechas y descargas el CSV. En el iPhone, cuando salga la hoja de compartir, elige «Enviar a Cartera» y ya no tienes que hacer nada más aquí.",
     ojo: "Sólo está en la app del móvil, y no lo abras en Excel antes de subirlo: al guardarlo cambia las fechas y los decimales.",
   },
   {
@@ -52,8 +63,9 @@ const AYUDA: { broker: string; pasos: string; ojo?: string }[] = [
   },
   {
     broker: "MyInvestor",
-    pasos: "En la web: Mi cartera → Movimientos → Descargar. También vale el JSON de la propia web.",
-    ojo: "Los traspasos entre fondos tuyos se marcan aparte para que no cuenten como dinero nuevo aportado.",
+    pasos:
+      "Sólo desde la web, con ordenador: la app no exporta. El que importa es el de los fondos — Inversiones → Fondos → Operaciones y consultas → Consulta de operaciones → eliges las fechas y descargas el Excel. Ése trae el ISIN, las participaciones y el valor liquidativo de cada compra, que es lo que hace falta para saber cuánto tienes. Si además quieres los ingresos y los intereses de la cuenta, baja también Cuentas → Corriente → Operaciones y consultas → Consulta de operaciones, y al subirlo elige el formato «sólo el dinero».",
+    ojo: "El extracto de la cuenta corriente por sí solo NO vale para los fondos: corta el nombre a 30 caracteres y se come las participaciones, así que los fondos entrarían a cero. Y no abras el archivo en Excel antes de subirlo, que al guardarlo cambia fechas y decimales.",
   },
   {
     broker: "Cualquier otro",
@@ -65,18 +77,28 @@ const FORMATOS: Formato[] = [
   "traderepublic-csv",
   "revolut-csv",
   "myinvestor-tabla",
+  "myinvestor-cuenta",
+  "myinvestor-efectivo",
   "myinvestor-json",
   "generico-csv",
   "generico-json",
 ];
 
 export default function Importar() {
-  const { estado, mercado, insertar, recargar } = useDatos();
+  const { estado, mercado, buzon, insertar, actualizar, recargar, recargarBuzon } = useDatos();
   const navegar = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [entrada, setEntrada] = useState<Entrada | null>(null);
   const [nombreArchivo, setNombreArchivo] = useState("");
+  // Los archivos que esperan turno cuando se sueltan varios de golpe. Se
+  // procesan de uno en uno a propósito: cada archivo tiene su formato, su
+  // cuenta destino y su vista previa, y mezclarlos en una sola pantalla es
+  // pedir que se confirme algo que no se ha mirado.
+  const [cola, setCola] = useState<File[]>([]);
+  // De qué entrada del buzón salió lo que hay cargado, para marcarla como
+  // importada al terminar y que deje de aparecer.
+  const [origenBuzon, setOrigenBuzon] = useState<string | null>(null);
   const [formato, setFormato] = useState<Formato | null>(null);
   const [mapa, setMapa] = useState<Mapa>({});
   const [cuentaId, setCuentaId] = useState<string>("");
@@ -85,7 +107,9 @@ export default function Importar() {
   const [texto, setTexto] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
-  const [hecho, setHecho] = useState<{ ops: number; activos: number } | null>(null);
+  const [hecho, setHecho] = useState<{ ops: number; activos: number; quedan: number } | null>(
+    null,
+  );
   // Alias ISIN -> simbolo que ha resuelto el servidor para ESTE archivo. El
   // catalogo solo trae el alias de los simbolos curados a mano, y todos los
   // brokers europeos exportan ISIN: sin esto, cada valor importado nace sin
@@ -163,14 +187,56 @@ export default function Importar() {
     }
   }
 
-  async function tomar(f: File) {
+  /** Carga un archivo en la pantalla.
+   *
+   *  `conservarAviso` existe por el encadenado: al pasar al siguiente archivo
+   *  de la cola queremos que siga viéndose el «importadas 12 operaciones» del
+   *  anterior, y al elegir uno nuevo a mano, no. */
+  async function tomar(f: File, deBuzon: string | null = null, conservarAviso = false) {
     setError(null);
-    setHecho(null);
+    if (!conservarAviso) setHecho(null);
+    setOrigenBuzon(deBuzon);
     try {
       const e = await leerArchivo(f);
       aplicar(e, f.name);
     } catch {
       setError("No se ha podido leer el archivo. ¿Seguro que es un CSV, un Excel o un JSON?");
+    }
+  }
+
+  /** Varios archivos de una vez: el primero se abre y los demás hacen cola.
+   *
+   *  Es el caso normal cuando bajas los extractos de los cuatro brókeres el
+   *  mismo día, y antes obligaba a repetir todo el paseo cuatro veces. Se
+   *  procesan de uno en uno y no en bloque porque cada archivo tiene su
+   *  formato y su cuenta destino, y juntarlos sería confirmar a ciegas. */
+  function tomarVarios(fs: File[]) {
+    if (fs.length === 0) return;
+    setCola(fs.slice(1));
+    void tomar(fs[0]);
+  }
+
+  /** El siguiente de la cola, o la pantalla limpia si no queda ninguno. */
+  function siguiente(conservarAviso = false) {
+    const [f, ...resto] = cola;
+    if (!f) {
+      limpiarArchivo();
+      return;
+    }
+    setCola(resto);
+    void tomar(f, null, conservarAviso);
+  }
+
+  async function abrirDelBuzon(item: EntradaBuzon) {
+    await tomar(comoArchivo(item), item.id);
+  }
+
+  async function descartarDelBuzon(id: string) {
+    try {
+      await descartar(id);
+      await recargarBuzon();
+    } catch {
+      setError("No se ha podido descartar el archivo.");
     }
   }
 
@@ -190,21 +256,39 @@ export default function Importar() {
     }
   }
 
-  function limpiar() {
+  /** Deja la pantalla sin archivo cargado, pero sin tocar el aviso de la
+   *  importación anterior. */
+  function limpiarArchivo() {
     setResueltos([]);
     setEntrada(null);
     setFormato(null);
     setNombreArchivo("");
     setMapa({});
     setError(null);
+    setOrigenBuzon(null);
+  }
+
+  /** Empezar de cero: se va también el aviso y la cola. */
+  function limpiar() {
+    limpiarArchivo();
+    setCola([]);
     setHecho(null);
   }
 
   // ── Confirmar ─────────────────────────────────────────────────────────
-  // El orden importa: primero la cuenta, luego los activos, y sólo al final
-  // las operaciones, que necesitan los ids de los dos anteriores.
+  // El orden importa: primero la cuenta, luego los activos, después las
+  // operaciones —que necesitan los ids de los dos anteriores— y al final el
+  // efectivo, cuyo saldo sale de las operaciones ya escritas.
   async function confirmar() {
-    if (!plan || plan.nuevas.length === 0) return;
+    if (!plan) return;
+    // Un archivo entero repetido no trae ninguna operación nueva, y aun así
+    // puede quedar trabajo: si la cuenta de efectivo no llegó a crearse la
+    // primera vez —falló la escritura, o se cerró la pestaña— salir aquí la
+    // condenaba a no existir nunca, porque el archivo ya no traería nada
+    // nuevo jamás. El saldo se calcula sobre TODAS las operaciones, así que
+    // reimportar es exactamente la manera de arreglarlo.
+    if (plan.nuevas.length === 0 && !efectivoPendiente(plan)) return;
+
     setGuardando(true);
     setError(null);
     try {
@@ -236,8 +320,46 @@ export default function Importar() {
       });
 
       await insertar<Operacion>("operations", ops);
-      setHecho({ ops: ops.length, activos: creados.length });
-      limpiar();
+
+      // ── El efectivo ────────────────────────────────────────────────────
+      // Sin esto el patrimonio sale corto: el extracto trae los ingresos y
+      // las retiradas, pero si nadie crea la cuenta de liquidez, el dinero
+      // parado en el bróker no aparece por ningún lado. El plan ya ha
+      // calculado el saldo sobre TODAS las operaciones, no sólo las nuevas,
+      // así que reimportar el mismo archivo lo deja igual y no al doble.
+      if (plan.efectivo) {
+        const { existente, activo, saldo } = plan.efectivo;
+        // Los campos se escriben uno a uno en vez de reenviar el objeto del
+        // plan: ése lleva dentro la fila existente entera —id, user_id, las
+        // marcas de tiempo— y devolverle a la base sus propias columnas es
+        // la manera de que una de ellas se quede pegada donde no toca.
+        const campos: Partial<Activo> = {
+          name: activo.name,
+          cat: "liquidez",
+          currency: "EUR",
+          unit: "€",
+          // REGLA: en el efectivo el coste ES el saldo. Un coste a cero
+          // convertiría cada ingreso en una plusvalía inventada.
+          mode: "manual",
+          manual_qty: saldo,
+          manual_cost_unit: 1,
+          manual_price: 1,
+        };
+        if (existente) await actualizar<Activo>("assets", existente.id, campos);
+        else await insertar<Activo>("assets", [campos]);
+      }
+
+      if (origenBuzon) {
+        await marcarImportada(origenBuzon, ops.length);
+        await recargarBuzon();
+      }
+
+      setHecho({ ops: ops.length, activos: creados.length, quedan: cola.length });
+      // Limpia el archivo pero NO el aviso de «hecho»: llamar aquí a
+      // `limpiar()` entero lo borraba en el mismo lote de React y el mensaje
+      // de que había ido bien no llegaba a verse nunca.
+      limpiarArchivo();
+      siguiente(true);
       await recargar();
     } catch (e) {
       setError(
@@ -273,10 +395,50 @@ export default function Importar() {
             </>
           )}
           .{" "}
-          <button onClick={() => navegar("/")} className="font-bold underline underline-offset-2">
-            Ver la cartera
-          </button>
+          {hecho.quedan > 0 ? (
+            <>
+              Quedan <strong>{hecho.quedan}</strong>{" "}
+              {hecho.quedan === 1 ? "archivo" : "archivos"} por revisar, abajo.
+            </>
+          ) : (
+            <button onClick={() => navegar("/")} className="font-bold underline underline-offset-2">
+              Ver la cartera
+            </button>
+          )}
         </Aviso>
+      )}
+
+      {/* ── 0 · El buzón ────────────────────────────────────────────────── */}
+      {/* Lo que has compartido desde el móvil, esperando. Va antes que el
+          selector a propósito: si hay algo aquí, es lo que vienes a hacer. */}
+      {buzon.length > 0 && (
+        <section>
+          <TituloSeccion nota="Llegaron desde la app de tu bróker. Nada se ha importado todavía.">
+            Te esperan {buzon.length} {buzon.length === 1 ? "archivo" : "archivos"}
+          </TituloSeccion>
+          <div className="flex flex-col gap-2">
+            {buzon.map((b) => (
+              <div key={b.id} className="tile flex items-center gap-3 px-3.5 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-bold text-fg0">{b.filename}</p>
+                  <p className="text-[11px] text-fg2">
+                    {haceCuanto(b.created_at)} · {Math.max(1, Math.round(b.bytes / 1024))} KB
+                  </p>
+                </div>
+                <Boton tipo="principal" onClick={() => void abrirDelBuzon(b)}>
+                  Revisar
+                </Boton>
+                <button
+                  onClick={() => void descartarDelBuzon(b.id)}
+                  aria-label={`Descartar ${b.filename}`}
+                  className="shrink-0 rounded-tile px-2 py-1 text-[11px] font-semibold text-fg3 transition-colors hover:bg-bg2 hover:text-dn"
+                >
+                  Descartar
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* ── 1 · El archivo ──────────────────────────────────────────────── */}
@@ -291,8 +453,7 @@ export default function Importar() {
             onDrop={(e) => {
               e.preventDefault();
               setSobre(false);
-              const f = e.dataTransfer.files[0];
-              if (f) void tomar(f);
+              tomarVarios([...e.dataTransfer.files]);
             }}
             className={`flex flex-col items-center gap-2 rounded-card border-2 border-dashed px-6 py-10 text-center transition-colors ${
               sobre ? "border-blue bg-bg2" : "border-line2"
@@ -302,11 +463,13 @@ export default function Importar() {
               <path d="M12 16V4m0 0L8 8m4-4 4 4" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" strokeLinecap="round" />
             </svg>
-            <p className="font-disp text-[15px] font-bold text-fg1">Arrastra tu archivo aquí</p>
-            <p className="text-[12px] text-fg2">CSV, TSV, Excel o JSON de cualquier bróker</p>
+            <p className="font-disp text-[15px] font-bold text-fg1">Arrastra tus archivos aquí</p>
+            <p className="text-[12px] text-fg2">
+              CSV, TSV, Excel o JSON de cualquier bróker. Puedes soltar varios de golpe.
+            </p>
             <div className="mt-2 flex gap-2">
               <Boton tipo="principal" onClick={() => fileRef.current?.click()}>
-                Elegir archivo
+                Elegir archivos
               </Boton>
               <Boton tipo="suave" onClick={() => setPegando(true)}>
                 Pegar texto
@@ -315,15 +478,54 @@ export default function Importar() {
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,.tsv,.txt,.json,.xlsx,.xls"
+              multiple
+              // Sin `accept`, y no por descuido: en iOS la lista de extensiones
+              // deja en gris justo los archivos que se quieren subir. Un CSV
+              // que Trade Republic guardó en Archivos llega sin tipo MIME, y
+              // Safari lo mide por el tipo, no por el nombre. Es preferible
+              // que se pueda elegir un archivo equivocado —y que la pantalla
+              // lo diga— a que no se pueda elegir el correcto.
               className="hidden"
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void tomar(f);
+                tomarVarios([...(e.target.files ?? [])]);
                 e.target.value = "";
               }}
             />
           </div>
+
+          {/* El camino corto, para quien todavía no lo tenga puesto. */}
+          {hayNube && (
+            <Link
+              to="/ajustes"
+              className="tile flex items-center gap-3 px-3.5 py-3 transition-colors hover:bg-bg2"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0 text-blue"
+                aria-hidden
+              >
+                <rect x="6" y="2.5" width="12" height="19" rx="2.5" />
+                <path d="M12 15V8m0 0-2.5 2.5M12 8l2.5 2.5" />
+              </svg>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-bold text-fg0">
+                  Mándalos desde el móvil sin descargar nada
+                </span>
+                <span className="block text-[11.5px] leading-relaxed text-fg2">
+                  En la app del bróker, «Compartir → Enviar a Cartera». Se configura una vez, en
+                  Ajustes.
+                </span>
+              </span>
+              <span className="shrink-0 text-fg3">›</span>
+            </Link>
+          )}
 
           <section>
             <TituloSeccion nota="Dónde encontrar el archivo en cada app.">
@@ -352,12 +554,22 @@ export default function Importar() {
           <Tarjeta className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <Etiqueta>Archivo</Etiqueta>
+                <Etiqueta>
+                  {origenBuzon ? "Llegó desde el móvil" : "Archivo"}
+                  {cola.length > 0 && ` · quedan ${cola.length} detrás`}
+                </Etiqueta>
                 <p className="truncate text-[13px] font-bold text-fg0">{nombreArchivo}</p>
               </div>
-              <Boton tipo="suave" onClick={limpiar}>
-                Cambiar
-              </Boton>
+              <div className="flex shrink-0 gap-2">
+                {cola.length > 0 && (
+                  <Boton tipo="suave" onClick={() => siguiente()}>
+                    Saltar
+                  </Boton>
+                )}
+                <Boton tipo="suave" onClick={limpiar}>
+                  Cambiar
+                </Boton>
+              </div>
             </div>
 
             <Selector
@@ -414,7 +626,29 @@ export default function Importar() {
 
           {plan && <Resumen plan={plan} />}
 
-          {plan && plan.nuevas.length > 0 && (
+          {/* Un archivo del buzón cuyas operaciones ya estaban todas dentro
+              sigue apareciendo como pendiente hasta que alguien lo cierra. Es
+              lo que pasa al reenviar el extracto del mes con dos compras
+              nuevas y cuarenta viejas: se importan las dos y, a la siguiente,
+              el mismo archivo no trae nada. */}
+          {plan && plan.nuevas.length === 0 && origenBuzon && (
+            <Boton
+              tipo="suave"
+              className="w-full"
+              onClick={() => {
+                const id = origenBuzon;
+                void (async () => {
+                  await marcarImportada(id, 0);
+                  await recargarBuzon();
+                })();
+                siguiente();
+              }}
+            >
+              Entendido, quítalo del buzón
+            </Boton>
+          )}
+
+          {plan && (plan.nuevas.length > 0 || efectivoPendiente(plan)) && (
             <div className="sticky bottom-24 z-20">
               <Boton
                 tipo="principal"
@@ -424,7 +658,9 @@ export default function Importar() {
               >
                 {guardando
                   ? "Guardando…"
-                  : `Importar ${plan.nuevas.length} ${plan.nuevas.length === 1 ? "operación" : "operaciones"}`}
+                  : plan.nuevas.length > 0
+                    ? `Importar ${plan.nuevas.length} ${plan.nuevas.length === 1 ? "operación" : "operaciones"}`
+                    : "Poner al día el saldo de efectivo"}
               </Boton>
             </div>
           )}
@@ -511,6 +747,21 @@ function Resumen({ plan }: { plan: Plan }) {
           </Aviso>
         )}
 
+        {/* El efectivo se escribe al confirmar, así que tiene que verse antes.
+            Es la única línea de la importación que no sale de una operación
+            del archivo sino de la suma de todas, y por eso es la que más
+            sorprende cuando aparece sola en la cartera. */}
+        {plan.efectivo && (plan.nuevas.length > 0 || efectivoPendiente(plan)) && (
+          <div className="mt-2">
+            <Aviso>
+              {plan.efectivo.existente ? "Se actualizará" : "Se creará"} la cuenta de efectivo{" "}
+              <strong>{plan.efectivo.activo.name}</strong> con un saldo de{" "}
+              <strong>{fe(plan.efectivo.saldo, 2)}</strong>, que es lo que suman los ingresos, las
+              retiradas, las compras y los cobros del extracto.
+            </Aviso>
+          </div>
+        )}
+
         {nada && plan.duplicadas.length > 0 && (
           <Aviso>
             Todas las operaciones de este archivo ya estaban importadas. Puedes volver a subirlo
@@ -592,6 +843,20 @@ function Resumen({ plan }: { plan: Plan }) {
       )}
     </>
   );
+}
+
+/** «hace 3 min», «ayer». Para el buzón vale más que una fecha exacta: lo que
+ *  se quiere saber es si esto es lo que acabas de compartir o algo que llevaba
+ *  ahí desde la semana pasada. */
+function haceCuanto(iso: string): string {
+  const min = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (!isFinite(min)) return "";
+  if (min < 1) return "ahora mismo";
+  if (min < 60) return `hace ${min} min`;
+  const horas = Math.round(min / 60);
+  if (horas < 24) return `hace ${horas} h`;
+  const dias = Math.round(horas / 24);
+  return dias === 1 ? "ayer" : `hace ${dias} días`;
 }
 
 function Dato({ n, t, apagado }: { n: number; t: string; apagado?: boolean }) {

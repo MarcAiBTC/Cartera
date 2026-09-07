@@ -18,6 +18,9 @@ export default function Inicio() {
 
   const vacia = estado.activos.length === 0;
   const movers = movimientoDelDia(posiciones).slice(0, 3);
+  // Sólo las que además tienen títulos: una posición cerrada sin precio no le
+  // quita nada al patrimonio y avisar de ella sería ruido.
+  const mudas = posiciones.filter((p) => p.estado === "sin-precio" && p.qty > 0);
 
   return (
     <div className="flex flex-col gap-5">
@@ -43,6 +46,26 @@ export default function Inicio() {
         />
       ) : (
         <>
+          {/* ── Cuando el titular de arriba es MENTIRA ──────────────────
+              Una posición abierta sin cotización vale cero en el total, y
+              nada lo decía: la cartera enseñaba 358 € de un patrimonio de
+              3.065 € y parecía sencillamente que la app no funcionaba. Un
+              patrimonio incompleto tiene que decir que lo está. */}
+          {mudas.length > 0 && (
+            <Link to="/historial" className="tile block px-3.5 py-3">
+              <p className="text-[13px] font-bold text-fg0">
+                {mudas.length === 1
+                  ? "Hay una posición sin cotización"
+                  : `Hay ${mudas.length} posiciones sin cotización`}
+              </p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-fg2">
+                Valen 0 € en el total de arriba, así que el patrimonio sale corto:{" "}
+                {mudas.map((p) => p.activo.name).join(", ")}. En Historial → Posiciones puedes
+                ponerles el símbolo de cotización, o el precio a mano. ›
+              </p>
+            </Link>
+          )}
+
           {/* ── Las tres cifras que explican el titular ────────────────── */}
           <Tarjeta className="grid grid-cols-3 gap-2">
             <Cifra

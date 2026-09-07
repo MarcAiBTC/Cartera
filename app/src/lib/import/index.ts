@@ -9,7 +9,14 @@
 // pantalla lo enseñe antes de confirmar. Importar a ciegas un extracto de
 // cinco años es la mejor manera de meter cien líneas mal y no enterarse.
 
-import { tabular, type OrdenFecha, type Tabla } from "./csv";
+import {
+  filaCabecera,
+  nombrarColumnas,
+  normaliza,
+  tabular,
+  type OrdenFecha,
+  type Tabla,
+} from "./csv";
 import { esRevolut, leerRevolut } from "./revolut";
 import { esTradeRepublic, leerTradeRepublic } from "./traderepublic";
 import {
@@ -50,11 +57,17 @@ export async function leerArchivo(file: File): Promise<Entrada> {
     const hoja = libro.Sheets[libro.SheetNames[0]];
     // `raw:false` deja las fechas y los números ya formateados como los ve el
     // usuario en Excel; el parser de `csv.ts` sabe deshacer ese formato.
-    const objetos = XLSX.utils.sheet_to_json<Record<string, unknown>>(hoja, {
+    //
+    // `header:1` devuelve la hoja tal cual, en filas de celdas, en vez de dar
+    // por hecho que la cabecera es la primera fila. El Excel de MyInvestor
+    // empieza por el titular, el número de cuenta y el saldo: leído «como
+    // objetos» salían columnas llamadas «TITULAR:» y no se reconocía nada.
+    const matriz = XLSX.utils.sheet_to_json<unknown[]>(hoja, {
+      header: 1,
       raw: false,
       defval: "",
     });
-    return { nombre: file.name, tabla: desdeObjetos(objetos) };
+    return { nombre: file.name, tabla: desdeMatriz(matriz) };
   }
 
   const texto = await file.text();
@@ -73,20 +86,31 @@ export function desdeTexto(texto: string, nombre = "pegado"): Entrada {
   return { nombre, texto, tabla: tabular(texto) };
 }
 
-function desdeObjetos(objetos: Record<string, unknown>[]): Tabla {
-  const filas = objetos.map((o) => {
+/** Una hoja de Excel ya leída como filas de celdas, convertida en la misma
+ *  `Tabla` que sale de un CSV: misma cabecera, mismos números de línea y, por
+ *  tanto, los mismos adaptadores para los dos. */
+export function desdeMatriz(matriz: unknown[][]): Tabla {
+  const celdas = matriz.map((f) => (f ?? []).map((c) => (c == null ? "" : String(c).trim())));
+  if (celdas.length === 0) return { cabeceras: [], filas: [], lineas: [], separador: "," };
+
+  const cabecera = filaCabecera(celdas);
+  const cabeceras = nombrarColumnas(celdas[cabecera]);
+
+  const filas: Record<string, string>[] = [];
+  const lineas: number[] = [];
+  for (let i = cabecera + 1; i < celdas.length; i++) {
+    // Las hojas de un banco acaban en filas vacías y en líneas de total.
+    if (celdas[i].every((c) => c === "")) continue;
     const fila: Record<string, string> = {};
-    for (const [k, v] of Object.entries(o)) {
-      fila[k.toLowerCase().trim()] = v == null ? "" : String(v);
-    }
-    return fila;
-  });
-  return {
-    cabeceras: [...new Set(filas.flatMap((f) => Object.keys(f)))],
-    filas,
-    lineas: filas.map((_, i) => i + 2),
-    separador: ",",
-  };
+    cabeceras.forEach((c, j) => {
+      fila[c] = celdas[i][j] ?? "";
+    });
+    filas.push(fila);
+    // La fila de Excel que ve el usuario, para poder señalarla en un descarte.
+    lineas.push(i + 1);
+  }
+
+  return { cabeceras, filas, lineas, separador: "," };
 }
 
 // ── 2 · Detectar el formato ──────────────────────────────────────────────
@@ -130,6 +154,8 @@ export function leer(e: Entrada, op: OpcionesLectura = {}): Lectura {
       return leerMyInvestorTabla(e.tabla!);
     case "myinvestor-cuenta":
       return leerMyInvestorMovimientos(e.tabla!);
+    case "myinvestor-efectivo":
+      return leerMyInvestorMovimientos(e.tabla!, { soloEfectivo: true });
     case "traderepublic-csv":
       return leerTradeRepublic(e.tabla!);
     case "generico-csv":
@@ -172,6 +198,21 @@ export interface Plan {
    *  ingresos y las retiradas, pero si nadie crea la cuenta de efectivo el
    *  dinero parado en el broker no aparece por ningun lado. */
   efectivo?: { saldo: number; activo: Partial<Activo>; existente?: Activo };
+}
+
+/** ¿Queda saldo de efectivo por escribir?
+ *
+ *  Un archivo repetido no trae ninguna operación nueva, pero eso no quiere
+ *  decir que no haya nada que hacer: si la cuenta de efectivo no llegó a
+ *  crearse —falló la escritura, se cerró la pestaña— nunca se creará sola,
+ *  porque el mismo archivo ya no traerá nada nuevo. Reimportar tiene que
+ *  poder arreglarlo. */
+export function efectivoPendiente(plan: Plan): boolean {
+  const e = plan.efectivo;
+  if (!e) return false;
+  if (!e.existente) return true;
+  // Un céntimo de diferencia es ruido de coma flotante, no un saldo distinto.
+  return Math.abs((e.existente.manual_qty ?? 0) - e.saldo) > 0.005;
 }
 
 export interface OpcionesPlan {
@@ -234,6 +275,22 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
     if (a.isin) porIsin.set(a.isin.toUpperCase(), a);
     if (a.ticker) porTicker.set(a.ticker.toUpperCase(), a);
   }
+
+  /** El extracto de una cuenta corriente no trae ISIN, y encima corta el
+   *  nombre del fondo: «FIDELITY MSCI WORLD INDEX P AC». Si ese fondo ya está
+   *  en la cartera con su nombre entero, la compra tiene que caer ahí y no
+   *  crear un activo gemelo y mudo al lado.
+   *
+   *  Sólo vale cuando el trozo casa con UN activo: «VANGUARD US 500 STOCK»
+   *  encaja con dos clases distintas del mismo fondo, y elegir una a cara o
+   *  cruz es peor que dejarlo sin casar y que se vea en la vista previa. */
+  const porPrefijo = (nombre: string | undefined): Activo | undefined => {
+    if (!nombre) return undefined;
+    const trozo = normaliza(nombre);
+    if (trozo.length < 8) return undefined;
+    const casan = estado.activos.filter((a) => a.name && normaliza(a.name).startsWith(trozo));
+    return casan.length === 1 ? casan[0] : undefined;
+  };
   const catPorIsin = new Map<string, EntradaCatalogo>();
   const catPorTicker = new Map<string, EntradaCatalogo>();
   for (const c of catalogo) {
@@ -262,7 +319,8 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
     const clave = esValor ? (fila.isin || fila.ticker || fila.nombre || "").toUpperCase() : "";
     const existente =
       (fila.isin ? porIsin.get(fila.isin.toUpperCase()) : undefined) ??
-      (fila.ticker ? porTicker.get(fila.ticker.toUpperCase()) : undefined);
+      (fila.ticker ? porTicker.get(fila.ticker.toUpperCase()) : undefined) ??
+      (esValor && !fila.isin && !fila.ticker ? porPrefijo(fila.nombre) : undefined);
 
     const entradaCat =
       (fila.isin ? catPorIsin.get(fila.isin.toUpperCase()) : undefined) ??
