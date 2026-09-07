@@ -22,7 +22,9 @@ if (!rutas[cual]) {
 delete process.env.CRON_SECRET;
 process.env.SUPABASE_URL ??= process.env.VITE_SUPABASE_URL;
 
-const { default: handler } = await rutas[cual]();
+// `GET` y no `default`: las rutas se exportan por nombre de método, que es lo
+// único que Vercel ejecuta con la firma web. Ver la nota en _lib/supabase.ts.
+const { GET: handler } = await rutas[cual]();
 const t0 = Date.now();
 const r = await handler(new Request(`http://local/api/${cual}`));
 const cuerpo = await r.text();

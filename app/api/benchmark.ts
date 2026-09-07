@@ -11,7 +11,8 @@ import { historicoYahoo, serieCambios } from "./_lib/mercado";
 
 export const config = { maxDuration: 120 };
 
-export default async function handler(req: Request): Promise<Response> {
+// Por nombre de metodo, nunca `export default`: ver la nota en _lib/supabase.ts.
+export async function GET(req: Request): Promise<Response> {
   if (!autorizada(req)) return respuesta({ error: "no autorizada" }, 401);
 
   const sb = clienteServicio();

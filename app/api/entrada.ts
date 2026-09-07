@@ -91,7 +91,13 @@ function claveDe(req: Request): string {
   return (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
 }
 
-export default async function handler(req: Request): Promise<Response> {
+// Esta ruta atiende GET y POST, asi que se exportan los dos apuntando al
+// mismo sitio. Por nombre de metodo, nunca `export default`: ver la nota en
+// _lib/supabase.ts.
+export const GET = manejar;
+export const POST = manejar;
+
+async function manejar(req: Request): Promise<Response> {
   const clave = claveDe(req);
   if (!ES_CLAVE(clave)) {
     return respuesta({ error: "falta la clave de subida, o no tiene la forma esperada" }, 401);

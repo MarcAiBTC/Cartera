@@ -20,7 +20,13 @@ export const config = { maxDuration: 60 };
  *  puede trocear si algún día hiciera falta. */
 const TOPE = 40;
 
-export default async function handler(req: Request): Promise<Response> {
+// Esta ruta atiende GET y POST, asi que se exportan los dos apuntando al
+// mismo sitio. Por nombre de metodo, nunca `export default`: ver la nota en
+// _lib/supabase.ts.
+export const GET = manejar;
+export const POST = manejar;
+
+async function manejar(req: Request): Promise<Response> {
   let isines: string[] = [];
 
   if (req.method === "POST") {
