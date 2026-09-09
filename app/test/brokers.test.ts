@@ -204,10 +204,15 @@ describe("MyInvestor · extracto de cuenta", () => {
 // de cuenta y el saldo. Leída dando por hecho que la cabecera es la primera
 // fila, las columnas se llamaban «TITULAR:» y el archivo entero acababa en el
 // importador genérico sin reconocer ni una línea.
+//
+// El titular y el número de cuenta van INVENTADOS. Esto es un repositorio
+// público y un extracto de banco lleva dentro el nombre, la dirección y el
+// IBAN de una persona: para probar el lector da igual lo que ponga en esas
+// filas, lo que se prueba es que se salten.
 
 const HOJA: string[][] = [
-  ["", "", "TITULAR:", "MARC ALVAREZ AZANON", "", ""],
-  ["", "", "CUENTA:", "6650673555", "", ""],
+  ["", "", "TITULAR:", "PERSONA DE EJEMPLO", "", ""],
+  ["", "", "CUENTA:", "0000000000", "", ""],
   ["", "", "Saldo:", "218,32€", "", ""],
   ["", "", "", "", "", ""],
   ["", "", "", "", "", ""],
