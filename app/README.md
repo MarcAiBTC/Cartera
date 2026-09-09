@@ -11,6 +11,11 @@ obligaba a teclear cada compra a mano. Lo que cambia:
 - **Se carga el archivo del bróker.** Trade Republic, Revolut, MyInvestor y
   cualquier CSV o Excel. La app detecta el formato, enseña qué va a entrar y
   sólo entonces guarda. Se pueden soltar varios de golpe y van en cola.
+- **Y el PDF, cuando el CSV no basta.** El extracto de MyInvestor sólo se puede
+  bajar en PDF, y es el único archivo suyo que dice qué fondos tienes, con su
+  ISIN y sus participaciones: el de movimientos corta el nombre a 30 caracteres
+  y se lleva por delante las dos cosas. Se lee sin librerías (`lib/import/pdf.ts`
+  reconstruye la tabla a partir de las coordenadas del texto).
 - **Y desde el móvil, sin descargar nada.** En la app del bróker: compartir el
   extracto y elegir «Enviar a Cartera». El archivo aterriza en el buzón y está
   esperando la próxima vez que abras la app. Se monta una vez, en Ajustes.
@@ -150,7 +155,7 @@ segundo es contra un Atajo en bucle, no contra ti.
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # 73 pruebas del cálculo, los importadores y el buzón
+npm test           # 105 pruebas del cálculo, los importadores y el buzón
 npm run build
 ```
 
@@ -170,6 +175,50 @@ SEMBRAR=http://localhost:4173/sembrar-demo.html \
 usar `--screenshot` a secas: en Windows la ventana tiene una anchura mínima de
 unos 500 px, así que la página se maqueta a 500 y la captura se recorta a 430.
 Parece un desbordamiento horizontal que no existe.
+
+### Probar un extracto de verdad
+
+El formato que documenta un bróker y el que exporta no siempre son el mismo, y
+la única manera de arreglar un adaptador es pasarle el archivo real. Dos sondas,
+ninguna escribe nada:
+
+```bash
+# Qué ha entendido de UN archivo: formato, operaciones, posiciones, descartes.
+npx vite-node scripts/probar-import.mjs "~/Downloads/Extracto cuenta MyInvestor.pdf"
+
+# La importación ENTERA, varios archivos a la vez, y la cartera que saldría.
+npx vite-node scripts/simular-import.mjs --cuadra 2879.69 \
+  "~/Downloads/Movimientos_07-09-2025_07-09-2026.xlsx" \
+  "~/Downloads/Extracto cuenta MyInvestor.pdf"
+```
+
+`simular-import.mjs` llama a las mismas funciones que la pantalla —`leerArchivo`,
+`combinar`, `planificar`— y luego repite lo que hace «Confirmar», pero en
+memoria: aplica el plan sobre una copia del estado y calcula la cartera con el
+motor de verdad. Con `--cuadra` le dices lo que dice el banco y te contesta si
+cuadra. Con `--cero`, como si la cartera estuviera vacía.
+
+### MyInvestor: por qué hacen falta dos archivos
+
+Ninguno de los dos vale solo, y esto es el resumen de por qué:
+
+| | PDF «Extracto de cuenta» | Excel de la cuenta corriente |
+|---|---|---|
+| Qué tienes hoy | sí: ISIN, participaciones, valor | no |
+| El saldo real | sí | sí |
+| Lo que costó | no (sólo el último mes) | sí, pero sin ISIN ni participaciones |
+
+El Excel corta el concepto a 30 caracteres y con el corte se van el ISIN y las
+participaciones, así que por sí solo deja los fondos a cero títulos **y** a cero
+euros. Los dos juntos sí: las posiciones y el saldo salen del PDF, y el coste de
+sumar las compras del Excel que casan con cada posición.
+
+Y el PDF trae una tercera cosa que no es obvia: **su propio total**. Si el
+efectivo más las posiciones suman el total que declara el banco, su lista lo
+cuenta todo — y entonces un valor que sale en las compras y no en la lista es un
+valor que ya no tienes. Ésos se crean archivados, con su historial pero fuera de
+la cartera; vivos y sin participaciones sólo serían una fila a cero euros. Si el
+total no cuadra, no se archiva nada: la lista podría estar parcial.
 
 ---
 

@@ -21,17 +21,21 @@ import { useDatos } from "../lib/datos";
 import { comoArchivo, descartar, marcarImportada, type EntradaBuzon } from "../lib/buzon";
 import {
   adivinarMapa,
+  combinar,
   desdeTexto,
   detectar,
   efectivoPendiente,
   ETIQUETA_CAMPO,
   FORMATO_LBL,
+  FORMATO_NOTA,
   leer,
   leerArchivo,
   planificar,
+  posicionesPendientes,
   type CampoImport,
   type Entrada,
   type Formato,
+  type Lectura,
   type Mapa,
   type Plan,
 } from "../lib/import";
@@ -64,8 +68,8 @@ const AYUDA: { broker: string; pasos: string; ojo?: string }[] = [
   {
     broker: "MyInvestor",
     pasos:
-      "Sólo desde la web, con ordenador: la app no exporta. El que importa es el de los fondos — Inversiones → Fondos → Operaciones y consultas → Consulta de operaciones → eliges las fechas y descargas el Excel. Ése trae el ISIN, las participaciones y el valor liquidativo de cada compra, que es lo que hace falta para saber cuánto tienes. Si además quieres los ingresos y los intereses de la cuenta, baja también Cuentas → Corriente → Operaciones y consultas → Consulta de operaciones, y al subirlo elige el formato «sólo el dinero».",
-    ojo: "El extracto de la cuenta corriente por sí solo NO vale para los fondos: corta el nombre a 30 caracteres y se come las participaciones, así que los fondos entrarían a cero. Y no abras el archivo en Excel antes de subirlo, que al guardarlo cambia fechas y decimales.",
+      "Hacen falta DOS archivos, y los dos sólo desde la web, con ordenador: la app no exporta. Primero el PDF «Extracto de cuenta» —Perfil → Documentos y extractos—, que es el que dice qué fondos tienes, con su ISIN, sus participaciones y el saldo de la cuenta. Y después el Excel de movimientos —Cuentas → Corriente → Operaciones y consultas → Consulta de operaciones—, eligiendo el rango de fechas MÁS LARGO que te deje, que es de donde sale lo que te costó cada cosa.",
+    ojo: "El Excel por sí solo no vale: corta el nombre del fondo a 30 caracteres y con él se van el ISIN y las participaciones, así que los fondos entran a cero euros. Por eso hace falta el PDF. Y no abras ninguno de los dos en Excel antes de subirlos, que al guardarlos cambia fechas y decimales.",
   },
   {
     broker: "Cualquier otro",
@@ -73,43 +77,74 @@ const AYUDA: { broker: string; pasos: string; ojo?: string }[] = [
   },
 ];
 
-const FORMATOS: Formato[] = [
-  "traderepublic-csv",
-  "revolut-csv",
-  "myinvestor-tabla",
-  "myinvestor-cuenta",
-  "myinvestor-efectivo",
-  "myinvestor-json",
-  "generico-csv",
-  "generico-json",
-];
+/** Los formatos que puede tener un archivo, según lo que se haya podido sacar
+ *  de él. Ofrecer los nueve siempre era la manera de que alguien eligiera
+ *  «Trade Republic · CSV» para un PDF y se quedara mirando una pantalla vacía:
+ *  un PDF no es una tabla y ningún lector de tabla va a saber leerlo. */
+function formatosDe(e: Entrada): Formato[] {
+  if (e.pdf) return ["myinvestor-extracto"];
+  if (e.json !== undefined) return ["myinvestor-json", "generico-json"];
+  return [
+    "traderepublic-csv",
+    "revolut-csv",
+    "myinvestor-cuenta",
+    "myinvestor-efectivo",
+    "myinvestor-tabla",
+    "generico-csv",
+  ];
+}
+
+/** Un archivo ya leído y esperando a que se confirme la importación. */
+interface Cargado {
+  id: string;
+  nombre: string;
+  entrada: Entrada;
+  formato: Formato;
+  mapa: Mapa;
+  /** De qué entrada del buzón salió, para marcarla al terminar */
+  buzon?: string;
+}
+
+/** Qué aporta este archivo, en una línea. Es lo que deja ver de un vistazo que
+ *  faltan las posiciones, o que se ha subido dos veces el mismo. */
+function queTrae(l: Lectura): string {
+  const partes: string[] = [];
+  if (l.filas.length) partes.push(`${l.filas.length} movimientos`);
+  if (l.posiciones?.length) partes.push(`${l.posiciones.length} posiciones`);
+  if (l.saldo != null) partes.push(`saldo ${fe(l.saldo, 2)}`);
+  if (partes.length === 0) return "no se ha reconocido nada dentro";
+  return partes.join(" · ");
+}
 
 export default function Importar() {
   const { estado, mercado, buzon, insertar, actualizar, recargar, recargarBuzon } = useDatos();
   const navegar = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
+  /** Un número por archivo cargado, para poder identificarlos sin depender del
+   *  nombre: se puede subir dos veces el mismo. */
+  const contador = useRef(0);
 
-  const [entrada, setEntrada] = useState<Entrada | null>(null);
-  const [nombreArchivo, setNombreArchivo] = useState("");
-  // Los archivos que esperan turno cuando se sueltan varios de golpe. Se
-  // procesan de uno en uno a propósito: cada archivo tiene su formato, su
-  // cuenta destino y su vista previa, y mezclarlos en una sola pantalla es
-  // pedir que se confirme algo que no se ha mirado.
-  const [cola, setCola] = useState<File[]>([]);
-  // De qué entrada del buzón salió lo que hay cargado, para marcarla como
-  // importada al terminar y que deje de aparecer.
-  const [origenBuzon, setOrigenBuzon] = useState<string | null>(null);
-  const [formato, setFormato] = useState<Formato | null>(null);
-  const [mapa, setMapa] = useState<Mapa>({});
+  // Todos los archivos cargados a la vez, y una sola importación con lo que
+  // digan entre todos. Antes iban en cola, de uno en uno, y con MyInvestor eso
+  // no puede funcionar: el Excel trae las compras y el PDF las participaciones,
+  // y por separado el primero deja los fondos a cero y el segundo no sabe
+  // todavía lo que costaron.
+  const [archivos, setArchivos] = useState<Cargado[]>([]);
+  // Qué activo de la cartera es cada posición del extracto, cuando lo dice una
+  // persona. Sólo hace falta con dos clases del mismo fondo, donde el parecido
+  // de los nombres empata y elegir por él sería jugárselo a cara o cruz.
+  const [emparejamientos, setEmparejamientos] = useState<Record<string, string>>({});
   const [cuentaId, setCuentaId] = useState<string>("");
   const [sobre, setSobre] = useState(false);
   const [pegando, setPegando] = useState(false);
   const [texto, setTexto] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
-  const [hecho, setHecho] = useState<{ ops: number; activos: number; quedan: number } | null>(
-    null,
-  );
+  const [hecho, setHecho] = useState<{
+    ops: number;
+    activos: number;
+    posiciones: number;
+  } | null>(null);
   // Alias ISIN -> simbolo que ha resuelto el servidor para ESTE archivo. El
   // catalogo solo trae el alias de los simbolos curados a mano, y todos los
   // brokers europeos exportan ISIN: sin esto, cada valor importado nace sin
@@ -118,20 +153,58 @@ export default function Importar() {
   const [resueltos, setResueltos] = useState<EntradaCatalogo[]>([]);
   const [resolviendo, setResolviendo] = useState(false);
 
+  /** Lo que ha entendido de cada archivo, por separado. Se enseña archivo por
+   *  archivo para que se vea de dónde sale cada cosa. */
+  const lecturas: Lectura[] = useMemo(
+    () => archivos.map((a) => leer(a.entrada, { formato: a.formato, mapa: a.mapa })),
+    [archivos],
+  );
+
   // ── El plan se recalcula solo con cada cambio: no hay un botón de
   //    «previsualizar» que se pueda quedar desincronizado del formulario.
   const plan: Plan | null = useMemo(() => {
-    if (!entrada || !formato) return null;
-    const lectura = leer(entrada, { formato, mapa });
-    return planificar(lectura, {
+    if (archivos.length === 0) return null;
+    return planificar(combinar(lecturas), {
       estado,
       fx: mercado.fx,
       // Los alias recien resueltos van DELANTE: son mas frescos que el
       // catalogo que se cargo al abrir la app.
       catalogo: [...resueltos, ...mercado.catalogo],
       cuentaId: cuentaId || undefined,
+      emparejamientos,
     });
-  }, [entrada, formato, mapa, estado, mercado, cuentaId, resueltos]);
+  }, [archivos, lecturas, estado, mercado, cuentaId, resueltos, emparejamientos]);
+
+  /** El archivo que falta. Con MyInvestor hacen falta dos y ninguno de los dos
+   *  vale solo, así que decirlo aquí ahorra la importación a medias y el
+   *  «pues sigue sin salir» de después. */
+  const falta = useMemo(() => {
+    const fs = archivos.map((a) => a.formato);
+    const movimientos = fs.some((f) => f.startsWith("myinvestor-") && f !== "myinvestor-extracto");
+    const posicion = fs.includes("myinvestor-extracto");
+    if (posicion && !movimientos) {
+      return "Con esto sabremos qué fondos tienes y cuánto valen, pero no lo que te costaron. Añade también el Excel de movimientos de la cuenta corriente y se importa todo de una vez.";
+    }
+    if (movimientos && !posicion && !fs.includes("myinvestor-tabla")) {
+      return "Falta el PDF «Extracto de cuenta» de MyInvestor. Sin él los fondos entran sin ISIN y sin participaciones, o sea a cero euros. Añádelo aquí y se importa todo junto.";
+    }
+    return null;
+  }, [archivos]);
+
+  /** Los activos que pueden ser una de las posiciones del extracto: los que
+   *  han tenido movimiento en la cuenta destino. Una acción comprada en otro
+   *  bróker no puede ser el fondo del que habla este PDF. */
+  const candidatos = useMemo(() => {
+    if (!plan?.posiciones.length) return [];
+    const cuenta =
+      cuentaId || estado.cuentas.find((c) => c.broker === plan.lectura.broker)?.id;
+    const suyos = new Set(
+      estado.operaciones.filter((o) => o.account_id === cuenta && o.asset_id).map((o) => o.asset_id),
+    );
+    return estado.activos.filter(
+      (a) => !a.archived && a.cat !== "liquidez" && (!cuenta || suyos.has(a.id)),
+    );
+  }, [plan, estado, cuentaId]);
 
   /** Pregunta al servidor por los ISIN que el catalogo no sabe traducir. */
   async function resolverIsines(e: Entrada, f: Formato) {
@@ -142,8 +215,14 @@ export default function Importar() {
       );
       const faltan = [
         ...new Set(
-          lectura.filas
-            .map((x) => (x.isin ?? "").toUpperCase())
+          [
+            ...lectura.filas.map((x) => x.isin),
+            // Los de las posiciones también, y sobre todo: un extracto de
+            // MyInvestor no trae ninguna operación con ISIN, y son justo esos
+            // fondos los que estaban sin cotización.
+            ...(lectura.posiciones ?? []).map((p) => p.isin),
+          ]
+            .map((i) => (i ?? "").toUpperCase())
             .filter((i) => i && !conocidos.has(i)),
         ),
       ];
@@ -187,48 +266,61 @@ export default function Importar() {
     }
   }
 
-  /** Carga un archivo en la pantalla.
-   *
-   *  `conservarAviso` existe por el encadenado: al pasar al siguiente archivo
-   *  de la cola queremos que siga viéndose el «importadas 12 operaciones» del
-   *  anterior, y al elegir uno nuevo a mano, no. */
-  async function tomar(f: File, deBuzon: string | null = null, conservarAviso = false) {
-    setError(null);
-    if (!conservarAviso) setHecho(null);
-    setOrigenBuzon(deBuzon);
-    try {
-      const e = await leerArchivo(f);
-      aplicar(e, f.name);
-    } catch {
-      setError("No se ha podido leer el archivo. ¿Seguro que es un CSV, un Excel o un JSON?");
-    }
-  }
-
-  /** Varios archivos de una vez: el primero se abre y los demás hacen cola.
-   *
-   *  Es el caso normal cuando bajas los extractos de los cuatro brókeres el
-   *  mismo día, y antes obligaba a repetir todo el paseo cuatro veces. Se
-   *  procesan de uno en uno y no en bloque porque cada archivo tiene su
-   *  formato y su cuenta destino, y juntarlos sería confirmar a ciegas. */
-  function tomarVarios(fs: File[]) {
+  /** Añade archivos a la importación. Todos juntos, no en cola: con
+   *  MyInvestor hacen falta dos y sólo tienen sentido sumados. */
+  async function tomarVarios(fs: File[], deBuzon?: string) {
     if (fs.length === 0) return;
-    setCola(fs.slice(1));
-    void tomar(fs[0]);
+    setError(null);
+    setHecho(null);
+    setEmparejamientos({});
+
+    const nuevos: Cargado[] = [];
+    const fallos: string[] = [];
+    for (const f of fs) {
+      try {
+        const e = await leerArchivo(f);
+        nuevos.push({
+          id: `a${(contador.current += 1)}`,
+          nombre: f.name,
+          entrada: e,
+          formato: detectar(e),
+          mapa: e.tabla ? adivinarMapa(e.tabla) : {},
+          buzon: deBuzon,
+        });
+      } catch {
+        fallos.push(f.name);
+      }
+    }
+
+    if (fallos.length) {
+      setError(
+        `No se ha podido leer ${fallos.join(", ")}. ¿Seguro que es un CSV, un Excel, un PDF o un JSON?`,
+      );
+    }
+    if (nuevos.length === 0) return;
+
+    setArchivos((previos) => [...previos, ...nuevos]);
+    for (const n of nuevos) {
+      if (n.formato !== "desconocido") void resolverIsines(n.entrada, n.formato);
+    }
   }
 
-  /** El siguiente de la cola, o la pantalla limpia si no queda ninguno. */
-  function siguiente(conservarAviso = false) {
-    const [f, ...resto] = cola;
-    if (!f) {
-      limpiarArchivo();
-      return;
-    }
-    setCola(resto);
-    void tomar(f, null, conservarAviso);
+  function quitarArchivo(id: string) {
+    setArchivos((previos) => previos.filter((a) => a.id !== id));
+    setEmparejamientos({});
+  }
+
+  function cambiarFormato(id: string, f: Formato) {
+    setArchivos((previos) => previos.map((a) => (a.id === id ? { ...a, formato: f } : a)));
+    setEmparejamientos({});
+  }
+
+  function cambiarMapa(id: string, m: Mapa) {
+    setArchivos((previos) => previos.map((a) => (a.id === id ? { ...a, mapa: m } : a)));
   }
 
   async function abrirDelBuzon(item: EntradaBuzon) {
-    await tomar(comoArchivo(item), item.id);
+    await tomarVarios([comoArchivo(item)], item.id);
   }
 
   async function descartarDelBuzon(id: string) {
@@ -240,38 +332,12 @@ export default function Importar() {
     }
   }
 
-  function aplicar(e: Entrada, nombre: string) {
-    const f = detectar(e);
-    setEntrada(e);
-    setNombreArchivo(nombre);
-    setFormato(f);
-    setMapa(e.tabla ? adivinarMapa(e.tabla) : {});
-    if (f === "desconocido") {
-      setError(
-        "No se reconoce el formato. Elige uno a mano abajo, o comprueba que el archivo tenga una fila de cabecera.",
-      );
-    } else {
-      setError(null);
-      void resolverIsines(e, f);
-    }
-  }
-
-  /** Deja la pantalla sin archivo cargado, pero sin tocar el aviso de la
-   *  importación anterior. */
-  function limpiarArchivo() {
-    setResueltos([]);
-    setEntrada(null);
-    setFormato(null);
-    setNombreArchivo("");
-    setMapa({});
-    setError(null);
-    setOrigenBuzon(null);
-  }
-
-  /** Empezar de cero: se va también el aviso y la cola. */
+  /** Empezar de cero. */
   function limpiar() {
-    limpiarArchivo();
-    setCola([]);
+    setArchivos([]);
+    setResueltos([]);
+    setEmparejamientos({});
+    setError(null);
     setHecho(null);
   }
 
@@ -287,7 +353,7 @@ export default function Importar() {
     // condenaba a no existir nunca, porque el archivo ya no traería nada
     // nuevo jamás. El saldo se calcula sobre TODAS las operaciones, así que
     // reimportar es exactamente la manera de arreglarlo.
-    if (plan.nuevas.length === 0 && !efectivoPendiente(plan)) return;
+    if (plan.nuevas.length === 0 && !efectivoPendiente(plan) && !posicionesPendientes(plan)) return;
 
     setGuardando(true);
     setError(null);
@@ -310,12 +376,54 @@ export default function Importar() {
         porClave.set(a.name.toUpperCase(), a.id);
       }
 
+      // ── Las posiciones ─────────────────────────────────────────────────
+      // Un extracto de posición no cuenta lo que hiciste sino lo que tienes, y
+      // por eso va ANTES de las operaciones: el fondo que crea el PDF con su
+      // ISIN es el mismo al que tienen que caer las compras del Excel, y hasta
+      // que no se escribe no tiene id al que apuntar.
+      /** Activo que se archiva → activo que se queda con sus operaciones. */
+      const redirigir = new Map<string, string>();
+      let posiciones = 0;
+
+      for (const p of plan.posiciones) {
+        if (p.aldia) {
+          // Aunque no haya nada que cambiar en el activo, las compras nuevas de
+          // este fondo tienen que saber a dónde van.
+          if (p.activo) for (const k of p.claves) porClave.set(k, p.activo.id);
+          continue;
+        }
+
+        let id: string;
+        if (p.activo) {
+          await actualizar<Activo>("assets", p.activo.id, p.campos);
+          id = p.activo.id;
+        } else {
+          const [a] = await insertar<Activo>("assets", [p.campos]);
+          id = a.id;
+        }
+        for (const k of p.claves) porClave.set(k, id);
+
+        // El mismo fondo con el nombre cortado de dos maneras eran dos activos.
+        // El que se queda es uno; al otro se le mudan las operaciones y se
+        // archiva —no se borra—, que es lo que deja el coste bien la próxima
+        // vez que se importe.
+        for (const o of p.reasignar) {
+          await actualizar<Operacion>("operations", o.id, { asset_id: id });
+        }
+        for (const a of p.absorbidos) {
+          redirigir.set(a.id, id);
+          await actualizar<Activo>("assets", a.id, { archived: true });
+        }
+        posiciones++;
+      }
+
       const ops = plan.nuevas.map((p) => {
         const clave = (p.fila.isin || p.fila.ticker || p.fila.nombre || "").toUpperCase();
+        const suyo = p.activo ? (redirigir.get(p.activo.id) ?? p.activo.id) : undefined;
         return {
           ...p.operacion,
           account_id: cuenta || null,
-          asset_id: p.activo?.id ?? porClave.get(clave) ?? null,
+          asset_id: porClave.get(clave) ?? suyo ?? null,
         };
       });
 
@@ -349,17 +457,25 @@ export default function Importar() {
         else await insertar<Activo>("assets", [campos]);
       }
 
-      if (origenBuzon) {
-        await marcarImportada(origenBuzon, ops.length);
+      const delBuzon = archivos.map((a) => a.buzon).filter((b): b is string => Boolean(b));
+      if (delBuzon.length) {
+        for (const b of delBuzon) await marcarImportada(b, ops.length);
         await recargarBuzon();
       }
 
-      setHecho({ ops: ops.length, activos: creados.length, quedan: cola.length });
-      // Limpia el archivo pero NO el aviso de «hecho»: llamar aquí a
-      // `limpiar()` entero lo borraba en el mismo lote de React y el mensaje
-      // de que había ido bien no llegaba a verse nunca.
-      limpiarArchivo();
-      siguiente(true);
+      // El aviso se pone DESPUÉS de vaciar los archivos: en el mismo lote de
+      // React, limpiar lo borraba y el mensaje de que había ido bien no
+      // llegaba a verse nunca.
+      setArchivos([]);
+      setResueltos([]);
+      setEmparejamientos({});
+      // Los archivados no se cuentan como activos nuevos: no van a aparecer en
+      // la cartera y decir «creados 3 activos» mandaría a buscarlos.
+      setHecho({
+        ops: ops.length,
+        activos: creados.filter((a) => !a.archived).length,
+        posiciones,
+      });
       await recargar();
     } catch (e) {
       setError(
@@ -394,17 +510,16 @@ export default function Importar() {
               {hecho.activos === 1 ? "activo nuevo" : "activos nuevos"}
             </>
           )}
-          .{" "}
-          {hecho.quedan > 0 ? (
+          {hecho.posiciones > 0 && (
             <>
-              Quedan <strong>{hecho.quedan}</strong>{" "}
-              {hecho.quedan === 1 ? "archivo" : "archivos"} por revisar, abajo.
+              . Puestas al día <strong>{hecho.posiciones}</strong>{" "}
+              {hecho.posiciones === 1 ? "posición" : "posiciones"}
             </>
-          ) : (
-            <button onClick={() => navegar("/")} className="font-bold underline underline-offset-2">
-              Ver la cartera
-            </button>
           )}
+          .{" "}
+          <button onClick={() => navegar("/")} className="font-bold underline underline-offset-2">
+            Ver la cartera
+          </button>
         </Aviso>
       )}
 
@@ -442,7 +557,7 @@ export default function Importar() {
       )}
 
       {/* ── 1 · El archivo ──────────────────────────────────────────────── */}
-      {!entrada && (
+      {archivos.length === 0 && (
         <>
           <div
             onDragOver={(e) => {
@@ -465,7 +580,7 @@ export default function Importar() {
             </svg>
             <p className="font-disp text-[15px] font-bold text-fg1">Arrastra tus archivos aquí</p>
             <p className="text-[12px] text-fg2">
-              CSV, TSV, Excel o JSON de cualquier bróker. Puedes soltar varios de golpe.
+              CSV, TSV, Excel, PDF o JSON de cualquier bróker. Puedes soltar varios de golpe.
             </p>
             <div className="mt-2 flex gap-2">
               <Boton tipo="principal" onClick={() => fileRef.current?.click()}>
@@ -475,22 +590,6 @@ export default function Importar() {
                 Pegar texto
               </Boton>
             </div>
-            <input
-              ref={fileRef}
-              type="file"
-              multiple
-              // Sin `accept`, y no por descuido: en iOS la lista de extensiones
-              // deja en gris justo los archivos que se quieren subir. Un CSV
-              // que Trade Republic guardó en Archivos llega sin tipo MIME, y
-              // Safari lo mide por el tipo, no por el nombre. Es preferible
-              // que se pueda elegir un archivo equivocado —y que la pantalla
-              // lo diga— a que no se pueda elegir el correcto.
-              className="hidden"
-              onChange={(e) => {
-                tomarVarios([...(e.target.files ?? [])]);
-                e.target.value = "";
-              }}
-            />
           </div>
 
           {/* El camino corto, para quien todavía no lo tenga puesto. */}
@@ -546,42 +645,137 @@ export default function Importar() {
         </>
       )}
 
+      {/* El selector de archivos vive fuera de todo: hace falta también con la
+          vista previa abierta, para poder añadir el segundo archivo sin
+          deshacer lo que ya se ha leído del primero. */}
+      <input
+        ref={fileRef}
+        type="file"
+        multiple
+        // Sin `accept`, y no por descuido: en iOS la lista de extensiones
+        // deja en gris justo los archivos que se quieren subir. Un CSV
+        // que Trade Republic guardó en Archivos llega sin tipo MIME, y
+        // Safari lo mide por el tipo, no por el nombre. Es preferible
+        // que se pueda elegir un archivo equivocado —y que la pantalla
+        // lo diga— a que no se pueda elegir el correcto.
+        className="hidden"
+        onChange={(e) => {
+          void tomarVarios([...(e.target.files ?? [])]);
+          e.target.value = "";
+        }}
+      />
+
       {error && <Aviso tono="error">{error}</Aviso>}
 
       {/* ── 2 · Vista previa ────────────────────────────────────────────── */}
-      {entrada && (
+      {archivos.length > 0 && (
         <>
+          {/* ── Los archivos ───────────────────────────────────────────────
+              Uno por línea, con lo que ha reconocido en cada uno y de qué tipo
+              lo ha tomado. El desplegable sólo ofrece lo que ese archivo puede
+              ser: para un PDF, un formato; para una tabla, seis. */}
           <Tarjeta className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <Etiqueta>
-                  {origenBuzon ? "Llegó desde el móvil" : "Archivo"}
-                  {cola.length > 0 && ` · quedan ${cola.length} detrás`}
+                  {archivos.length === 1 ? "Un archivo" : `${archivos.length} archivos juntos`}
                 </Etiqueta>
-                <p className="truncate text-[13px] font-bold text-fg0">{nombreArchivo}</p>
+                <p className="text-[13px] font-bold text-fg0">
+                  {archivos.length === 1
+                    ? "Esto es lo que se ha leído"
+                    : "Se importan todos de una vez, sumados"}
+                </p>
               </div>
               <div className="flex shrink-0 gap-2">
-                {cola.length > 0 && (
-                  <Boton tipo="suave" onClick={() => siguiente()}>
-                    Saltar
-                  </Boton>
-                )}
+                <Boton tipo="suave" onClick={() => fileRef.current?.click()}>
+                  Añadir otro
+                </Boton>
                 <Boton tipo="suave" onClick={limpiar}>
-                  Cambiar
+                  Quitar todos
                 </Boton>
               </div>
             </div>
 
-            <Selector
-              etiqueta="Formato"
-              valor={formato ?? "generico-csv"}
-              onChange={(f) => setFormato(f as Formato)}
-              opciones={FORMATOS.map((f) => ({ valor: f, texto: FORMATO_LBL[f] }))}
-            />
+            {archivos.map((a, i) => {
+              const l = lecturas[i];
+              const opciones = formatosDe(a.entrada);
+              return (
+                <div key={a.id} className="tile flex flex-col gap-2 px-3.5 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[12.5px] font-bold text-fg0">
+                        {a.buzon && "📱 "}
+                        {a.nombre}
+                      </p>
+                      <p className="text-[11px] text-fg2">{queTrae(l)}</p>
+                    </div>
+                    <button
+                      onClick={() => quitarArchivo(a.id)}
+                      className="shrink-0 text-[11.5px] font-semibold text-fg2 underline-offset-4 hover:text-fg0 hover:underline"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+
+                  {a.formato === "desconocido" ? (
+                    <Aviso tono="alerta">
+                      {a.entrada.pdf
+                        ? a.entrada.pdf.length === 0
+                          ? "Este PDF no tiene texto dentro: será una foto o un escaneo. Bájalo otra vez desde la web del banco."
+                          : "Es un PDF, pero no es el extracto de posición de MyInvestor. De momento es el único PDF que se sabe leer."
+                        : "No se reconoce el contenido. Elige abajo qué es, o comprueba que el archivo tenga una fila de cabecera."}
+                    </Aviso>
+                  ) : null}
+
+                  <Selector
+                    etiqueta="Qué es este archivo"
+                    valor={a.formato}
+                    onChange={(f) => cambiarFormato(a.id, f as Formato)}
+                    opciones={[
+                      ...(a.formato === "desconocido"
+                        ? [{ valor: "desconocido", texto: "— elige qué es —" }]
+                        : []),
+                      ...opciones.map((f) => ({ valor: f, texto: FORMATO_LBL[f] })),
+                    ]}
+                  />
+                  {a.formato !== "desconocido" && (
+                    <p className="text-[11px] leading-relaxed text-fg2">
+                      {FORMATO_NOTA[a.formato]}
+                    </p>
+                  )}
+
+                  {/* Mapeo manual: sólo cuando hace falta, y ya relleno con lo
+                      que se haya adivinado. */}
+                  {a.formato === "generico-csv" && a.entrada.tabla && (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer list-none text-[11.5px] font-semibold text-fg2">
+                        Qué columna es cada cosa
+                      </summary>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        {(Object.keys(ETIQUETA_CAMPO) as CampoImport[]).map((c) => (
+                          <Selector
+                            key={c}
+                            etiqueta={ETIQUETA_CAMPO[c]}
+                            valor={a.mapa[c] ?? ""}
+                            onChange={(v) => cambiarMapa(a.id, { ...a.mapa, [c]: v || undefined })}
+                            opciones={[
+                              { valor: "", texto: "— ninguna —" },
+                              ...a.entrada.tabla!.cabeceras.map((h) => ({ valor: h, texto: h })),
+                            ]}
+                          />
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              );
+            })}
+
+            {falta && <Aviso>{falta}</Aviso>}
 
             {resolviendo && (
               <p className="text-[12px] text-fg2">
-                Buscando el símbolo de cotización de los ISIN que trae el archivo…
+                Buscando el símbolo de cotización de los ISIN que traen los archivos…
               </p>
             )}
 
@@ -601,69 +795,67 @@ export default function Importar() {
             />
           </Tarjeta>
 
-          {/* Mapeo manual: sólo cuando hace falta, y ya relleno con lo adivinado */}
-          {formato === "generico-csv" && entrada.tabla && (
-            <Tarjeta>
-              <TituloSeccion nota="Sólo hay que tocar lo que no haya acertado.">
-                Qué columna es cada cosa
-              </TituloSeccion>
-              <div className="grid grid-cols-2 gap-2">
-                {(Object.keys(ETIQUETA_CAMPO) as CampoImport[]).map((c) => (
-                  <Selector
-                    key={c}
-                    etiqueta={ETIQUETA_CAMPO[c]}
-                    valor={mapa[c] ?? ""}
-                    onChange={(v) => setMapa({ ...mapa, [c]: v || undefined })}
-                    opciones={[
-                      { valor: "", texto: "— ninguna —" },
-                      ...entrada.tabla!.cabeceras.map((h) => ({ valor: h, texto: h })),
-                    ]}
-                  />
-                ))}
-              </div>
-            </Tarjeta>
+          {plan && (
+            <Resumen
+              plan={plan}
+              candidatos={candidatos}
+              emparejamientos={emparejamientos}
+              onEmparejar={(isin, valor) =>
+                setEmparejamientos((m) => {
+                  const nuevo = { ...m };
+                  if (valor === AUTO) delete nuevo[isin];
+                  else nuevo[isin] = valor;
+                  return nuevo;
+                })
+              }
+            />
           )}
-
-          {plan && <Resumen plan={plan} />}
 
           {/* Un archivo del buzón cuyas operaciones ya estaban todas dentro
               sigue apareciendo como pendiente hasta que alguien lo cierra. Es
               lo que pasa al reenviar el extracto del mes con dos compras
               nuevas y cuarenta viejas: se importan las dos y, a la siguiente,
               el mismo archivo no trae nada. */}
-          {plan && plan.nuevas.length === 0 && origenBuzon && (
-            <Boton
-              tipo="suave"
-              className="w-full"
-              onClick={() => {
-                const id = origenBuzon;
-                void (async () => {
-                  await marcarImportada(id, 0);
-                  await recargarBuzon();
-                })();
-                siguiente();
-              }}
-            >
-              Entendido, quítalo del buzón
-            </Boton>
-          )}
-
-          {plan && (plan.nuevas.length > 0 || efectivoPendiente(plan)) && (
-            <div className="sticky bottom-24 z-20">
+          {plan &&
+            plan.nuevas.length === 0 &&
+            !efectivoPendiente(plan) &&
+            !posicionesPendientes(plan) &&
+            archivos.some((a) => a.buzon) && (
               <Boton
-                tipo="principal"
-                onClick={() => void confirmar()}
-                disabled={guardando}
-                className="w-full py-3 shadow-e2"
+                tipo="suave"
+                className="w-full"
+                onClick={() => {
+                  const ids = archivos.map((a) => a.buzon).filter((b): b is string => Boolean(b));
+                  void (async () => {
+                    for (const id of ids) await marcarImportada(id, 0);
+                    await recargarBuzon();
+                    limpiar();
+                  })();
+                }}
               >
-                {guardando
-                  ? "Guardando…"
-                  : plan.nuevas.length > 0
-                    ? `Importar ${plan.nuevas.length} ${plan.nuevas.length === 1 ? "operación" : "operaciones"}`
-                    : "Poner al día el saldo de efectivo"}
+                Entendido, quítalo del buzón
               </Boton>
-            </div>
-          )}
+            )}
+
+          {plan &&
+            (plan.nuevas.length > 0 || efectivoPendiente(plan) || posicionesPendientes(plan)) && (
+              <div className="sticky bottom-24 z-20">
+                <Boton
+                  tipo="principal"
+                  onClick={() => void confirmar()}
+                  disabled={guardando}
+                  className="w-full py-3 shadow-e2"
+                >
+                  {guardando
+                    ? "Guardando…"
+                    : plan.nuevas.length > 0
+                      ? `Importar ${plan.nuevas.length} ${plan.nuevas.length === 1 ? "operación" : "operaciones"}`
+                      : posicionesPendientes(plan)
+                        ? "Poner al día las posiciones"
+                        : "Poner al día el saldo de efectivo"}
+                </Boton>
+              </div>
+            )}
           {guardando && <Cargando texto="Escribiendo en la cartera…" />}
         </>
       )}
@@ -678,8 +870,19 @@ export default function Importar() {
             className="w-full"
             disabled={!texto.trim()}
             onClick={() => {
-              aplicar(desdeTexto(texto), "texto pegado");
+              const e = desdeTexto(texto);
+              setArchivos((previos) => [
+                ...previos,
+                {
+                  id: `a${(contador.current += 1)}`,
+                  nombre: "texto pegado",
+                  entrada: e,
+                  formato: detectar(e),
+                  mapa: e.tabla ? adivinarMapa(e.tabla) : {},
+                },
+              ]);
               setPegando(false);
+              setTexto("");
             }}
           >
             Leer
@@ -703,9 +906,31 @@ export default function Importar() {
 
 // ── Vista previa del plan ─────────────────────────────────────────────────
 
-function Resumen({ plan }: { plan: Plan }) {
+/** Valor del selector que significa «déjalo como lo hayas adivinado». */
+const AUTO = "auto";
+
+function Resumen({
+  plan,
+  candidatos,
+  emparejamientos,
+  onEmparejar,
+}: {
+  plan: Plan;
+  candidatos: Activo[];
+  emparejamientos: Record<string, string>;
+  onEmparejar(isin: string, valor: string): void;
+}) {
   const [verDescartes, setVerDescartes] = useState(false);
-  const nada = plan.nuevas.length === 0;
+  // Un extracto de posición no trae operaciones y no por eso está vacío.
+  const nada = plan.nuevas.length === 0 && plan.posiciones.length === 0;
+  /** Alguno de los archivos trae compras. Cambia lo que hay que decirle a
+   *  alguien de un fondo sin coste: si no las trae, que suba el Excel; si las
+   *  trae, que ese fondo no está en ellas — y pedirle otra vez el archivo que
+   *  acaba de subir es la manera de que deje de leer los avisos. */
+  const hayCompras = plan.lectura.filas.some((f) => f.tipo === "buy");
+  /** Claves de los valores que nacen archivados, para no anunciarlos en el
+   *  detalle como «activo nuevo»: no van a aparecer en la cartera. */
+  const claveCerrada = new Set(plan.cerrados.map((c) => c.clave));
 
   return (
     <>
@@ -715,7 +940,7 @@ function Resumen({ plan }: { plan: Plan }) {
         <div className="mb-3 grid grid-cols-3 gap-2 text-center">
           <Dato n={plan.nuevas.length} t="nuevas" />
           <Dato n={plan.duplicadas.length} t="ya estaban" apagado />
-          <Dato n={plan.lectura.descartes.length} t="descartadas" apagado />
+          <Dato n={plan.descartes.length} t="descartadas" apagado />
         </div>
 
         {(plan.totalCompras > 0 || plan.totalVentas > 0 || plan.totalCobros > 0) && (
@@ -738,29 +963,69 @@ function Resumen({ plan }: { plan: Plan }) {
           </div>
         )}
 
-        {plan.activosNuevos.length > 0 && (
-          <Aviso>
-            Se crearán {plan.activosNuevos.length}{" "}
-            {plan.activosNuevos.length === 1 ? "activo nuevo" : "activos nuevos"}:{" "}
-            {plan.activosNuevos.map((a) => a.name).join(", ")}. Revisa después su categoría en la
-            cartera si alguno no ha caído donde tocaba.
-          </Aviso>
+        {(() => {
+          // Los que nacen archivados no se anuncian como activos nuevos que
+          // revisar: no van a aparecer en la cartera. Tienen su propio aviso.
+          const vivos = plan.activosNuevos.filter((a) => !a.archived);
+          if (vivos.length === 0) return null;
+          return (
+            <Aviso>
+              Se crearán {vivos.length} {vivos.length === 1 ? "activo nuevo" : "activos nuevos"}:{" "}
+              {vivos.map((a) => a.name).join(", ")}. Revisa después su categoría en la cartera si
+              alguno no ha caído donde tocaba.
+            </Aviso>
+          );
+        })()}
+
+        {/* Lo que compraste y el extracto ya no menciona. Va aquí arriba y no
+            escondido entre los descartes porque es dinero: son las compras que
+            NO van a contar en el coste de nada. */}
+        {plan.cerrados.length > 0 && (
+          <div className="mt-2">
+            <Aviso>
+              El extracto cuadra con su propio total, así que dice todo lo que tienes — y de{" "}
+              <strong>{plan.cerrados.map((c) => c.nombre).join(", ")}</strong> no dice nada. O los
+              vendiste, o los traspasaste a otro fondo, o se los llevó otro bróker. Sus{" "}
+              {plan.cerrados.reduce((s, c) => s + c.ops, 0)} compras —
+              {fe(
+                plan.cerrados.reduce((s, c) => s + c.euros, 0),
+                2,
+              )}
+              — se guardan en el historial, pero {plan.cerrados.length === 1 ? "el activo" : "los activos"}{" "}
+              {plan.cerrados.length === 1 ? "nace" : "nacen"} archivado
+              {plan.cerrados.length === 1 ? "" : "s"}: sin participaciones sólo serían una fila a
+              cero euros. Si crees que los sigues teniendo, sácalos del archivo desde su ficha y
+              ponles las participaciones a mano.
+            </Aviso>
+          </div>
         )}
 
         {/* El efectivo se escribe al confirmar, así que tiene que verse antes.
             Es la única línea de la importación que no sale de una operación
             del archivo sino de la suma de todas, y por eso es la que más
             sorprende cuando aparece sola en la cartera. */}
-        {plan.efectivo && (plan.nuevas.length > 0 || efectivoPendiente(plan)) && (
-          <div className="mt-2">
-            <Aviso>
-              {plan.efectivo.existente ? "Se actualizará" : "Se creará"} la cuenta de efectivo{" "}
-              <strong>{plan.efectivo.activo.name}</strong> con un saldo de{" "}
-              <strong>{fe(plan.efectivo.saldo, 2)}</strong>, que es lo que suman los ingresos, las
-              retiradas, las compras y los cobros del extracto.
-            </Aviso>
-          </div>
-        )}
+        {plan.efectivo &&
+          (plan.nuevas.length > 0 || efectivoPendiente(plan) || posicionesPendientes(plan)) && (
+            <div className="mt-2">
+              <Aviso>
+                {plan.efectivo.existente ? "Se actualizará" : "Se creará"} la cuenta de efectivo{" "}
+                <strong>{plan.efectivo.activo.name}</strong> con un saldo de{" "}
+                <strong>{fe(plan.efectivo.saldo, 2)}</strong>
+                {plan.efectivo.declarado ? (
+                  <>
+                    , que es el que dice el propio extracto. Sumando sólo los movimientos
+                    importados saldrían {fe(plan.efectivo.calculado, 2)}: la diferencia es el
+                    dinero que ya había en la cuenta antes de la primera línea del archivo.
+                  </>
+                ) : (
+                  <>
+                    , que es lo que suman los ingresos, las retiradas, las compras y los cobros del
+                    extracto.
+                  </>
+                )}
+              </Aviso>
+            </div>
+          )}
 
         {nada && plan.duplicadas.length > 0 && (
           <Aviso>
@@ -776,6 +1041,137 @@ function Resumen({ plan }: { plan: Plan }) {
           </Aviso>
         )}
       </Tarjeta>
+
+      {/* ── Las posiciones ──────────────────────────────────────────────
+          Lo que el extracto dice que TIENES, que es distinto de lo que has
+          hecho. Se enseña activo por activo porque aquí es donde el
+          importador tiene que adivinar —el banco corta los nombres— y una
+          equivocación aquí se lleva por delante la posición entera. */}
+      {plan.posiciones.length > 0 && (
+        <section>
+          <TituloSeccion nota="Lo que el banco dice que tienes hoy. Comprueba que cada uno cae en el activo que toca.">
+            Tus posiciones, según el extracto
+          </TituloSeccion>
+          <div className="flex flex-col gap-2">
+            {plan.posiciones.map((p) => {
+              const valorEur = p.posicion.valor;
+              const cortoDeCoste = p.coste > 0 && p.coste < valorEur * 0.75;
+              return (
+                <div key={p.posicion.isin} className="tile flex flex-col gap-2 px-3.5 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-bold text-fg0">
+                        {p.posicion.nombre}
+                      </p>
+                      <p className="font-mono text-[10.5px] text-fg3">{p.posicion.isin}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-[13px] font-bold text-fg0">
+                        {fn(p.posicion.valor, 2)} {p.posicion.divisa}
+                      </p>
+                      <p className="text-[10.5px] text-fg2">
+                        {fn(p.posicion.titulos, 5)} títulos
+                      </p>
+                    </div>
+                  </div>
+
+                  {p.aldia ? (
+                    <p className="text-[11.5px] text-fg2">
+                      Ya está así en la cartera: no hay nada que cambiar.
+                    </p>
+                  ) : (
+                    <>
+                      <Selector
+                        etiqueta="En tu cartera es"
+                        valor={emparejamientos[p.posicion.isin] ?? AUTO}
+                        onChange={(v) => onEmparejar(p.posicion.isin, v)}
+                        opciones={[
+                          {
+                            valor: AUTO,
+                            texto: p.activo
+                              ? `Automático · ${p.activo.name}`
+                              : "Automático · crear uno nuevo",
+                          },
+                          { valor: "", texto: "Crear un activo nuevo" },
+                          ...candidatos.map((a) => ({ valor: a.id, texto: a.name })),
+                        ]}
+                      />
+                      {p.dudoso && (
+                        <Aviso tono="alerta">
+                          Ojo con éste: hay activos tuyos que se parecen igual a dos posiciones
+                          distintas —pasa con las dos clases del mismo fondo, la de euros y la de
+                          dólares— y por el nombre no hay manera de saberlo. Mira arriba que sea el
+                          que tú crees.
+                        </Aviso>
+                      )}
+                      {p.absorbidos.length > 0 && (
+                        <p className="text-[11.5px] leading-relaxed text-fg1">
+                          Se juntará con{" "}
+                          <strong>{p.absorbidos.map((a) => a.name).join(", ")}</strong>: es el
+                          mismo fondo con el nombre cortado de otra manera. Se archiva y sus
+                          compras cuentan aquí.
+                        </p>
+                      )}
+                      <p className="text-[11.5px] leading-relaxed text-fg2">
+                        {p.coste > 0 ? (
+                          <>
+                            Coste según tus operaciones: <strong>{fe(p.coste, 2)}</strong>.
+                            {cortoDeCoste && (
+                              <>
+                                {" "}
+                                Es bastante menos de lo que vale hoy, así que probablemente
+                                compraste antes de la ventana del Excel que subiste. Baja otro con
+                                un rango de fechas más largo y la ganancia saldrá bien.
+                              </>
+                            )}
+                          </>
+                        ) : hayCompras ? (
+                          <>
+                            Ninguna de las compras que traes casa con este fondo: o lo compraste
+                            antes del rango de fechas que bajaste, o llegó por un traspaso de otro
+                            fondo, que MyInvestor no apunta en la cuenta corriente. Se apunta con
+                            un coste igual a lo que vale hoy, así que aparecerá sin ganancia ni
+                            pérdida.
+                          </>
+                        ) : (
+                          <>
+                            No hay ninguna compra importada de este fondo, así que se apunta con un
+                            coste igual a lo que vale hoy: aparecerá sin ganancia ni pérdida hasta
+                            que importes el Excel de movimientos.
+                          </>
+                        )}
+                      </p>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Al revés: activos tuyos de los que el extracto no dice nada. O
+              los vendiste, o los traspasaste, o están en otro sitio del banco
+              que este extracto no lista. En cualquiera de los tres casos van a
+              quedarse en la cartera valiendo cero, y más vale saberlo. */}
+          {(() => {
+            const casados = new Set(
+              plan.posiciones.flatMap((p) => [p.activo?.id, ...p.absorbidos.map((a) => a.id)]),
+            );
+            const huerfanos = candidatos.filter((a) => !casados.has(a.id));
+            if (huerfanos.length === 0) return null;
+            return (
+              <div className="mt-2">
+                <Aviso>
+                  El extracto no dice nada de{" "}
+                  <strong>{huerfanos.map((a) => a.name).join(", ")}</strong>.{" "}
+                  {plan.extractoCompleto
+                    ? "Y cuadra con su propio total, así que dice todo lo que tienes: eso quiere decir que ya no los tienes ahí. Archívalos desde su ficha — tal cual están, cuentan cero en tu cartera. Éstos no se archivan solos porque ya estaban en tu cartera antes de esta importación."
+                    : "O los vendiste, o los traspasaste, o están en otro sitio del banco que este extracto no lista. Si los vendiste o los traspasaste, archívalos desde su ficha; si crees que los sigues teniendo, compruébalo en el banco: tal cual están, cuentan cero en tu cartera."}
+                </Aviso>
+              </div>
+            );
+          })()}
+        </section>
+      )}
 
       {plan.nuevas.length > 0 && (
         <section>
@@ -801,7 +1197,12 @@ function Resumen({ plan }: { plan: Plan }) {
                       <span className="text-[10.5px] text-fg2">
                         {OP_LBL[p.fila.tipo]}
                         {p.fila.traspasoInterno && " · traspaso interno"}
-                        {p.nuevoActivo && " · activo nuevo"}
+                        {p.nuevoActivo &&
+                          (claveCerrada.has(
+                            (p.fila.isin || p.fila.ticker || p.fila.nombre || "").toUpperCase(),
+                          )
+                            ? " · ya no lo tienes: se archiva"
+                            : " · activo nuevo")}
                       </span>
                     </td>
                     <td className="px-2.5 py-2 text-right whitespace-nowrap text-fg1">
@@ -818,18 +1219,18 @@ function Resumen({ plan }: { plan: Plan }) {
         </section>
       )}
 
-      {plan.lectura.descartes.length > 0 && (
+      {plan.descartes.length > 0 && (
         <section>
           <button
             onClick={() => setVerDescartes(!verDescartes)}
             className="text-[12px] font-semibold text-fg2 underline-offset-4 hover:text-fg0 hover:underline"
           >
-            {verDescartes ? "Ocultar" : "Ver"} las {plan.lectura.descartes.length} líneas
+            {verDescartes ? "Ocultar" : "Ver"} las {plan.descartes.length} líneas
             descartadas
           </button>
           {verDescartes && (
             <ul className="mt-2 flex flex-col gap-1.5">
-              {plan.lectura.descartes.slice(0, 60).map((d, i) => (
+              {plan.descartes.slice(0, 60).map((d, i) => (
                 <li key={i} className="tile px-3 py-2">
                   <p className="text-[11.5px] font-semibold text-fg1">
                     Línea {d.linea} · {d.motivo}

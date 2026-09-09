@@ -8,17 +8,20 @@
 import { readFileSync } from "node:fs";
 import XLSX from "xlsx";
 import { tabular } from "../src/lib/import/csv.ts";
+import { leerPdf } from "../src/lib/import/pdf.ts";
 import { desdeMatriz, detectar, leer } from "../src/lib/import/index.ts";
 
 const ruta = process.argv[2];
 if (!ruta) {
-  console.error("uso: npx vite-node scripts/probar-import.mjs <archivo.csv|.xlsx> [formato]");
+  console.error("uso: npx vite-node scripts/probar-import.mjs <archivo.csv|.xlsx|.pdf> [formato]");
   process.exit(1);
 }
 
 // El Excel se lee igual que en la app: la hoja tal cual, en filas de celdas,
 // que es lo que deja saltarse el titular y el saldo de encima de la tabla.
-const entrada = /\.(xlsx|xls|xlsm|ods)$/i.test(ruta)
+const entrada = /\.pdf$/i.test(ruta)
+  ? { nombre: ruta, pdf: await leerPdf(readFileSync(ruta)) }
+  : /\.(xlsx|xls|xlsm|ods)$/i.test(ruta)
   ? (() => {
       // `readFile` no llega al disco desde el build ESM: se le da el búfer.
       const libro = XLSX.read(readFileSync(ruta), { type: "buffer", cellDates: true });
@@ -33,12 +36,31 @@ const entrada = /\.(xlsx|xls|xlsm|ods)$/i.test(ruta)
       return { nombre: ruta, texto: txt, tabla: tabular(txt) };
     })();
 
-console.log("cabeceras:", entrada.tabla.cabeceras.join(" | "));
+if (entrada.pdf) {
+  console.log("filas de texto en el PDF:", entrada.pdf.length);
+} else {
+  console.log("cabeceras:", entrada.tabla.cabeceras.join(" | "));
+  console.log("filas en el archivo:", entrada.tabla.filas.length);
+}
 console.log("formato detectado:", detectar(entrada));
-console.log("filas en el archivo:", entrada.tabla.filas.length);
 
 const l = leer(entrada, process.argv[3] ? { formato: process.argv[3] } : {});
 console.log("\noperaciones:", l.filas.length, " descartes:", l.descartes.length);
+
+if (l.saldo != null) console.log("saldo que declara el archivo:", l.saldo.toFixed(2), "EUR");
+if (l.posiciones?.length) {
+  console.log("\n-- posiciones --");
+  let total = 0;
+  for (const p of l.posiciones) {
+    total += p.valor;
+    console.log(
+      `  ${p.isin}  ${p.nombre.padEnd(30)} ${p.divisa}  ` +
+        `${p.titulos.toFixed(5).padStart(12)} tit  ${p.valor.toFixed(2).padStart(10)}  ` +
+        `(${(p.valor / p.titulos).toFixed(4)} por título)`,
+    );
+  }
+  console.log(`  ${"".padEnd(12)} ${"suma".padEnd(30)}      ${total.toFixed(2).padStart(25)}`);
+}
 
 const por = new Map();
 for (const f of l.filas) por.set(f.tipo, (por.get(f.tipo) ?? 0) + 1);

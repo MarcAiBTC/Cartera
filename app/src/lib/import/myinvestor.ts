@@ -1,20 +1,39 @@
 // ── MYINVESTOR ───────────────────────────────────────────────────────────
-// Dos caminos, porque MyInvestor da los datos de dos maneras:
+// Cuatro caminos, porque MyInvestor no tiene un archivo que lo cuente todo:
 //
-//   1. El Excel de movimientos de la web (Mi cartera → Movimientos →
-//      Descargar). Es una tabla normal y lo lee `leerMyInvestorTabla`.
-//   2. El JSON de la propia web, con la forma `{ payload: { data: [...] } }`.
-//      Es el que trae los campos completos —incluido el valor liquidativo de
-//      la operación— y el que distingue los traspasos internos.
+//   1. El extracto de FONDOS (Inversiones → Fondos → Consulta de operaciones).
+//      Trae ISIN, participaciones y valor liquidativo de cada orden. Es el
+//      mejor, y también el que MyInvestor no siempre deja bajar.
+//   2. El extracto de la CUENTA CORRIENTE, en Excel o CSV. Sólo dinero, con el
+//      nombre del fondo cortado a 30 caracteres: sin ISIN y casi sin
+//      participaciones. Es de donde salen las compras y lo que costaron.
+//   3. El EXTRACTO DE POSICIÓN, en PDF (Perfil → Documentos y extractos). No
+//      cuenta lo que hiciste sino lo que TIENES: ISIN, participaciones y valor
+//      de cada fondo, y el saldo real de la cuenta. Es el que arregla lo que
+//      el 2 deja roto, y sin él los fondos de MyInvestor valían cero euros.
+//   4. El JSON de la propia web, `{ payload: { data: [...] } }`, que trae los
+//      campos completos y distingue los traspasos internos.
 //
 // El traspaso interno es la razón de tener adaptador propio: un
 // INTERNAL_TRANSFER_SUBSCRIPTION mueve dinero entre dos fondos tuyos. Si se
 // importa como una compra normal, el «dinero aportado» sube sin que hayas
 // puesto un euro, y toda la rentabilidad sale mal.
+//
+// El reparto entre el 2 y el 3 es deliberado: las operaciones y su coste
+// salen del Excel, y las participaciones y el saldo, del PDF. Ninguno de los
+// dos puede con los dos trabajos.
 
-import { campo, fecha, num, type Tabla } from "./csv";
+import { campo, ES_ISIN, fecha, num, type Tabla } from "./csv";
+import { celdaEn, textoPdf, type FilaPdf } from "./pdf";
 import type { TipoOperacion } from "../tipos";
-import { clasificar, lecturaVacia, type Descarte, type FilaImportada, type Lectura } from "./tipos";
+import {
+  clasificar,
+  lecturaVacia,
+  type Descarte,
+  type FilaImportada,
+  type Lectura,
+  type PosicionImportada,
+} from "./tipos";
 
 interface OperacionMI {
   operationType?: string;
@@ -266,6 +285,17 @@ const FRASES: [RegExp, "interest" | "deposit" | "withdrawal" | "fee"][] = [
   [/^comision|^gastos?\b/i, "fee"],
 ];
 
+/** ¿Este concepto es un movimiento de dinero y no una orden de fondo? Con el
+ *  tipo que le corresponde ya corregido por el signo: el mismo «PROMOCION» en
+ *  negativo no es un cobro, es que lo retiraron. */
+function tipoDeCaja(concepto: string, importe: number): TipoOperacion | undefined {
+  const frase = FRASES.find(([re]) => re.test(concepto));
+  if (!frase) return undefined;
+  const tipo = frase[1];
+  if (importe < 0 && (tipo === "interest" || tipo === "deposit")) return "withdrawal";
+  return tipo;
+}
+
 /** Dónde corta MyInvestor el concepto. Todo lo que llegue justo a esta
  *  longitud puede venir mutilado. */
 const CORTE = 30;
@@ -360,20 +390,12 @@ export function leerMyInvestorMovimientos(t: Tabla, op: OpcionesCuenta = {}): Le
     }
 
     // ── ¿Efectivo o fondo? ──────────────────────────────────────────────
-    const frase = FRASES.find(([re]) => re.test(concepto));
-    if (frase) {
-      const tipo = frase[1];
-      // «PROMOCION …» en negativo no es un cobro: es que lo retiraron.
-      const real =
-        tipo === "interest" && importe < 0
-          ? "withdrawal"
-          : tipo === "deposit" && importe < 0
-            ? "withdrawal"
-            : tipo;
+    const caja = tipoDeCaja(concepto, importe);
+    if (caja) {
       filas.push({
         linea,
         fecha: d,
-        tipo: real,
+        tipo: caja,
         total: Math.abs(importe),
         divisa,
         nota: concepto,
@@ -436,12 +458,253 @@ export function leerMyInvestorMovimientos(t: Tabla, op: OpcionesCuenta = {}): Le
         `«${nombre}»: ${a.veces} compras por ${a.euros.toFixed(2)} € entran con el importe ` +
         `correcto pero SIN participaciones, así que el fondo se queda a cero títulos. ` +
         `MyInvestor corta el concepto a ${CORTE} caracteres y en este fondo el corte se come ` +
-        `las participaciones. Descárgate el extracto de fondos —Inversiones → Fondos → ` +
-        `Operaciones y consultas → Consulta de operaciones— que trae el ISIN y las ` +
-        `participaciones de cada compra, e impórtalo en vez de éste`,
+        `las participaciones. Se arregla subiendo además el PDF «Extracto de cuenta» ` +
+        `—Perfil → Documentos y extractos—, que dice cuántas participaciones tienes hoy de ` +
+        `cada fondo y con su ISIN`,
       crudo: `${a.veces} líneas del archivo`,
+      clave: nombre.toUpperCase(),
     });
   }
 
-  return { ...out, filas, descartes };
+  return { ...out, filas, descartes, saldo: saldoFinal(t) };
+}
+
+/** El saldo con el que se queda la cuenta al final del extracto, leído de la
+ *  columna «Saldo» del propio archivo.
+ *
+ *  Hace falta porque un extracto es una ventana: el Excel que baja MyInvestor
+ *  empieza el día que le pides, y el dinero que ya había antes no aparece en
+ *  ninguna fila. Sumando sólo los movimientos, la cuenta de efectivo salía en
+ *  −173,39 € cuando en el banco había 218,32. Lo que falta —391,71— es
+ *  justamente lo que había el día antes de la primera línea.
+ *
+ *  El CSV de la cuenta corriente no trae columna de saldo; ahí no hay nada que
+ *  hacer y se devuelve `undefined`. */
+function saldoFinal(t: Tabla): number | undefined {
+  const conSaldo = t.filas
+    .map((f) => ({
+      d: fecha(campo(f, "fecha de operación", "fecha operación", "fecha"), "dmy"),
+      s: num(campo(f, "saldo", "saldo posterior", "balance")),
+    }))
+    .filter((x): x is { d: string; s: number } => x.d != null && x.s != null);
+  if (conSaldo.length === 0) return undefined;
+
+  // Unos extractos van de lo más antiguo a lo más nuevo y otros al revés. La
+  // última fila del archivo sólo es la más reciente en los primeros.
+  const primera = conSaldo[0];
+  const ultima = conSaldo[conSaldo.length - 1];
+  return ultima.d >= primera.d ? ultima.s : primera.s;
+}
+
+// ── EL EXTRACTO DE POSICIÓN, EN PDF ──────────────────────────────────────
+// Perfil → Documentos y extractos → «Extracto de cuenta». Es un PDF, y es el
+// único archivo de MyInvestor que dice LO QUE TIENES en vez de lo que has ido
+// haciendo:
+//
+//   Posiciones
+//   Código        Nombre                     Divisa  Títulos  Valor de mercado
+//   IE00BYX5NX33  MSCI WORLD INDEX P ACC EUR EUR     27.415   390,1300 €
+//   LU0625737910  PICTET CHINA INDEX P ACC   EUR     1.80942  238,6600 €
+//
+// Y eso resuelve de una vez las tres cosas que los otros archivos de
+// MyInvestor no pueden resolver:
+//
+//   · EL ISIN. El extracto de la cuenta corriente sólo trae el nombre del
+//     fondo cortado a 30 caracteres, y sin ISIN un fondo no tiene precio:
+//     los ocho fondos de la cartera valían cero euros.
+//   · LAS PARTICIPACIONES. El «@» del concepto se pierde con el corte en la
+//     mitad de los fondos. Aquí están todas, y las de hoy.
+//   · EL SALDO DE VERDAD, y los fondos que no salen en ningún movimiento
+//     porque se compraron antes de la ventana del extracto. Dos de los seis
+//     fondos de esta cartera —369 € en AXA Trésor y 6 € en MSCI Europe— no
+//     aparecían por ningún lado.
+//
+// LO QUE NO TRAE: el histórico. Sólo lista los últimos movimientos de la
+// cuenta —un mes escaso— así que como fuente de operaciones es peor que el
+// Excel. De ahí el reparto: de aquí salen las POSICIONES y el SALDO; las
+// compras, del Excel de movimientos. Por eso las órdenes de fondo que
+// aparecen en la lista de movimientos de este PDF se dejan pasar en vez de
+// importarlas: entrarían cojas (sin participaciones y sólo del último mes) y
+// se pisarían con las del Excel.
+
+/** Los rótulos que parten el PDF en secciones. Se mira el rótulo y no la
+ *  posición porque el mismo juego de columnas —«Fecha operación, Concepto,
+ *  Importe, Saldo»— aparece dos veces: una para la cuenta y otra, vacía, para
+ *  los movimientos de las tarjetas. */
+const SECCIONES: [string, RegExp][] = [
+  ["resumen", /^posici[oó]n integrada/i],
+  ["movimientos", /movimientos de efectivo/i],
+  ["posiciones", /^posiciones$/i],
+  ["otra", /^(tarjetas|movimientos tarjetas|cr[eé]ditos|intervinientes|cuentas)$/i],
+];
+
+export function esMyInvestorExtracto(filas: FilaPdf[]): boolean {
+  const t = textoPdf(filas);
+  if (!/myinvestor/i.test(t)) return false;
+  return /posici[oó]n integrada/i.test(t) || /^\s*posiciones\s*$/im.test(t);
+}
+
+/** Las participaciones de la tabla de posiciones.
+ *
+ *  Vienen en formato inglés y sin separador de millares, y eso las hace un
+ *  campo minado: «27.415» son veintisiete participaciones y pico, pero `num()`
+ *  ve un punto con tres cifras detrás, lo toma por separador de millares y
+ *  devuelve 27.415. La posición salía mil veces más grande, así que este
+ *  número se lee aparte y con la regla contraria. */
+function titulos(v: string | undefined): number | undefined {
+  if (!v) return undefined;
+  const t = v.trim().replace(/\s/g, "");
+  // Si algún día lo escriben a la española, que mande la coma decimal.
+  const n = /,/.test(t) ? num(t) : /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : undefined;
+  return n != null && isFinite(n) && n > 0 ? n : undefined;
+}
+
+export function leerMyInvestorExtracto(filas: FilaPdf[]): Lectura {
+  const out = lecturaVacia("myinvestor-extracto", "MyInvestor");
+  const importadas: FilaImportada[] = [];
+  const descartes: Descarte[] = [];
+  const posiciones: PosicionImportada[] = [];
+  let saldo: number | undefined;
+  const declarado: { efectivo?: number; invertido?: number; total?: number } = {};
+  let seccion = "";
+  /** X de cada columna, tomadas de la fila de cabecera de cada tabla. */
+  let cols: Record<string, number> = {};
+  /** Órdenes de fondo de la lista de movimientos, que aquí no se importan. */
+  let ordenes = 0;
+  let lineaOrdenes = 0;
+
+  filas.forEach((f, i) => {
+    const linea = i + 1;
+    const crudo = f.celdas.map((c) => c.texto).join(" · ");
+
+    // ── ¿Ha empezado otra sección? ──────────────────────────────────────
+    if (f.celdas.length === 1) {
+      const s = SECCIONES.find(([, re]) => re.test(f.celdas[0].texto));
+      if (s) {
+        seccion = s[0];
+        cols = {};
+        return;
+      }
+    }
+
+    // ── El resumen: efectivo, inversión, total ──────────────────────────
+    // Las tres líneas, no sólo el efectivo. «Inversión» y «Total» son la
+    // prueba de que la tabla de posiciones está completa: si cuadran con lo
+    // que hay en la tabla, lo que no está en la tabla no lo tienes.
+    if (seccion === "resumen") {
+      const rotulo = f.celdas[0]?.texto ?? "";
+      const v = num(f.celdas[1]?.texto);
+      if (v == null) return;
+      if (/^efectivo$/i.test(rotulo)) {
+        saldo = v;
+        declarado.efectivo = v;
+      } else if (/^inversi[oó]n$/i.test(rotulo)) declarado.invertido = v;
+      else if (/^total$/i.test(rotulo)) declarado.total = v;
+      return;
+    }
+
+    // ── La tabla de posiciones ──────────────────────────────────────────
+    if (seccion === "posiciones") {
+      const cabecera = f.celdas.find((c) => /^c[oó]digo$/i.test(c.texto));
+      if (cabecera) {
+        for (const c of f.celdas) {
+          if (/^c[oó]digo$/i.test(c.texto)) cols.isin = c.x;
+          else if (/^nombre$/i.test(c.texto)) cols.nombre = c.x;
+          else if (/^divisa$/i.test(c.texto)) cols.divisa = c.x;
+          else if (/^t[ií]tulos$/i.test(c.texto)) cols.titulos = c.x;
+          else if (/^valor de mercado$/i.test(c.texto)) cols.valor = c.x;
+        }
+        return;
+      }
+      if (cols.isin == null) return;
+
+      const isin = (celdaEn(f, cols.isin) ?? "").toUpperCase();
+      if (!ES_ISIN(isin)) return;
+
+      const nombre = celdaEn(f, cols.nombre, 40) ?? isin;
+      const t = titulos(celdaEn(f, cols.titulos, 20));
+      const valor = num(celdaEn(f, cols.valor, 40));
+      if (t == null || valor == null) {
+        descartes.push({
+          linea,
+          motivo: `«${nombre}»: la fila de posición viene sin títulos o sin valor`,
+          crudo,
+        });
+        return;
+      }
+      posiciones.push({
+        isin,
+        nombre,
+        divisa: (celdaEn(f, cols.divisa, 20) ?? "EUR").toUpperCase(),
+        titulos: t,
+        valor,
+      });
+      return;
+    }
+
+    // ── Los últimos movimientos de la cuenta ────────────────────────────
+    if (seccion !== "movimientos") return;
+
+    const cabecera = f.celdas.find((c) => /^fecha\s*operaci/i.test(c.texto));
+    if (cabecera) {
+      for (const c of f.celdas) {
+        if (/^fecha\s*operaci/i.test(c.texto)) cols.fecha = c.x;
+        else if (/^operacion$/i.test(c.texto)) cols.orden = c.x;
+        else if (/^concepto$/i.test(c.texto)) cols.concepto = c.x;
+        else if (/^importe$/i.test(c.texto)) cols.importe = c.x;
+      }
+      return;
+    }
+    if (cols.fecha == null) return;
+
+    const d = fecha(celdaEn(f, cols.fecha, 20), "dmy");
+    if (!d) return;
+
+    const orden = celdaEn(f, cols.orden, 60) ?? "";
+    const concepto = (celdaEn(f, cols.concepto, 80) ?? "").trim();
+    const importe = num(celdaEn(f, cols.importe, 30));
+    if (importe == null || importe === 0) {
+      descartes.push({ linea, motivo: "Movimiento sin importe", crudo });
+      return;
+    }
+
+    // Primero lo que es dinero y no producto. El orden importa: «PERIODO
+    // 11/07/2026 11/08/2026» —los intereses del mes— va en mayúsculas y con
+    // varias palabras, así que `pareceFondo` lo da por producto y se perdían
+    // los dos cobros del extracto.
+    const caja = tipoDeCaja(concepto, importe);
+    if (!caja) {
+      // Una suscripción o un reembolso de fondo se deja pasar: el histórico
+      // entero está en el Excel de movimientos, y de este PDF lo que vale es
+      // la posición, no un mes suelto de compras sin participaciones.
+      if (/suscripcion|reembolso|traspaso/i.test(orden) || pareceFondo(concepto)) {
+        ordenes++;
+        lineaOrdenes = lineaOrdenes || linea;
+        return;
+      }
+    }
+
+    importadas.push({
+      linea,
+      fecha: d,
+      tipo: caja ?? clasificar(orden) ?? (importe > 0 ? "deposit" : "withdrawal"),
+      total: Math.abs(importe),
+      divisa: "EUR",
+      nota: concepto || orden,
+    });
+  });
+
+  if (ordenes > 0) {
+    descartes.push({
+      linea: lineaOrdenes,
+      motivo:
+        `${ordenes} órdenes de fondo de la lista de movimientos no entran por aquí: este PDF ` +
+        `sólo lista el último mes y sin participaciones. Lo que sí entra —y es lo que ` +
+        `arregla la cartera— son las posiciones y el saldo. El histórico de compras sale del ` +
+        `Excel de movimientos de la cuenta corriente`,
+      crudo: `${ordenes} líneas del PDF`,
+    });
+  }
+
+  return { ...out, filas: importadas, descartes, posiciones, saldo, declarado };
 }

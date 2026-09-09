@@ -10,20 +10,43 @@ export type Formato =
   | "myinvestor-tabla"
   | "myinvestor-cuenta"
   | "myinvestor-efectivo"
+  | "myinvestor-extracto"
   | "generico-csv"
   | "generico-json"
+  | "varios"
   | "desconocido";
 
+/** El nombre del formato, y debajo qué aporta. Lo segundo importa tanto como
+ *  lo primero: con MyInvestor hacen falta dos archivos y ninguno de los dos
+ *  vale solo, así que el desplegable tiene que decir para qué sirve cada uno
+ *  en vez de limitarse a nombrarlo. */
 export const FORMATO_LBL: Record<Formato, string> = {
-  "traderepublic-csv": "Trade Republic · CSV",
+  "traderepublic-csv": "Trade Republic · movimientos",
   "revolut-csv": "Revolut · extracto de cuenta",
-  "myinvestor-json": "MyInvestor · JSON",
-  "myinvestor-tabla": "MyInvestor · fondos (consulta de operaciones)",
+  "myinvestor-extracto": "MyInvestor · extracto de posición (PDF)",
   "myinvestor-cuenta": "MyInvestor · cuenta corriente",
-  "myinvestor-efectivo": "MyInvestor · cuenta corriente (sólo el dinero)",
-  "generico-csv": "Genérico · CSV/Excel",
-  "generico-json": "Genérico · JSON",
-  desconocido: "Formato no reconocido",
+  "myinvestor-efectivo": "MyInvestor · cuenta corriente, sólo el dinero",
+  "myinvestor-tabla": "MyInvestor · operaciones de fondos",
+  "myinvestor-json": "MyInvestor · JSON de la web",
+  "generico-csv": "Otro bróker · CSV o Excel",
+  "generico-json": "Otro bróker · JSON",
+  varios: "Varios archivos juntos",
+  desconocido: "No reconocido",
+};
+
+export const FORMATO_NOTA: Record<Formato, string> = {
+  "traderepublic-csv": "Compras, ventas, dividendos e ingresos, con ISIN.",
+  "revolut-csv": "Compras, ventas, dividendos e ingresos.",
+  "myinvestor-extracto":
+    "Qué fondos tienes hoy, con ISIN y participaciones, y el saldo real de la cuenta.",
+  "myinvestor-cuenta": "El dinero y las compras de fondos, pero sin ISIN ni participaciones.",
+  "myinvestor-efectivo": "Sólo ingresos, retiradas e intereses. Deja fuera las compras.",
+  "myinvestor-tabla": "Cada orden con su ISIN, sus participaciones y su valor liquidativo.",
+  "myinvestor-json": "Como el anterior, y además distingue los traspasos internos.",
+  "generico-csv": "Una fila por movimiento. Las columnas se eligen a mano.",
+  "generico-json": "Una lista de movimientos en JSON.",
+  varios: "",
+  desconocido: "No se ha reconocido el contenido de este archivo.",
 };
 
 /** Una operación tal y como sale del archivo, antes de casarla con un activo
@@ -51,12 +74,43 @@ export interface FilaImportada {
   /** Traspaso entre cuentas propias: no es dinero nuevo */
   traspasoInterno?: boolean;
   nota?: string;
+  /** De qué archivo salió, cuando se importan varios de una vez. Se guarda en
+   *  la operación para poder deshacer una importación concreta. */
+  formato?: Formato;
 }
 
 export interface Descarte {
   linea: number;
   motivo: string;
   crudo: string;
+  /** Qué valor es el que va cojo, cuando el aviso habla de uno concreto.
+   *
+   *  Está para poder RETIRAR el aviso: «este fondo entra sin participaciones,
+   *  sube también el PDF» deja de ser verdad en cuanto el PDF está delante, y
+   *  seguir enseñándolo después de haberlo subido es la manera de que nadie se
+   *  crea ninguno de los avisos. */
+  clave?: string;
+}
+
+/** UNA POSICIÓN, NO UNA OPERACIÓN.
+ *
+ *  Casi todos los archivos de bróker cuentan lo que has HECHO —compraste,
+ *  vendiste, cobraste— y la posición sale de sumarlo. Un extracto de posición
+ *  hace lo contrario: dice lo que TIENES hoy, sin explicar cómo llegaste ahí.
+ *
+ *  Las dos cosas se necesitan y ninguna sustituye a la otra: de las
+ *  operaciones sale lo que te costó, y de aquí, cuántas participaciones tienes
+ *  de verdad. En MyInvestor esto no es un lujo, es la única manera: el
+ *  extracto de la cuenta corta el nombre del fondo a 30 caracteres y se come
+ *  el ISIN y las participaciones. */
+export interface PosicionImportada {
+  isin: string;
+  nombre: string;
+  divisa: string;
+  /** Participaciones o títulos, tal y como los cuenta el bróker */
+  titulos: number;
+  /** Valor de mercado EN SU DIVISA, no en euros */
+  valor: number;
 }
 
 export interface Lectura {
@@ -65,6 +119,22 @@ export interface Lectura {
   broker: string;
   filas: FilaImportada[];
   descartes: Descarte[];
+  /** Lo que el archivo dice que tienes, cuando lo dice */
+  posiciones?: PosicionImportada[];
+  /** El saldo de efectivo que declara el archivo. Vale más que la suma de los
+   *  movimientos: un extracto es una ventana y el dinero que ya había antes
+   *  de la primera línea no aparece en ninguna de ellas. */
+  saldo?: number;
+  /** Lo que el propio extracto declara como total, en euros, cuando lo dice:
+   *  el efectivo, lo invertido y la suma de los dos.
+   *
+   *  No es adorno. Es lo que permite saber si la lista de posiciones está
+   *  COMPLETA: si el saldo más las posiciones suman el total que dice el
+   *  banco, el extracto lo cuenta todo, y entonces un fondo que aparece en las
+   *  compras y no en la lista es un fondo que YA NO TIENES. Sin esta prueba
+   *  hay que suponer que la lista puede estar parcial y no se puede archivar
+   *  nada. */
+  declarado?: { efectivo?: number; invertido?: number; total?: number };
 }
 
 export const lecturaVacia = (formato: Formato, broker = ""): Lectura => ({
