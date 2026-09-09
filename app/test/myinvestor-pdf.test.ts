@@ -463,12 +463,19 @@ describe("planificar con posiciones", () => {
   // ── Lo que el extracto dice que ya no tienes ────────────────────────────
   // MyInvestor no lista una venta ni un traspaso en la cuenta corriente, así
   // que hay valores que aparecen en las compras y no vuelven a aparecer nunca.
-  // Antes nacían vivos, sin participaciones y sin precio: tres filas a cero
-  // euros en la cartera que no decían nada. Y no se pueden archivar sin más:
-  // sólo cuando el extracto ha demostrado que su lista lo cuenta todo.
+  // Entran sin participaciones y sin precio: filas a cero euros que no dicen
+  // nada. Y NO se pueden dar por vendidos, por mucho que el extracto cuadre su
+  // propio total: el «Extracto de cuenta» de MyInvestor cuadra la cuenta de
+  // efectivo, y los ETC y los ETF viven en la de valores, que no sale en él.
+  // Darlos por cerrados borraba de la cartera 423 € que sí estaban ahí. Lo
+  // único honesto es preguntar cuánto valen.
 
   /** El Excel de la cuenta y el PDF, juntos, como los sube la pantalla. */
-  const conExcel = async (filas: string[][], fx: Record<string, number> = { EUR: 1, USD: 0.86 }) => {
+  const conExcel = async (
+    filas: string[][],
+    fx: Record<string, number> = { EUR: 1, USD: 0.86 },
+    valores?: Record<string, number>,
+  ) => {
     const excel = desdeMatriz([
       ["", "", "TITULAR:", "PERSONA DE EJEMPLO", "", ""],
       ["", "", "Saldo:", "218,32€", "", ""],
@@ -481,7 +488,15 @@ describe("planificar con posiciones", () => {
       leer({ nombre: "cuenta.xlsx", tabla: excel }, { formato: "myinvestor-cuenta" }),
       leer({ nombre: "extracto.pdf", pdf }, { formato: "myinvestor-extracto" }),
     ]);
-    return { lectura, plan: planificar(lectura, { estado: estadoCon([], []), fx, cuentaId: "cuenta1" }) };
+    return {
+      lectura,
+      plan: planificar(lectura, {
+        estado: estadoCon([], []),
+        fx,
+        cuentaId: "cuenta1",
+        valores,
+      }),
+    };
   };
 
   /** Un ETC comprado y nunca más visto, y un fondo que sí está en el extracto. */
@@ -498,43 +513,106 @@ describe("planificar con posiciones", () => {
     expect(l.declarado?.total).toBeCloseTo(2504.12, 2);
   });
 
-  it("archiva lo que el extracto completo no menciona, y no pierde su historial", async () => {
+  it("no da por vendido lo que el extracto no menciona: lo pregunta", async () => {
     const { plan: p } = await conExcel(COMPRAS);
-    expect(p.extractoCompleto).toBe(true);
-    expect(p.cerrados).toEqual([
+    // El extracto cuadra su propio total, y aun así eso NO autoriza a nada: lo
+    // único que dice es hasta dónde llega el archivo.
+    expect(p.extractoCuadra).toBe(true);
+    expect(p.sinCubrir).toEqual([
       {
         clave: "FIDELITY PHYSICAL BITCOIN ET",
         nombre: "FIDELITY PHYSICAL BITCOIN ET",
         euros: 18.94,
         ops: 2,
+        titulos: undefined,
+        valor: undefined,
       },
     ]);
-    // Nace archivado: fuera de la cartera, pero las dos compras se guardan.
+    // Entra vivo, con sus dos compras. Nunca archivado.
     const etc = p.activosNuevos.find((a) => a.name === "FIDELITY PHYSICAL BITCOIN ET")!;
-    expect(etc.archived).toBe(true);
+    expect(etc.archived).toBeUndefined();
     expect(p.nuevas.filter((x) => x.fila.nombre === "FIDELITY PHYSICAL BITCOIN ET")).toHaveLength(2);
     // Y el fondo que sí está en el extracto no se crea aparte: se lo queda su
     // posición, con su ISIN y sus participaciones.
     expect(p.activosNuevos.map((a) => a.name)).not.toContain("FIDELITY MSCI WORLD INDEX P AC");
   });
 
-  it("si el extracto no cuadra con su propio total, no archiva nada", async () => {
-    // Mismo archivo, otro cambio del dólar: las posiciones ya no suman lo que
-    // el banco dice que tienes, así que la lista puede estar parcial y un valor
-    // que no sale en ella puede seguir siendo tuyo.
-    const { plan: p } = await conExcel(COMPRAS, { EUR: 1, USD: 0.5 });
-    expect(p.extractoCompleto).toBe(false);
-    expect(p.cerrados).toEqual([]);
-    expect(p.activosNuevos.find((a) => a.name === "FIDELITY PHYSICAL BITCOIN ET")?.archived)
-      .toBeUndefined();
+  it("con lo que vale a mano, el ETC entra por su valor y con SU coste", async () => {
+    const { plan: p } = await conExcel(COMPRAS, undefined, {
+      "FIDELITY PHYSICAL BITCOIN ET": 25.5,
+    });
+    expect(p.sinCubrir[0].valor).toBe(25.5);
+    const etc = p.activosNuevos.find((a) => a.name === "FIDELITY PHYSICAL BITCOIN ET")!;
+    expect(etc.mode).toBe("manual");
+    // Sin participaciones se cuenta como una posición entera, que es como lo
+    // lee quien mira la app del banco.
+    expect(etc.manual_qty).toBe(1);
+    expect(etc.unit).toBe("posición");
+    expect(etc.manual_price).toBeCloseTo(25.5, 6);
+    // El coste sale de las compras, NO del valor: si no, cada valor tecleado
+    // entraría sin ganancia ni pérdida y se perderían los 18,94 € de verdad.
+    expect(etc.manual_cost_unit).toBeCloseTo(18.94, 6);
   });
 
-  it("retira el aviso de «sube el PDF» cuando el PDF ya está delante", async () => {
+  it("y si las compras traían las participaciones, las usa", async () => {
+    // «X GALAXY PHY ETHEREUM ETC @ 1» son 29 caracteres: el corte a 30 no se
+    // come el número, así que de éste sí se sabe cuántos hay.
+    const { plan: p } = await conExcel(
+      [
+        ["26/09/2025", "30/09/2025", "X GALAXY PHY ETHEREUM ETC @ 1", "", "-10,03€", "189,08€"],
+        ["23/12/2025", "29/12/2025", "X GALAXY PHY ETHEREUM ETC @ 2", "", "-15,05€", "174,03€"],
+      ],
+      undefined,
+      { "X GALAXY PHY ETHEREUM ETC": 30 },
+    );
+    expect(p.sinCubrir[0].titulos).toBe(3);
+    const etc = p.activosNuevos.find((a) => a.name === "X GALAXY PHY ETHEREUM ETC")!;
+    expect(etc.manual_qty).toBe(3);
+    expect(etc.unit).not.toBe("posición");
+    expect(etc.manual_price).toBeCloseTo(10, 6);
+    expect(etc.manual_cost_unit).toBeCloseTo(25.08 / 3, 6);
+  });
+
+  it("el oro y la cripto no entran como fondos", async () => {
+    // El extracto de la cuenta lo llama todo «SUSCRIPCION IIC» y antes todo
+    // entraba en «fondo»: el oro y la cripto salían contados como fondos en la
+    // pantalla de reparto. El nombre es la única pista, y basta.
+    const { plan: p } = await conExcel([
+      ["08/09/2025", "10/09/2025", "FIDELITY PHYSICAL BITCOIN ET @", "", "-9,30€", "262,41€"],
+      ["16/09/2025", "18/09/2025", "WT PHYSICAL GOLD-EUR DLY HDG @", "", "-19,84€", "242,57€"],
+      ["26/09/2025", "30/09/2025", "X GALAXY PHY ETHEREUM ETC @ 1", "", "-10,03€", "232,54€"],
+      // Un fondo de mineras NO es oro, por mucho que se llame GOLD: sin
+      // PHYSICAL ni ETC en el nombre se queda donde estaba.
+      ["01/10/2025", "02/10/2025", "WORLD GOLD FUND CLASS A2 EUR", "", "-5,00€", "227,54€"],
+    ]);
+    const cat = Object.fromEntries(p.activosNuevos.map((a) => [a.name, a.cat]));
+    expect(cat["FIDELITY PHYSICAL BITCOIN ET"]).toBe("cripto");
+    expect(cat["WT PHYSICAL GOLD-EUR DLY HDG"]).toBe("metal");
+    expect(cat["X GALAXY PHY ETHEREUM ETC"]).toBe("cripto");
+    expect(cat["WORLD GOLD FUND CLASS A2 EUR"]).toBe("fondo");
+    // Y con el subyacente puesto, que es como los agrupa la pantalla de
+    // reparto: dos ETC distintos del mismo metal son la misma apuesta.
+    const sub = Object.fromEntries(p.activosNuevos.map((a) => [a.name, a.underlying]));
+    expect(sub["FIDELITY PHYSICAL BITCOIN ET"]).toBe("Bitcoin");
+    expect(sub["WT PHYSICAL GOLD-EUR DLY HDG"]).toBe("Oro");
+    expect(sub["X GALAXY PHY ETHEREUM ETC"]).toBe("Ethereum");
+    expect(sub["WORLD GOLD FUND CLASS A2 EUR"]).toBeNull();
+  });
+
+  it("retira el aviso de «sube el PDF» cuando ya no hay nada que arreglar", async () => {
     const { lectura, plan: p } = await conExcel(COMPRAS);
     // El Excel avisa de los dos por su cuenta: ninguno trae participaciones.
     expect(lectura.descartes.filter((d) => d.clave)).toHaveLength(2);
-    // Con el PDF delante, uno lo resuelve la posición y el otro está cerrado.
-    expect(p.descartes.filter((d) => d.clave)).toEqual([]);
+    // Con el PDF delante, la posición resuelve el fondo. El ETC sigue avisando:
+    // el PDF no lo cubre y nadie ha dicho todavía lo que vale.
+    expect(p.descartes.filter((d) => d.clave).map((d) => d.clave)).toEqual([
+      "FIDELITY PHYSICAL BITCOIN ET",
+    ]);
+    // Y en cuanto se dice lo que vale, tampoco.
+    const { plan: q } = await conExcel(COMPRAS, undefined, {
+      "FIDELITY PHYSICAL BITCOIN ET": 25.5,
+    });
+    expect(q.descartes.filter((d) => d.clave)).toEqual([]);
   });
 
   it("reimportar el mismo PDF no cambia nada", async () => {

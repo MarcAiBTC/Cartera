@@ -155,7 +155,7 @@ segundo es contra un Atajo en bucle, no contra ti.
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # 105 pruebas del cálculo, los importadores y el buzón
+npm test           # 107 pruebas del cálculo, los importadores y el buzón
 npm run build
 ```
 
@@ -187,7 +187,8 @@ ninguna escribe nada:
 npx vite-node scripts/probar-import.mjs "~/Downloads/Extracto cuenta MyInvestor.pdf"
 
 # La importación ENTERA, varios archivos a la vez, y la cartera que saldría.
-npx vite-node scripts/simular-import.mjs --cuadra 2879.69 \
+npx vite-node scripts/simular-import.mjs --cuadra 3336.49 \
+  --valor "FIDELITY PHYSICAL BITCOIN ET=189.79" \
   "~/Downloads/Movimientos_07-09-2025_07-09-2026.xlsx" \
   "~/Downloads/Extracto cuenta MyInvestor.pdf"
 ```
@@ -213,12 +214,21 @@ participaciones, así que por sí solo deja los fondos a cero títulos **y** a c
 euros. Los dos juntos sí: las posiciones y el saldo salen del PDF, y el coste de
 sumar las compras del Excel que casan con cada posición.
 
-Y el PDF trae una tercera cosa que no es obvia: **su propio total**. Si el
-efectivo más las posiciones suman el total que declara el banco, su lista lo
-cuenta todo — y entonces un valor que sale en las compras y no en la lista es un
-valor que ya no tienes. Ésos se crean archivados, con su historial pero fuera de
-la cartera; vivos y sin participaciones sólo serían una fila a cero euros. Si el
-total no cuadra, no se archiva nada: la lista podría estar parcial.
+Y falta una tercera cosa que **no está en ninguno de los dos**: los ETC y los
+ETF. Viven en la cuenta de VALORES, y el «Extracto de cuenta» cuadra su
+«Posición Integrada» con el efectivo y los fondos de la cuenta de EFECTIVO —
+compruébalo con su propio total— así que no salen por ningún lado. Y sus compras
+sí están en el Excel, pero sin participaciones, porque el corte a 30 caracteres
+se las come.
+
+Ahí no hay nada que deducir, así que la pantalla lo pregunta: sale una casilla
+por valor, con lo que te costó al lado, y escribes lo que vale hoy. Con eso el
+activo entra con su valor y con SU coste —el de las compras, no el que has
+escrito—, así que la ganancia sale bien. En blanco entra a cero, y se avisa.
+
+Un aviso sobre lo que el total NO prueba: que cuadre significa que el archivo
+llega hasta ahí, no que sea todo lo que tienes en el banco. Dar por vendido lo
+que no salga en la lista borraba 423 € de oro y cripto que estaban ahí.
 
 ---
 

@@ -335,6 +335,27 @@ function pareceFondo(concepto: string): boolean {
   return /[A-Z]{3}/.test(sinPrecio) && sinPrecio.split(/\s+/).length >= 2;
 }
 
+/** Qué es en realidad lo que se ha comprado.
+ *
+ *  El extracto de la cuenta corriente no distingue: todo sale como
+ *  «SUSCRIPCION IIC» o como un cargo, y ponerlo todo en «fondo» dejaba el oro
+ *  y la cripto contados como fondos en la pantalla de reparto. El nombre sí lo
+ *  dice, y aquí es la única pista que hay.
+ *
+ *  Con cuidado de no pasarse: el metal sólo cuando el nombre dice PHYSICAL o
+ *  ETC. «WORLD GOLD FUND» es un fondo de mineras, no oro, y llamarlo metal
+ *  sería peor que dejarlo donde estaba. */
+function queEs(nombre: string): { cat: string; underlying?: string } {
+  const n = nombre.toUpperCase();
+  if (/\bBITCOIN\b|\bBTC\b/.test(n)) return { cat: "cripto", underlying: "Bitcoin" };
+  if (/\bETHEREUM\b|\bETH\b/.test(n)) return { cat: "cripto", underlying: "Ethereum" };
+  if (/\bSOLANA\b|\bCRIPTO\b|\bCRYPTO\b/.test(n)) return { cat: "cripto" };
+  const fisico = /\bPHYSICAL\b|\bPHY\b|\bETC\b/.test(n);
+  if (fisico && /\bGOLD\b|\bORO\b/.test(n)) return { cat: "metal", underlying: "Oro" };
+  if (fisico && /\bSILVER\b|\bPLATA\b/.test(n)) return { cat: "metal", underlying: "Plata" };
+  return { cat: "fondo" };
+}
+
 export function esMyInvestorMovimientos(t: Tabla): boolean {
   const h = t.cabeceras.join(" ");
   // El de fondos trae ISIN y participaciones; ése lo lee el otro lector.
@@ -419,7 +440,8 @@ export function leerMyInvestorMovimientos(t: Tabla, op: OpcionesCuenta = {}): Le
         fecha: d,
         tipo,
         nombre,
-        categoria: "fondo",
+        categoria: queEs(nombre).cat,
+        subyacente: queEs(nombre).underlying,
         cantidad,
         precio: cantidad != null ? total / cantidad : undefined,
         total,

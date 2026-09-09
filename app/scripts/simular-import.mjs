@@ -104,7 +104,17 @@ console.log(
 );
 
 const cuenta = estado.cuentas.find((c) => c.broker === junto.broker);
-const plan = planificar(junto, { estado, fx, catalogo, cuentaId: cuenta?.id });
+// --valor "FIDELITY PHYSICAL BITCOIN ET=180" para lo que ningún archivo sabe:
+// los ETC y los ETF viven en la cuenta de valores, que el extracto de posición
+// no cubre, y sus compras vienen sin participaciones.
+const valores = {};
+for (let i = 0; i < args.length; i++) {
+  if (args[i] !== "--valor") continue;
+  const [clave, v] = (args[i + 1] ?? "").split("=");
+  if (clave && v != null) valores[clave.toUpperCase()] = Number(v);
+}
+
+const plan = planificar(junto, { estado, fx, catalogo, cuentaId: cuenta?.id, valores });
 
 console.log(
   `plan: ${plan.nuevas.length} nuevas · ${plan.duplicadas.length} ya estaban · ` +
@@ -112,7 +122,7 @@ console.log(
 );
 
 if (plan.posiciones.length) {
-  console.log(`\n-- posiciones (extracto completo: ${plan.extractoCompleto ? "sí" : "NO"}) --`);
+  console.log(`\n-- posiciones (el extracto cuadra su total: ${plan.extractoCuadra ? "sí" : "NO"}) --`);
   for (const p of plan.posiciones) {
     console.log(
       `  ${p.posicion.isin}  ${p.posicion.nombre.slice(0, 30).padEnd(31)}` +
@@ -127,11 +137,17 @@ if (plan.posiciones.length) {
   }
 }
 
-if (plan.cerrados.length) {
-  console.log("\n-- el extracto dice que ya no los tienes: nacen archivados --");
-  for (const c of plan.cerrados) {
-    console.log(`  ${c.nombre.padEnd(32)} ${c.ops} compras  ${c.euros.toFixed(2)} €`);
+if (plan.sinCubrir.length) {
+  console.log("\n-- el extracto no los cubre: hay que decir cuánto valen --");
+  for (const c of plan.sinCubrir) {
+    console.log(
+      `  ${c.nombre.padEnd(32)} ${String(c.ops).padStart(2)} compras  ` +
+        `costaron ${c.euros.toFixed(2).padStart(8)} €  ` +
+        (c.titulos != null ? `${c.titulos} títulos  ` : "títulos: se desconocen  ") +
+        (c.valor != null ? `→ vale ${c.valor.toFixed(2)} €` : "→ SIN VALOR: entra a cero"),
+    );
   }
+  console.log(`     usa --valor "NOMBRE=123.45" para decir lo que vale cada uno`);
 }
 
 if (plan.descartes.length) {

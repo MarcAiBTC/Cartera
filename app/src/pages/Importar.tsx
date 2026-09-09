@@ -134,6 +134,12 @@ export default function Importar() {
   // persona. Sólo hace falta con dos clases del mismo fondo, donde el parecido
   // de los nombres empata y elegir por él sería jugárselo a cara o cruz.
   const [emparejamientos, setEmparejamientos] = useState<Record<string, string>>({});
+  // Cuánto vale hoy, en euros, un valor del que el extracto no dice nada. Hay
+  // dinero que ningún archivo de MyInvestor sabe contar —los ETC y los ETF
+  // viven en la cuenta de valores, que el extracto de posición no cubre, y sus
+  // compras vienen sin participaciones— y la única salida honesta es
+  // preguntarlo en vez de dejarlo entrar valiendo cero.
+  const [valores, setValores] = useState<Record<string, number>>({});
   const [cuentaId, setCuentaId] = useState<string>("");
   const [sobre, setSobre] = useState(false);
   const [pegando, setPegando] = useState(false);
@@ -172,8 +178,9 @@ export default function Importar() {
       catalogo: [...resueltos, ...mercado.catalogo],
       cuentaId: cuentaId || undefined,
       emparejamientos,
+      valores,
     });
-  }, [archivos, lecturas, estado, mercado, cuentaId, resueltos, emparejamientos]);
+  }, [archivos, lecturas, estado, mercado, cuentaId, resueltos, emparejamientos, valores]);
 
   /** El archivo que falta. Con MyInvestor hacen falta dos y ninguno de los dos
    *  vale solo, así que decirlo aquí ahorra la importación a medias y el
@@ -273,6 +280,7 @@ export default function Importar() {
     setError(null);
     setHecho(null);
     setEmparejamientos({});
+    setValores({});
 
     const nuevos: Cargado[] = [];
     const fallos: string[] = [];
@@ -308,11 +316,13 @@ export default function Importar() {
   function quitarArchivo(id: string) {
     setArchivos((previos) => previos.filter((a) => a.id !== id));
     setEmparejamientos({});
+    setValores({});
   }
 
   function cambiarFormato(id: string, f: Formato) {
     setArchivos((previos) => previos.map((a) => (a.id === id ? { ...a, formato: f } : a)));
     setEmparejamientos({});
+    setValores({});
   }
 
   function cambiarMapa(id: string, m: Mapa) {
@@ -337,6 +347,7 @@ export default function Importar() {
     setArchivos([]);
     setResueltos([]);
     setEmparejamientos({});
+    setValores({});
     setError(null);
     setHecho(null);
   }
@@ -469,13 +480,8 @@ export default function Importar() {
       setArchivos([]);
       setResueltos([]);
       setEmparejamientos({});
-      // Los archivados no se cuentan como activos nuevos: no van a aparecer en
-      // la cartera y decir «creados 3 activos» mandaría a buscarlos.
-      setHecho({
-        ops: ops.length,
-        activos: creados.filter((a) => !a.archived).length,
-        posiciones,
-      });
+      setValores({});
+      setHecho({ ops: ops.length, activos: creados.length, posiciones });
       await recargar();
     } catch (e) {
       setError(
@@ -808,6 +814,18 @@ export default function Importar() {
                   return nuevo;
                 })
               }
+              valores={valores}
+              onValor={(clave, texto) =>
+                setValores((m) => {
+                  const nuevo = { ...m };
+                  const n = Number(texto.replace(",", "."));
+                  // La casilla vacía no es un cero: es «no lo sé». Un cero sí
+                  // se respeta, que es como se dice «esto ya no vale nada».
+                  if (texto.trim() === "" || !isFinite(n) || n < 0) delete nuevo[clave];
+                  else nuevo[clave] = n;
+                  return nuevo;
+                })
+              }
             />
           )}
 
@@ -914,11 +932,15 @@ function Resumen({
   candidatos,
   emparejamientos,
   onEmparejar,
+  valores,
+  onValor,
 }: {
   plan: Plan;
   candidatos: Activo[];
   emparejamientos: Record<string, string>;
   onEmparejar(isin: string, valor: string): void;
+  valores: Record<string, number>;
+  onValor(clave: string, texto: string): void;
 }) {
   const [verDescartes, setVerDescartes] = useState(false);
   // Un extracto de posición no trae operaciones y no por eso está vacío.
@@ -928,9 +950,9 @@ function Resumen({
    *  trae, que ese fondo no está en ellas — y pedirle otra vez el archivo que
    *  acaba de subir es la manera de que deje de leer los avisos. */
   const hayCompras = plan.lectura.filas.some((f) => f.tipo === "buy");
-  /** Claves de los valores que nacen archivados, para no anunciarlos en el
-   *  detalle como «activo nuevo»: no van a aparecer en la cartera. */
-  const claveCerrada = new Set(plan.cerrados.map((c) => c.clave));
+  /** Claves de los valores que el extracto no cubre, para señalarlos en el
+   *  detalle: entran, pero valiendo cero mientras nadie diga lo que valen. */
+  const sinCubrir = new Map(plan.sinCubrir.map((c) => [c.clave, c]));
 
   return (
     <>
@@ -963,40 +985,67 @@ function Resumen({
           </div>
         )}
 
-        {(() => {
-          // Los que nacen archivados no se anuncian como activos nuevos que
-          // revisar: no van a aparecer en la cartera. Tienen su propio aviso.
-          const vivos = plan.activosNuevos.filter((a) => !a.archived);
-          if (vivos.length === 0) return null;
-          return (
-            <Aviso>
-              Se crearán {vivos.length} {vivos.length === 1 ? "activo nuevo" : "activos nuevos"}:{" "}
-              {vivos.map((a) => a.name).join(", ")}. Revisa después su categoría en la cartera si
-              alguno no ha caído donde tocaba.
-            </Aviso>
-          );
-        })()}
+        {plan.activosNuevos.length > 0 && (
+          <Aviso>
+            Se crearán {plan.activosNuevos.length}{" "}
+            {plan.activosNuevos.length === 1 ? "activo nuevo" : "activos nuevos"}:{" "}
+            {plan.activosNuevos.map((a) => a.name).join(", ")}. Revisa después su categoría en la
+            cartera si alguno no ha caído donde tocaba.
+          </Aviso>
+        )}
 
-        {/* Lo que compraste y el extracto ya no menciona. Va aquí arriba y no
-            escondido entre los descartes porque es dinero: son las compras que
-            NO van a contar en el coste de nada. */}
-        {plan.cerrados.length > 0 && (
+        {/* Lo que compraste y el extracto no cubre. Va aquí arriba y no
+            escondido entre los descartes porque es dinero de verdad: 423 € de
+            oro y cripto que sin esto entran valiendo cero. */}
+        {plan.sinCubrir.some((c) => c.valor == null) && (
           <div className="mt-2">
-            <Aviso>
-              El extracto cuadra con su propio total, así que dice todo lo que tienes — y de{" "}
-              <strong>{plan.cerrados.map((c) => c.nombre).join(", ")}</strong> no dice nada. O los
-              vendiste, o los traspasaste a otro fondo, o se los llevó otro bróker. Sus{" "}
-              {plan.cerrados.reduce((s, c) => s + c.ops, 0)} compras —
-              {fe(
-                plan.cerrados.reduce((s, c) => s + c.euros, 0),
-                2,
-              )}
-              — se guardan en el historial, pero {plan.cerrados.length === 1 ? "el activo" : "los activos"}{" "}
-              {plan.cerrados.length === 1 ? "nace" : "nacen"} archivado
-              {plan.cerrados.length === 1 ? "" : "s"}: sin participaciones sólo serían una fila a
-              cero euros. Si crees que los sigues teniendo, sácalos del archivo desde su ficha y
-              ponles las participaciones a mano.
+            <Aviso tono="alerta">
+              El extracto no dice nada de{" "}
+              <strong>
+                {plan.sinCubrir.filter((c) => c.valor == null).map((c) => c.nombre).join(", ")}
+              </strong>
+              , y por sus compras tampoco se saben las participaciones.{" "}
+              {plan.extractoCuadra ? (
+                <>
+                  Su «Posición Integrada» cuadra con el efectivo y esos{" "}
+                  {plan.posiciones.length} fondos y con nada más, así que este PDF sólo cubre la
+                  cuenta de efectivo: lo que tengas en la de valores —los ETC y los ETF— no sale
+                  aquí.{" "}
+                </>
+              ) : null}
+              Dinos cuánto valen hoy, que lo pone en la app del banco, y entran bien. Si los
+              dejas en blanco entran valiendo cero.
             </Aviso>
+          </div>
+        )}
+
+        {plan.sinCubrir.length > 0 && (
+          <div className="mt-2 flex flex-col gap-2">
+            {plan.sinCubrir.map((c) => (
+              <div key={c.clave} className="tile flex flex-wrap items-center gap-x-3 gap-y-1 px-3.5 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] font-bold text-fg0">{c.nombre}</p>
+                  <p className="text-[11px] text-fg2">
+                    {c.ops} {c.ops === 1 ? "compra" : "compras"} · te costaron {fe(c.euros, 2)}
+                    {c.titulos != null && c.titulos > 0 && <> · {fn(c.titulos, 4)} títulos</>}
+                  </p>
+                </div>
+                <label className="flex shrink-0 items-center gap-1.5">
+                  <span className="text-[11px] font-semibold text-fg2">Vale hoy</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={valores[c.clave] ?? ""}
+                    onChange={(e) => onValor(c.clave, e.target.value)}
+                    placeholder="€"
+                    aria-label={`Cuánto vale hoy ${c.nombre}`}
+                    className="w-24 rounded-field border border-line2 bg-bg1 px-2 py-1 text-right text-[12.5px] font-bold text-fg0"
+                  />
+                </label>
+              </div>
+            ))}
           </div>
         )}
 
@@ -1163,9 +1212,11 @@ function Resumen({
                 <Aviso>
                   El extracto no dice nada de{" "}
                   <strong>{huerfanos.map((a) => a.name).join(", ")}</strong>.{" "}
-                  {plan.extractoCompleto
-                    ? "Y cuadra con su propio total, así que dice todo lo que tienes: eso quiere decir que ya no los tienes ahí. Archívalos desde su ficha — tal cual están, cuentan cero en tu cartera. Éstos no se archivan solos porque ya estaban en tu cartera antes de esta importación."
-                    : "O los vendiste, o los traspasaste, o están en otro sitio del banco que este extracto no lista. Si los vendiste o los traspasaste, archívalos desde su ficha; si crees que los sigues teniendo, compruébalo en el banco: tal cual están, cuentan cero en tu cartera."}
+                  O los vendiste, o los traspasaste, o están en una parte del banco que este
+                  extracto no cubre — el de MyInvestor sólo cuadra la cuenta de efectivo, no la
+                  de valores. Si los vendiste o los traspasaste, archívalos desde su ficha; si los
+                  sigues teniendo, ponles a mano lo que valen: tal cual están cuentan cero en tu
+                  cartera.
                 </Aviso>
               </div>
             );
@@ -1198,11 +1249,15 @@ function Resumen({
                         {OP_LBL[p.fila.tipo]}
                         {p.fila.traspasoInterno && " · traspaso interno"}
                         {p.nuevoActivo &&
-                          (claveCerrada.has(
-                            (p.fila.isin || p.fila.ticker || p.fila.nombre || "").toUpperCase(),
-                          )
-                            ? " · ya no lo tienes: se archiva"
-                            : " · activo nuevo")}
+                          (() => {
+                            const s = sinCubrir.get(
+                              (p.fila.isin || p.fila.ticker || p.fila.nombre || "").toUpperCase(),
+                            );
+                            if (!s) return " · activo nuevo";
+                            return s.valor != null
+                              ? ` · activo nuevo · lo valoras en ${fe(s.valor, 2)}`
+                              : " · activo nuevo · el extracto no lo cubre";
+                          })()}
                       </span>
                     </td>
                     <td className="px-2.5 py-2 text-right whitespace-nowrap text-fg1">

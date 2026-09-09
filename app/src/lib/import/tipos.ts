@@ -62,6 +62,9 @@ export interface FilaImportada {
   /** Categoría que el bróker ya sabe («CRYPTO», «STOCK»…). Cuando viene, vale
    *  más que adivinarla por la forma del ISIN. */
   categoria?: string;
+  /** Qué hay debajo: «Bitcoin», «Oro». Dos ETC distintos del mismo metal son
+   *  la misma apuesta, y la pantalla de reparto los agrupa por aquí. */
+  subyacente?: string;
   cantidad?: number;
   precio?: number;
   total: number;

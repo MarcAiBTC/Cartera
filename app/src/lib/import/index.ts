@@ -309,18 +309,37 @@ export interface Plan {
   /** Lo que el extracto dice que tienes hoy. Vacío en los archivos que sólo
    *  cuentan movimientos, que son casi todos. */
   posiciones: PosicionPlaneada[];
-  /** Valores que salen en las compras y NO en la lista de posiciones, cuando
-   *  el extracto ha demostrado que su lista está completa: o los vendiste, o
-   *  los traspasaste, o se los llevó otro bróker. Se crean archivados —con su
-   *  historial, fuera de la cartera— porque dejarlos vivos sin participaciones
-   *  los deja como una fila a cero euros que no dice nada.
+  /** Valores que salen en las compras y NO en la lista de posiciones del
+   *  extracto. NO quiere decir que ya no sean tuyos: el «Extracto de cuenta»
+   *  de MyInvestor cuadra su total con el efectivo y los fondos de la CUENTA
+   *  DE EFECTIVO, y lo que tengas en la cuenta de valores —los ETC, los ETF—
+   *  no sale por ningún lado. Quiere decir que este archivo no dice nada de
+   *  ellos, y como el concepto viene cortado a 30 caracteres tampoco traen
+   *  participaciones: sin ayuda entran valiendo cero.
    *
-   *  Vacío mientras el extracto no pruebe que lo cuenta todo: ahí un valor que
-   *  no sale en la lista puede seguir siendo tuyo. */
-  cerrados: { clave: string; nombre: string; euros: number; ops: number }[];
-  /** El extracto declara un total y cuadra con lo que trae dentro, así que su
-   *  lista de posiciones lo cuenta todo. Es lo que autoriza a archivar. */
-  extractoCompleto: boolean;
+   *  Por eso lleva dentro lo que hace falta para preguntarlo: cuánto te
+   *  costaron y cuántos títulos se han podido leer. Lo que conteste una
+   *  persona entra por `valores`.
+   *
+   *  Vacío en los archivos que no traen posiciones —casi todos—: sin una lista
+   *  de lo que tienes, «no está en la lista» no significa nada. */
+  sinCubrir: {
+    clave: string;
+    nombre: string;
+    /** Lo que suman sus compras, en euros */
+    euros: number;
+    ops: number;
+    /** Títulos, sólo si TODAS sus compras traen cantidad. Con el nombre
+     *  cortado a 30 caracteres la mitad de los fondos las pierden. */
+    titulos?: number;
+    /** Lo que ha dicho una persona que vale hoy, si lo ha dicho */
+    valor?: number;
+  }[];
+  /** El extracto declara un total y cuadra con lo que trae dentro. Dicho de
+   *  otra manera: su alcance es exactamente el efectivo más esas posiciones y
+   *  no llega a nada más, así que lo que falte no es que se le haya escapado —
+   *  es que no es de este extracto. */
+  extractoCuadra: boolean;
   cuentaNueva?: Partial<Cuenta>;
   /** Suma de lo que entra y de lo que sale, para el resumen de la vista previa */
   totalCompras: number;
@@ -369,6 +388,15 @@ export interface OpcionesPlan {
    *  nuevo». Manda sobre lo que adivine el parecido de nombres, que con dos
    *  clases del mismo fondo no puede acertar. */
   emparejamientos?: Record<string, string>;
+  /** Lo que vale hoy, en euros, un valor del que el extracto no dice nada:
+   *  `clave del activo → euros`. Es la respuesta a `Plan.sinCubrir`.
+   *
+   *  Hace falta porque hay dinero que NINGÚN archivo de MyInvestor sabe contar:
+   *  el «Extracto de cuenta» sólo cuadra la cuenta de efectivo, y el Excel de
+   *  movimientos trae los euros de cada compra pero no las participaciones,
+   *  porque el concepto viene cortado a 30 caracteres. Sin preguntarlo, esos
+   *  valores entran a cero y no hay manera de que la cartera cuadre. */
+  valores?: Record<string, number>;
 }
 
 /** Hasta cuántos días atrás vale un cambio anterior. Un fin de semana largo
@@ -824,7 +852,7 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
           ticker: fila.ticker ?? entradaCat?.yahoo ?? entradaCat?.symbol ?? entradaCat?.ticker ?? null,
           cat: categoriaDe(fila, entradaCat),
           currency: fila.divisa || entradaCat?.currency || "EUR",
-          underlying: entradaCat?.underlying ?? null,
+          underlying: entradaCat?.underlying ?? fila.subyacente ?? null,
           unit: "títulos",
           mode: "operations",
         };
@@ -932,12 +960,17 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
   /** Claves de operación que ya tienen dueño: se las ha quedado una posición. */
   const reclamadas = new Set(posiciones.flatMap((p) => p.claves));
 
-  // ── ¿El extracto lo cuenta todo? ─────────────────────────────────────
-  // Un extracto de posición trae su propio total, y ese total es la prueba: si
-  // el efectivo más las posiciones de la tabla suman lo que el banco dice que
-  // tienes, la tabla no se deja nada fuera. Y entonces —y sólo entonces— un
-  // fondo que aparece en las compras y no en la tabla es un fondo que ya no
-  // tienes.
+  // ── ¿Hasta dónde llega el extracto? ──────────────────────────────────
+  // Un extracto de posición trae su propio total, y comparado con lo que trae
+  // dentro dice hasta dónde llega. Si el efectivo más las posiciones de la
+  // tabla suman ese total, el alcance del archivo es exactamente eso.
+  //
+  // OJO CON LO QUE NO SIGNIFICA. Que cuadre NO quiere decir que sea todo lo que
+  // tienes en el banco. El «Extracto de cuenta» de MyInvestor cuadra su
+  // «Posición Integrada» con el efectivo y los fondos de la cuenta de efectivo,
+  // y la cuenta de valores —donde están los ETC y los ETF— no aparece en él ni
+  // suma en el total. Dar por cerrado un valor porque no salga en la lista era
+  // borrar de la cartera 423 € que sí estaban ahí.
   //
   // El margen no es un número redondo por gusto: las posiciones en otra divisa
   // se convierten con el cambio de HOY y el banco usó el de su cierre, así que
@@ -950,7 +983,7 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
   const totalDeclarado = lectura.declarado?.total;
   const sumaPos = posEnEuros.reduce((s, p) => s + p.eur, 0);
   const enOtraDivisa = posEnEuros.reduce((s, p) => s + (p.fuera ? p.eur : 0), 0);
-  const extractoCompleto =
+  const extractoCuadra =
     posiciones.length > 0 &&
     totalDeclarado != null &&
     Math.abs(saldo + sumaPos - totalDeclarado) <= 1 + 0.02 * enOtraDivisa;
@@ -1007,24 +1040,60 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
     ),
   ];
 
-  // De los que quedan, los que el extracto completo no menciona ya no son
-  // tuyos. Nacen archivados: la compra queda en el historial y en el IRPF, pero
-  // no aparece en la cartera valiendo cero euros y sin precio, que es lo que
-  // pasaba con los tres ETC de cripto y oro de esta cuenta.
-  const cerrados: Plan["cerrados"] = [];
-  /** Claves que el extracto da por cerradas: ya no hay nada que arreglarles. */
+  // ── Lo que el extracto no cubre ──────────────────────────────────────
+  // Compras de un valor del que la lista de posiciones no dice nada. En
+  // MyInvestor son los ETC y los ETF: viven en la cuenta de valores y el
+  // «Extracto de cuenta» sólo cuadra la de efectivo. Con el concepto cortado a
+  // 30 caracteres tampoco traen participaciones, así que sin ayuda entran
+  // valiendo cero — 423 € de oro y cripto que desaparecían de la cartera.
+  //
+  // La única salida honesta es preguntarlo: aquí se prepara la pregunta, y lo
+  // que conteste una persona llega por `valores`.
+  const valores = op.valores ?? {};
+  const sinCubrir: Plan["sinCubrir"] = [];
+  /** Claves que ya no hace falta avisar: alguien ha dicho lo que valen. */
   const resueltos = new Set<string>();
-  if (extractoCompleto) {
+  if (posiciones.length > 0) {
     for (const [clave, activo] of porCrear) {
       const suyas = nuevas.filter((p) => claveDe(p.fila) === clave);
-      cerrados.push({
-        clave,
-        nombre: activo.name ?? clave,
-        euros: suyas.reduce((s, p) => s + dineroDe(p.operacion), 0),
-        ops: suyas.length,
-      });
-      activo.archived = true;
-      resueltos.add(clave);
+      const euros = suyas.reduce((s, p) => s + dineroDe(p.operacion), 0);
+      // Los títulos sólo valen si están TODOS: sumar la mitad de las compras
+      // da una posición a medias, que es peor que no dar ninguna.
+      const compras = suyas.filter((p) => p.fila.tipo === "buy");
+      const todas = compras.length > 0 && compras.every((p) => p.fila.cantidad != null);
+      const titulos = todas
+        ? suyas.reduce(
+            (s, p) => s + (p.fila.cantidad ?? 0) * (p.fila.tipo === "sell" ? -1 : 1),
+            0,
+          )
+        : undefined;
+      const valor = valores[clave];
+
+      sinCubrir.push({ clave, nombre: activo.name ?? clave, euros, ops: suyas.length, titulos, valor });
+
+      if (valor != null && valor >= 0) {
+        // Con un valor a mano el activo pasa a `manual`, igual que las
+        // posiciones del PDF: los títulos si se saben, y si no una posición
+        // entera, que es como lo cuenta quien mira la app del banco.
+        //
+        // OJO con la posición entera: `precioEur` prefiere el precio de
+        // mercado y sólo cae a `manual_price` si no hay ninguno, así que un
+        // ticker puesto encima de esto valdría «1 × lo que cuesta una unidad».
+        // Estos activos nacen sin ISIN y sin ticker —el Excel no los trae—, y
+        // quien le ponga uno a mano tiene que poner también las unidades.
+        const qty = titulos && titulos > 0 ? titulos : 1;
+        Object.assign(activo, {
+          mode: "manual",
+          currency: "EUR",
+          unit: titulos && titulos > 0 ? (activo.unit ?? "títulos") : "posición",
+          manual_qty: qty,
+          manual_price: valor / qty,
+          // El coste sale de las compras, no del valor: si no, cada valor que
+          // se teclea entraría sin ganancia ni pérdida.
+          manual_cost_unit: euros > 0 ? euros / qty : valor / qty,
+        });
+        resueltos.add(clave);
+      }
     }
   }
 
@@ -1036,14 +1105,14 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
     activosNuevos: porCrear.map(([, a]) => a),
     // «Este fondo entra sin participaciones, sube también el PDF» sobra en
     // cuanto el PDF está delante: la posición ya le ha puesto los títulos. Y
-    // sobra igual si el extracto dice que ese valor ya no es tuyo. Dejarlo
-    // puesto era pedir dos veces el archivo que se acaba de subir.
+    // sobra igual cuando alguien ha dicho a mano lo que vale. Dejarlo puesto
+    // era pedir dos veces el archivo que se acaba de subir.
     descartes: lectura.descartes.filter(
       (d) => !d.clave || !(reclamadas.has(d.clave) || resueltos.has(d.clave)),
     ),
     posiciones,
-    cerrados,
-    extractoCompleto,
+    sinCubrir,
+    extractoCuadra,
     cuentaNueva:
       broker && !cuentaExiste && !op.cuentaId
         ? { name: broker, broker, currency: "EUR" }
