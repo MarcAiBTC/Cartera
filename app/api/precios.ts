@@ -9,18 +9,13 @@
 //
 // Un símbolo que falla NO borra su precio anterior: se queda el último bueno y
 // el fallo se cuenta en la respuesta. Es preferible un precio de hace una hora
-// a un hueco en la cartera.
+// a un hueco en la cartera. La cotización en sí vive en `_lib/refresco.ts`,
+// que comparte con el botón de la app (/api/refrescar).
 
-import { clienteServicio, autorizada, respuesta } from "./_lib/supabase";
-import { Cambios, coingecko, dormir, yahoo } from "./_lib/mercado";
+import { clienteServicio, autorizada, respuesta } from "./_lib/supabase.js";
+import { cotizar, type Simbolo } from "./_lib/refresco.js";
 
 export const config = { maxDuration: 300 };
-
-interface Simbolo {
-  symbol: string;
-  yahoo: string | null;
-  coingecko: string | null;
-}
 
 // Por nombre de metodo, nunca `export default`: ver la nota en _lib/supabase.ts.
 export async function GET(req: Request): Promise<Response> {
@@ -65,74 +60,18 @@ export async function GET(req: Request): Promise<Response> {
       simbolos.set(t, { symbol: t, yahoo: t, coingecko: null });
     }
 
-    // Un ISIN NO es un símbolo de Yahoo: pedirlo devuelve 404 siempre. Antes
-    // se metía en la lista igual, así que cada vuelta del cron gastaba una
-    // petición inútil por cada valor europeo y llenaba `fallos` de ruido que
-    // tapaba los fallos de verdad. Si el activo ya tiene ticker, o si el
-    // catálogo sabe traducir ese ISIN, no hay nada que pedir; y si no lo
-    // sabe, lo que hace falta es resolverlo (/api/isin), no insistir.
+    // Un ISIN NO es un símbolo de Yahoo: pedirlo devuelve 404 siempre. Si el
+    // activo ya tiene ticker, o si el catálogo sabe traducir ese ISIN, no hay
+    // nada que pedir; y si no lo sabe, lo que hace falta es resolverlo
+    // (/api/isin), no insistir.
     const i = a.isin?.toUpperCase();
     if (i && !t && !simbolos.has(i) && !isinesConocidos.has(i)) {
       sinTraducir.add(i);
     }
   }
 
-  const previos = await sb.from("prices").select("symbol,eur,raw,currency,prev,source");
-  const anteriores = new Map(
-    ((previos.data ?? []) as { symbol: string }[]).map((p) => [p.symbol, p]),
-  );
-
-  const filas: Record<string, unknown>[] = [];
-  const fallos: string[] = [];
-  const cambios = new Cambios();
-
-  // ── Cripto, en una sola llamada ───────────────────────────────────────
-  const cripto = [...simbolos.values()].filter((s) => s.coingecko);
-  if (cripto.length > 0) {
-    try {
-      const d = await coingecko(cripto.map((s) => s.coingecko!));
-      for (const s of cripto) {
-        const p = d[s.coingecko!];
-        if (!p) continue;
-        filas.push({
-          symbol: s.symbol,
-          eur: p.eur,
-          raw: p.eur,
-          currency: "EUR",
-          prev: p.previo,
-          source: "coingecko",
-          updated_at: ahora,
-        });
-      }
-    } catch (e) {
-      fallos.push(`coingecko: ${e instanceof Error ? e.message : e}`);
-    }
-  }
-
-  // ── El resto, uno a uno por Yahoo ─────────────────────────────────────
-  const hechos = new Set(filas.map((f) => f.symbol as string));
-  for (const s of simbolos.values()) {
-    if (hechos.has(s.symbol) || !s.yahoo) continue;
-    try {
-      const q = await yahoo(s.yahoo);
-      const tasa = await cambios.aEuros(q.divisa);
-      filas.push({
-        symbol: s.symbol,
-        eur: q.precio * tasa,
-        raw: q.precio,
-        currency: q.divisa,
-        prev: q.previo != null ? q.previo * tasa : null,
-        source: "yahoo",
-        updated_at: ahora,
-      });
-      // Sin ráfagas: Yahoo penaliza el exceso con bloqueos temporales.
-      await dormir(350);
-    } catch (e) {
-      fallos.push(`${s.symbol}: ${e instanceof Error ? e.message : e}`);
-      const viejo = anteriores.get(s.symbol);
-      if (viejo) filas.push(viejo as Record<string, unknown>);
-    }
-  }
+  // De uno en uno y con pausa: Yahoo penaliza las ráfagas con bloqueos.
+  const { filas, fallos, tasas } = await cotizar([...simbolos.values()], { ahora, pausa: 350 });
 
   if (filas.length > 0) {
     const { error } = await sb.from("prices").upsert(filas, { onConflict: "symbol" });
@@ -140,22 +79,21 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   // Las divisas que se hayan tenido que resolver por el camino.
-  const tasas = Object.entries(cambios.todas()).map(([currency, eur_rate]) => ({
+  const filasFx = Object.entries(tasas).map(([currency, eur_rate]) => ({
     currency,
     eur_rate,
     updated_at: ahora,
   }));
-  if (tasas.length > 0) await sb.from("fx").upsert(tasas, { onConflict: "currency" });
+  if (filasFx.length > 0) await sb.from("fx").upsert(filasFx, { onConflict: "currency" });
 
   return respuesta({
     ok: true,
     momento: ahora,
     escritos: filas.length,
-    divisas: tasas.length,
+    divisas: filasFx.length,
     fallos,
     // Un ISIN aqui significa: hay un activo en alguna cartera al que nadie
-    // sabe ponerle precio. Se ve de un vistazo en vez de esconderse entre
-    // los 404 que antes generaba pedirlo a Yahoo.
+    // sabe ponerle precio.
     sinTraducir: [...sinTraducir],
   });
 }

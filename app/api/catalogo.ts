@@ -7,8 +7,8 @@
 // hora —que es lo que hacía que el cron tardara cada vez más— pero su fila
 // sigue ahí, así que las posiciones antiguas conservan su nombre y su ISIN.
 
-import { clienteServicio, autorizada, respuesta } from "./_lib/supabase";
-import { Cambios, serieCambios, yahoo, dormir } from "./_lib/mercado";
+import { clienteServicio, autorizada, respuesta } from "./_lib/supabase.js";
+import { Cambios, serieCambios, yahoo, dormir } from "./_lib/mercado.js";
 
 export const config = { maxDuration: 300 };
 

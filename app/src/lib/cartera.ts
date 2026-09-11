@@ -55,7 +55,7 @@ export const enMercado = (a: Activo) => a.cat !== "liquidez";
 
 export type EstadoPrecio = "fijo" | "manual" | "vivo" | "cierre" | "viejo" | "sin-precio";
 
-function buscaPrecio(a: Activo, precios: MapaPrecios): Precio | null {
+export function buscaPrecio(a: Activo, precios: MapaPrecios): Precio | null {
   if (a.ticker && precios[a.ticker.toUpperCase()]) return precios[a.ticker.toUpperCase()];
   if (a.isin && precios[a.isin.toUpperCase()]) return precios[a.isin.toUpperCase()];
   return null;

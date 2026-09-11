@@ -8,7 +8,7 @@
 // y así es imposible que una pantalla enseñe un total que ya no corresponde a
 // las posiciones de al lado.
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   almacenLocal,
@@ -18,7 +18,14 @@ import {
   type Almacen,
   type Tabla,
 } from "./almacen";
-import { cargarMercado, MERCADO_VACIO, type DatosMercado } from "./precios";
+import {
+  cargarMercado,
+  MERCADO_VACIO,
+  pedirRefresco,
+  type DatosMercado,
+  type ResultadoRefresco,
+} from "./precios";
+import { supabase } from "./supabase";
 import { cargarBuzon, type EntradaBuzon } from "./buzon";
 import { useSesion } from "./sesion";
 import { hoyISO } from "./formato";
@@ -50,6 +57,12 @@ export interface EstadoDatos {
   recargar(): Promise<void>;
   recargarBuzon(): Promise<void>;
   refrescarPrecios(): Promise<void>;
+  /** Pide precios NUEVOS —al servidor, que va a Yahoo y a CoinGecko en ese
+   *  momento— y después los vuelve a leer. `refrescarPrecios` sólo relee lo
+   *  que ya hay. Sin cuenta no hay servidor al que pedírselo: sólo se relee. */
+  actualizarPrecios(): Promise<ResultadoRefresco>;
+  /** Hay una petición de precios nuevos en marcha */
+  actualizando: boolean;
   insertar<T extends { id: string }>(tabla: Tabla, filas: Partial<T>[]): Promise<T[]>;
   actualizar<T extends { id: string }>(tabla: Tabla, id: string, cambios: Partial<T>): Promise<T>;
   borrar(tabla: Tabla, id: string): Promise<void>;
@@ -64,6 +77,11 @@ const Ctx = createContext<EstadoDatos | null>(null);
 /** Cada cuánto se vuelven a pedir los precios con la pestaña abierta. El cron
  *  escribe cada 15 minutos; pedirlos más a menudo sólo gasta batería. */
 const REFRESCO_MS = 5 * 60 * 1000;
+
+/** Con cuenta, precios más viejos que esto se piden nuevos solos, sin pulsar
+ *  nada. Y como mucho una vez cada tanto, también cuando el servidor falla:
+ *  un error no puede convertirse en un bucle contra Yahoo. */
+const AUTO_MS = 20 * 60 * 1000;
 
 export function ProveedorDatos({ children }: { children: ReactNode }) {
   const sesion = useSesion();
@@ -102,6 +120,29 @@ export function ProveedorDatos({ children }: { children: ReactNode }) {
       console.warn("[precios] fallo al refrescar", e);
     }
   }, []);
+
+  const [actualizando, setActualizando] = useState(false);
+  /** Cuándo se pidieron precios nuevos la última vez, pulsando o solos. */
+  const ultimaPeticion = useRef(0);
+
+  const actualizarPrecios = useCallback(async (): Promise<ResultadoRefresco> => {
+    setActualizando(true);
+    ultimaPeticion.current = Date.now();
+    try {
+      const token = sesion.usuario
+        ? (await supabase?.auth.getSession())?.data.session?.access_token
+        : undefined;
+      const r: ResultadoRefresco = token
+        ? await pedirRefresco(token)
+        : { ok: true, actualizados: 0, fallos: [], soloResumen: true };
+      // Se relee siempre, haya ido bien o no: lo que se enseña es lo que hay
+      // de verdad en las fuentes, no lo que el servidor dice haber escrito.
+      await refrescarPrecios();
+      return r;
+    } finally {
+      setActualizando(false);
+    }
+  }, [sesion.usuario, refrescarPrecios]);
 
   // El buzón se lee aparte de la cartera y no rompe nada si falla: un archivo
   // que no aparece es una molestia, y dejar la app sin arrancar por eso sería
@@ -148,6 +189,17 @@ export function ProveedorDatos({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", alVolver);
     };
   }, [refrescarPrecios, recargarBuzon]);
+
+  // Sin pulsar nada: con cuenta, si al abrir la app —o al volver a ella— los
+  // precios que hay son de hace más de AUTO_MS, se piden nuevos. La GitHub
+  // Action del cuarto de hora se salta turnos a menudo, y abrir la cartera por
+  // la mañana tiene que enseñar los precios de ahora, no los de anoche.
+  useEffect(() => {
+    if (!sesion.usuario || actualizando || mercado.origen === "ninguno") return;
+    const edad = mercado.actualizado ? Date.now() - Date.parse(mercado.actualizado) : Infinity;
+    if (edad < AUTO_MS || Date.now() - ultimaPeticion.current < AUTO_MS) return;
+    void actualizarPrecios();
+  }, [sesion.usuario, actualizando, mercado, actualizarPrecios]);
 
   // ── Escrituras ─────────────────────────────────────────────────────────
   // Se escribe primero y se refleja después con lo que devuelve el almacén:
@@ -242,6 +294,8 @@ export function ProveedorDatos({ children }: { children: ReactNode }) {
       recargar,
       recargarBuzon,
       refrescarPrecios,
+      actualizarPrecios,
+      actualizando,
       insertar,
       actualizar,
       borrar,
@@ -261,6 +315,8 @@ export function ProveedorDatos({ children }: { children: ReactNode }) {
       recargar,
       recargarBuzon,
       refrescarPrecios,
+      actualizarPrecios,
+      actualizando,
       insertar,
       actualizar,
       borrar,

@@ -6,8 +6,8 @@
 // aplicar el dólar actual a toda la serie convierte la comparación en una
 // medida del dólar, no del índice.
 
-import { clienteServicio, autorizada, respuesta } from "./_lib/supabase";
-import { historicoYahoo, serieCambios } from "./_lib/mercado";
+import { clienteServicio, autorizada, respuesta } from "./_lib/supabase.js";
+import { historicoYahoo, serieCambios } from "./_lib/mercado.js";
 
 export const config = { maxDuration: 120 };
 

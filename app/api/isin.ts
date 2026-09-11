@@ -10,8 +10,8 @@
 // entrado. Lo que sí lleva es un tope de ISIN por llamada, que es lo que
 // impide convertirla en un ariete contra Yahoo.
 
-import { clienteServicio, respuesta } from "./_lib/supabase";
-import { resolverIsines } from "./_lib/isin";
+import { clienteServicio, respuesta } from "./_lib/supabase.js";
+import { resolverIsines } from "./_lib/isin.js";
 
 export const config = { maxDuration: 60 };
 

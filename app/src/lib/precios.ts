@@ -1,13 +1,17 @@
 // ── PRECIOS ──────────────────────────────────────────────────────────────
 // El navegador NO puede pedirle precios a Yahoo: no manda cabeceras CORS y
 // todos los proxies públicos que se probaron acabaron cayéndose. Por eso el
-// precio siempre llega de un tercero que sí los manda:
+// precio siempre llega de un tercero que sí los manda, y hay dos:
 //
-//   1. La tabla `prices` de Supabase, que rellena el cron de Vercel. Es la vía
-//      normal y la que se actualiza cada 15 minutos.
-//   2. Si no hay Supabase configurado (modo local), los JSON que sigue
-//      publicando el repositorio antiguo. Así la app arranca con precios
-//      reales desde el primer minuto, sin esperar a nada.
+//   1. La tabla `prices` de Supabase. La escriben el cron y el botón de
+//      actualizar de la cabecera (/api/refrescar), que cotiza en el momento.
+//   2. Los JSON públicos del repositorio, que publica una GitHub Action: sobre
+//      el papel cada 15 minutos, en la práctica cada tres o cuatro horas.
+//
+// Se leen los dos y, SÍMBOLO A SÍMBOLO, gana el precio más reciente. Antes se
+// elegía una fuente entera —Supabase si lo suyo tenía menos de 45 minutos—, y
+// actualizar los veinte valores de una cartera dejaba los otros quinientos con
+// el precio de hace dos días.
 
 import { supabase, hayNube } from "./supabase";
 import type { EntradaCatalogo, Precio } from "./tipos";
@@ -21,7 +25,9 @@ export interface DatosMercado {
   precios: MapaPrecios;
   fx: MapaFx;
   catalogo: EntradaCatalogo[];
+  /** El precio más reciente de todos, en ISO */
   actualizado: string | null;
+  /** De dónde ha salido al menos un precio de los que ganan */
   origen: "nube" | "feed" | "ninguno";
 }
 
@@ -33,7 +39,22 @@ export const MERCADO_VACIO: DatosMercado = {
   origen: "ninguno",
 };
 
-async function desdeNube(): Promise<DatosMercado> {
+const cuando = (iso: string | null | undefined) => (iso ? Date.parse(iso) : NaN);
+/** ¿`b` es más reciente que `a`? Un hueco siempre pierde. */
+const masNuevo = (a: Precio | undefined, b: Precio) =>
+  !a || !(cuando(a.updated_at) >= cuando(b.updated_at));
+
+// ── Supabase ─────────────────────────────────────────────────────────────
+
+export interface DeNube {
+  precios: MapaPrecios;
+  fx: MapaFx;
+  /** Cuándo se escribieron las divisas, para compararlas con las del feed */
+  fxFecha: string | null;
+  catalogo: EntradaCatalogo[];
+}
+
+async function desdeNube(): Promise<DeNube> {
   const sb = supabase!;
   const [pr, fx, cat] = await Promise.all([
     sb.from("prices").select("*"),
@@ -46,43 +67,16 @@ async function desdeNube(): Promise<DatosMercado> {
   for (const p of (pr.data ?? []) as Precio[]) precios[p.symbol.toUpperCase()] = p;
 
   const tasas: MapaFx = { EUR: 1 };
-  for (const f of fx.data ?? []) tasas[String(f.currency).toUpperCase()] = Number(f.eur_rate);
-
-  const catalogo = (cat.data ?? []) as EntradaCatalogo[];
-  aliasDelCatalogo(precios, catalogo);
-
-  const fechas = (pr.data ?? []).map((p) => p.updated_at).sort();
-  return {
-    precios,
-    fx: tasas,
-    catalogo,
-    actualizado: fechas.at(-1) ?? null,
-    origen: "nube",
-  };
-}
-
-/** Deja el precio de cada valor también bajo su ISIN.
- *
- *  La tabla `prices` está indexada por el símbolo de Yahoo —«CABK.MC»— y un
- *  valor importado de un bróker europeo llega identificado por su ISIN
- *  —«ES0140609019»—. Si en el momento de importar no se pudo traducir el uno
- *  al otro, el activo se quedaba guardado sin `ticker` y MUDO PARA SIEMPRE:
- *  ningún precio volvía a buscarle las vueltas, aunque el catálogo supiera
- *  perfectamente de qué valor se trataba.
- *
- *  Con el alias puesto, `buscaPrecio` lo encuentra por el ISIN y el activo
- *  cotiza aunque el `ticker` esté vacío. Es lo que hace que un fallo de un día
- *  no deje una posición rota para siempre. */
-function aliasDelCatalogo(precios: MapaPrecios, catalogo: EntradaCatalogo[]): void {
-  for (const c of catalogo) {
-    const simbolo = (c.yahoo ?? c.symbol ?? c.ticker ?? "").toUpperCase();
-    const p = simbolo ? precios[simbolo] : undefined;
-    if (!p) continue;
-    // Sólo se rellenan huecos: un precio escrito con esa clave manda sobre el
-    // alias, que es una deducción.
-    if (c.isin && !precios[c.isin.toUpperCase()]) precios[c.isin.toUpperCase()] = p;
+  let fxFecha: string | null = null;
+  for (const f of fx.data ?? []) {
+    tasas[String(f.currency).toUpperCase()] = Number(f.eur_rate);
+    if (!fxFecha || cuando(f.updated_at) > cuando(fxFecha)) fxFecha = f.updated_at;
   }
+
+  return { precios, fx: tasas, fxFecha, catalogo: (cat.data ?? []) as EntradaCatalogo[] };
 }
+
+// ── Los JSON públicos ────────────────────────────────────────────────────
 
 /** Forma de los JSON que publica el repositorio antiguo. */
 interface FeedPrecios {
@@ -96,7 +90,16 @@ interface FeedCatalogo {
   precios?: Record<string, { eur: number; cur?: string; prev?: number }>;
 }
 
-async function desdeFeed(): Promise<DatosMercado> {
+export interface DeFeed {
+  precios: MapaPrecios;
+  /** ISIN o ticker → símbolo. Se aplican al mezclar, no antes: tienen que
+   *  apuntar al precio que gane, sea de la fuente que sea. */
+  alias: Record<string, string>;
+  fx: MapaFx;
+  fxFecha: string | null;
+}
+
+async function desdeFeed(): Promise<DeFeed | null> {
   const pedir = async <T,>(archivo: string): Promise<T | null> => {
     try {
       const r = await fetch(`${FEED}/${archivo}`, { cache: "no-store" });
@@ -110,13 +113,14 @@ async function desdeFeed(): Promise<DatosMercado> {
     pedir<FeedPrecios>("precios.json"),
     pedir<FeedCatalogo>("catalogo-precios.json"),
   ]);
-  if (!feed && !catalogo) return MERCADO_VACIO;
+  if (!feed && !catalogo) return null;
 
   const precios: MapaPrecios = {};
   const meter = (
     sym: string,
     v: { eur: number; raw?: number; cur?: string; prev?: number },
     origen: string,
+    fecha: string,
   ) => {
     if (!v || !isFinite(v.eur)) return;
     precios[sym.toUpperCase()] = {
@@ -127,80 +131,141 @@ async function desdeFeed(): Promise<DatosMercado> {
       prev: v.prev ?? null,
       name: null,
       source: origen,
-      updated_at: feed?.generated_at ?? catalogo?.generated_at ?? new Date().toISOString(),
+      // Cada precio con la fecha de SU archivo. Antes todos llevaban la del
+      // feed rápido, y el precio del catálogo diario —de esta mañana— se hacía
+      // pasar por uno de hace diez minutos.
+      updated_at: fecha,
     };
   };
 
-  // El catálogo diario va primero para que el feed de 15 minutos lo pise.
-  for (const [s, v] of Object.entries(catalogo?.precios ?? {})) meter(s, v, "catalogo");
-  for (const [s, v] of Object.entries(feed?.precios ?? {})) meter(s, v, "feed");
+  // El catálogo diario va primero para que el feed rápido lo pise.
+  for (const [s, v] of Object.entries(catalogo?.precios ?? {})) {
+    meter(s, v, "catalogo", catalogo!.generated_at);
+  }
+  for (const [s, v] of Object.entries(feed?.precios ?? {})) meter(s, v, "feed", feed!.generated_at);
+
+  const fx: MapaFx = { EUR: 1 };
+  for (const [c, r] of Object.entries(catalogo?.fx ?? {})) fx[c.toUpperCase()] = Number(r);
+
+  return { precios, alias: feed?.alias ?? {}, fx, fxFecha: catalogo?.generated_at ?? null };
+}
+
+// ── Juntar las dos ───────────────────────────────────────────────────────
+
+/** Deja el precio de cada valor también bajo su ISIN.
+ *
+ *  La tabla `prices` está indexada por el símbolo de Yahoo —«CABK.MC»— y un
+ *  valor importado de un bróker europeo llega identificado por su ISIN
+ *  —«ES0140609019»—. Si en el momento de importar no se pudo traducir el uno
+ *  al otro, el activo se quedaba guardado sin `ticker` y MUDO PARA SIEMPRE.
+ *  Con el alias puesto, `buscaPrecio` lo encuentra por el ISIN.
+ *
+ *  El ISIN y su símbolo son el mismo valor, así que se queda el más reciente
+ *  de los dos: una fila vieja escrita con el ISIN no puede tapar el precio de
+ *  hace un minuto que acaba de llegar con el símbolo. */
+function aliasDelCatalogo(precios: MapaPrecios, catalogo: EntradaCatalogo[]): void {
+  for (const c of catalogo) {
+    if (!c.isin) continue;
+    const simbolo = (c.yahoo ?? c.symbol ?? c.ticker ?? "").toUpperCase();
+    const p = simbolo ? precios[simbolo] : undefined;
+    const k = c.isin.toUpperCase();
+    if (p && masNuevo(precios[k], p)) precios[k] = p;
+  }
+}
+
+export function mezclar(nube: DeNube | null, feed: DeFeed | null): DatosMercado {
+  if (!nube && !feed) return MERCADO_VACIO;
+
+  const precios: MapaPrecios = { ...(feed?.precios ?? {}) };
+  let deLaNube = 0;
+  for (const [s, p] of Object.entries(nube?.precios ?? {})) {
+    if (!masNuevo(precios[s], p)) continue;
+    precios[s] = p;
+    deLaNube++;
+  }
 
   // Los alias ISIN/ticker → símbolo del feed son lo que permite que una
   // posición apuntada por ISIN encuentre su precio sin tocar nada más.
   //
-  // Y PISAN al catálogo, no se limitan a rellenar huecos: hay tickers que
-  // existen en dos mercados con precios muy distintos. «FBTC» es el ETF de
-  // bitcoin de Fidelity en Estados Unidos, a unos 60 €, y también el de
-  // Londres que es el que está en cartera, a unos 6,60 €. Cuando el alias
-  // sólo rellenaba huecos ganaba el del catálogo y la posición aparecía valorada
-  // diez veces de más, con un +625% inventado.
+  // Y PISAN, no se limitan a rellenar huecos: hay tickers que existen en dos
+  // mercados con precios muy distintos. «FBTC» es el ETF de bitcoin de
+  // Fidelity en Estados Unidos, a unos 60 €, y también el de Londres que es
+  // el que está en cartera, a unos 6,60 €. Cuando el alias sólo rellenaba
+  // huecos ganaba el otro y la posición salía valorada diez veces de más.
   for (const [alias, sym] of Object.entries(feed?.alias ?? {})) {
     const p = precios[String(sym).toUpperCase()];
     if (p) precios[alias.toUpperCase()] = p;
   }
 
-  const fx: MapaFx = { EUR: 1 };
-  for (const [c, r] of Object.entries(catalogo?.fx ?? {})) fx[c.toUpperCase()] = Number(r);
+  const catalogo = nube?.catalogo ?? [];
+  aliasDelCatalogo(precios, catalogo);
+
+  // Las divisas, enteras de la fuente más reciente, con la otra de respaldo
+  // para lo que le falte.
+  const fxDeLaNube = cuando(nube?.fxFecha) > cuando(feed?.fxFecha) || !feed;
+  const [respaldo, buenas] = fxDeLaNube ? [feed?.fx, nube?.fx] : [nube?.fx, feed?.fx];
+  const fx: MapaFx = { ...(respaldo ?? {}), ...(buenas ?? {}), EUR: 1 };
+
+  const fechas = Object.values(precios)
+    .map((p) => p.updated_at)
+    .filter((f) => isFinite(cuando(f)))
+    .sort((a, b) => cuando(a) - cuando(b));
 
   return {
     precios,
     fx,
-    catalogo: [],
-    actualizado: feed?.generated_at ?? catalogo?.generated_at ?? null,
-    origen: "feed",
+    catalogo,
+    actualizado: fechas.at(-1) ?? null,
+    origen: deLaNube > 0 || !feed ? "nube" : "feed",
   };
 }
 
-/** A partir de cuánto se considera que un precio de Supabase se ha quedado
- *  viejo y conviene mirar el feed. El cron rápido escribe cada 15 minutos, así
- *  que 45 son tres turnos fallados: ya no es un retraso, es que no está
- *  corriendo. */
-const VIEJO_MS = 45 * 60 * 1000;
-
 export async function cargarMercado(): Promise<DatosMercado> {
-  if (hayNube) {
-    try {
-      const d = await desdeNube();
-      if (Object.keys(d.precios).length > 0) {
-        const edad = d.actualizado ? Date.now() - Date.parse(d.actualizado) : Infinity;
-        if (!isFinite(edad) || edad < VIEJO_MS) return d;
+  const [nube, feed] = await Promise.all([
+    hayNube
+      ? desdeNube().catch((e) => {
+          console.warn("[precios] Supabase no ha respondido, sólo el feed", e);
+          return null;
+        })
+      : Promise.resolve(null),
+    desdeFeed(),
+  ]);
+  return mezclar(nube, feed);
+}
 
-        // Supabase tiene precios, pero de hace horas. Pasa cuando sólo está
-        // el cron diario de Vercel —el plan Hobby no admite otra cosa— y
-        // todavía no se ha configurado la GitHub Action del cuarto de hora.
-        // Antes se devolvía igualmente lo de Supabase y la cartera enseñaba
-        // el cierre de ayer teniendo el precio de hace diez minutos a un
-        // fetch de distancia. Gana el más reciente de los dos.
-        const feed = await desdeFeed();
-        const edadFeed = feed.actualizado ? Date.now() - Date.parse(feed.actualizado) : Infinity;
-        if (edadFeed >= edad) return d;
+// ── Pedir precios nuevos ─────────────────────────────────────────────────
 
-        // Ganan los precios del feed, pero NO su catálogo: el feed no trae
-        // ninguno y devolverlo tal cual dejaba la app sin la tabla que
-        // traduce ISIN → símbolo. Con el catálogo vacío, cada valor importado
-        // por ISIN —o sea, todos los europeos— se guardaba sin `ticker` y
-        // nacía sin cotización. Un cron atrasado no tiene por qué romper una
-        // importación: el catálogo es de Supabase y está perfectamente al día.
-        aliasDelCatalogo(feed.precios, d.catalogo);
-        return { ...feed, catalogo: d.catalogo };
-      }
-      // Una tabla `prices` vacía es el estado normal hasta que el cron corre
-      // por primera vez: mientras tanto, mejor el feed que ningún precio.
-    } catch (e) {
-      console.warn("[precios] Supabase no ha respondido, se prueba el feed", e);
+export interface ResultadoRefresco {
+  ok: boolean;
+  /** Precios escritos en esta vuelta */
+  actualizados: number;
+  /** Símbolos que Yahoo o CoinGecko no han querido dar */
+  fallos: string[];
+  error?: string;
+  /** Sin cuenta no hay servidor al que pedir: sólo se ha releído el feed */
+  soloResumen?: boolean;
+}
+
+/** Le pide al servidor que cotice YA lo que tiene esta cuenta. Ver
+ *  api/refrescar.ts. No lanza nunca: un fallo vuelve como `ok: false` con el
+ *  motivo, para que el botón pueda decirlo. */
+export async function pedirRefresco(token: string): Promise<ResultadoRefresco> {
+  const fallo = (error: string): ResultadoRefresco => ({ ok: false, actualizados: 0, fallos: [], error });
+  try {
+    const r = await fetch("/api/refrescar", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    // En `vite dev` no hay /api y contesta el index.html con un 200.
+    if (!(r.headers.get("content-type") ?? "").includes("json")) {
+      return fallo("El servidor de precios no está disponible");
     }
+    const j = (await r.json()) as { error?: string; actualizados?: number; fallos?: string[] };
+    if (!r.ok) return fallo(j.error ?? `El servidor ha contestado ${r.status}`);
+    return { ok: true, actualizados: j.actualizados ?? 0, fallos: j.fallos ?? [] };
+  } catch {
+    return fallo("Sin conexión");
   }
-  return desdeFeed();
 }
 
 // ── REFERENCIA DE MERCADO ────────────────────────────────────────────────

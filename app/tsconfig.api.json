@@ -8,8 +8,12 @@
     "types": ["node"],
     "skipLibCheck": true,
 
-    /* Vercel empaqueta estas funciones con esbuild, que resuelve los imports
-       sin extensión igual que un bundler. */
+    /* OJO: Vercel NO empaqueta estas funciones. Las transpila archivo por
+       archivo y las carga Node como ESM, que no resuelve un import relativo
+       sin extensión: `./_lib/supabase` daba ERR_MODULE_NOT_FOUND al cargar y
+       todas las rutas salvo /api/salud contestaban FUNCTION_INVOCATION_FAILED.
+       Los imports relativos van SIEMPRE con `.js` (`./_lib/supabase.js`);
+       TypeScript lo casa con el `.ts`. */
     "module": "esnext",
     "moduleResolution": "bundler",
     "verbatimModuleSyntax": true,

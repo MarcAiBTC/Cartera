@@ -18,7 +18,7 @@
 // enseñando la vista previa antes de escribir. Que subir sea fácil no es
 // excusa para que la cartera se llene de operaciones que nadie ha mirado.
 
-import { clienteServicio, respuesta } from "./_lib/supabase";
+import { clienteServicio, respuesta } from "./_lib/supabase.js";
 
 export const config = { maxDuration: 30 };
 
