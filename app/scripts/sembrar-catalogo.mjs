@@ -39,21 +39,26 @@ function leerCatalogoEmbebido() {
   const bloque = html.slice(desde, hasta);
 
   const filas = [];
-  // {s:"MMM",n:"3M",c:"accion",u:"3M",un:"acc.",cy:"USD"}
-  const re = /\{s:"([^"]+)",n:"([^"]*)",c:"([^"]*)"(?:,u:"([^"]*)")?(?:,un:"([^"]*)")?(?:,cy:"([^"]*)")?/g;
-  let m;
-  while ((m = re.exec(bloque)) != null) {
-    const [, simbolo, nombre, cat, subyacente, , divisa] = m;
+  // {s:"0P00000RNC",n:"Vanguard US500 USD Acc",c:"fondo",u:"S&P 500",i:"IE0002639668",un:"part.",cy:"USD"}
+  //
+  // Campo a campo y no con una expresión fija: el orden cambia de una entrada
+  // a otra. La expresión de antes esperaba `u`, `un` y `cy` seguidos, así que
+  // en cuanto había un ISIN (`i`) por medio se perdía el ISIN y, detrás, la
+  // divisa: el Vanguard en dólares estaba en el catálogo como si fuera en
+  // euros, y el MSCI Europe sin ISIN, o sea sin nombre para quien lo importa.
+  for (const [, cuerpo] of bloque.matchAll(/\{([^{}]*)\}/g)) {
+    const c = Object.fromEntries([...cuerpo.matchAll(/(\w+):"([^"]*)"/g)].map(([, k, v]) => [k, v]));
+    if (!c.s) continue;
     filas.push({
-      symbol: simbolo.toUpperCase(),
-      name: nombre || null,
-      isin: null,
-      ticker: simbolo.split(".")[0].toUpperCase(),
-      yahoo: simbolo,
+      symbol: c.s.toUpperCase(),
+      name: c.n || null,
+      isin: c.i ? c.i.toUpperCase() : null,
+      ticker: c.s.split(".")[0].toUpperCase(),
+      yahoo: c.s,
       coingecko: null,
-      currency: (divisa || "EUR").toUpperCase(),
-      cat: cat || null,
-      underlying: subyacente || null,
+      currency: (c.cy || "EUR").toUpperCase(),
+      cat: c.c || null,
+      underlying: c.u || null,
       retired: false,
     });
   }

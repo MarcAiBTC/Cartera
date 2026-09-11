@@ -23,7 +23,7 @@
 // salen del Excel, y las participaciones y el saldo, del PDF. Ninguno de los
 // dos puede con los dos trabajos.
 
-import { campo, ES_ISIN, fecha, num, type Tabla } from "./csv";
+import { campo, ES_ISIN, fecha, normaliza, num, type Tabla } from "./csv";
 import { celdaEn, textoPdf, type FilaPdf } from "./pdf";
 import type { TipoOperacion } from "../tipos";
 import {
@@ -231,6 +231,351 @@ export function leerMyInvestorTabla(t: Tabla): Lectura {
   return { ...out, filas, descartes };
 }
 
+// ── LAS ÓRDENES DE FONDOS, EN CSV ────────────────────────────────────────
+// La lista de órdenes de la sección de fondos, en la web:
+//
+//   Fecha de la orden;ISIN;Importe estimado;Nº de participaciones;Estado
+//   07/09/2026;IE0032126645;50 EUR;0,62;Finalizada
+//   02/06/2026;IE0032126645;349.94 EUR;4,42;Finalizada
+//   03/06/2026;FR0000447823;352.11 EUR;0,132;Finalizada
+//
+// Es el mejor archivo que da MyInvestor: todas las órdenes desde el primer
+// día, cada una con su ISIN y sus participaciones. Con él los fondos cuadran
+// al céntimo con el banco. Pero tiene dos trampas, y las dos rompían la
+// cartera sin avisar:
+//
+//   · NO DICE SI ES COMPRA O VENTA. No hay columna de tipo y los importes van
+//     todos en positivo. Las dos últimas líneas de arriba son un TRASPASO: el
+//     2 de junio se reembolsan 4,42 participaciones del Vanguard y al día
+//     siguiente ese dinero entra en el AXA. Leído todo como compras, el
+//     Vanguard salía con 30,37 participaciones cuando el banco dice 14,45.
+//   · LAS PARTICIPACIONES LLEVAN COMA DECIMAL y los importes, punto. Con tres
+//     cifras detrás de la coma, «0,707» es idéntico a un millar escrito a la
+//     inglesa, y `num()` —que tiene que servir para los dos— lo leía como 707.
+//     El fondo salía mil veces más grande.
+
+export function esMyInvestorOrdenes(t: Tabla): boolean {
+  const h = t.cabeceras.map(normaliza);
+  if (!h.includes("isin")) return false;
+  // Lo que lo distingue del extracto de fondos, que también trae ISIN y
+  // participaciones, es justo lo que le falta: el tipo de operación.
+  const titulos = h.some((c) => c.includes("participaciones"));
+  const tipo = h.some((c) => /tipo|operacion|concepto|movimiento/.test(c));
+  return titulos && !tipo;
+}
+
+/** Participaciones escritas a la española: la coma es SIEMPRE el decimal y el
+ *  punto, si lo hay, un millar. Lo contrario que `titulos()` del PDF, y por la
+ *  misma razón: en este campo no hay ambigüedad posible si se sabe de dónde
+ *  viene, y `num()` no lo sabe. */
+function participaciones(v: string | undefined): number | undefined {
+  if (!v) return undefined;
+  let t = v.trim().replace(/\s/g, "");
+  if (t.includes(",")) t = t.replace(/\./g, "").replace(",", ".");
+  const n = Number(t);
+  return isFinite(n) && n > 0 ? n : undefined;
+}
+
+/** «352.11 EUR» → 352,11 euros. El importe va a la inglesa —punto decimal—
+ *  y con la divisa pegada, que en los fondos en dólares es USD. */
+function importeConDivisa(v: string | undefined): { total?: number; divisa?: string } {
+  const m = (v ?? "").trim().match(/^(.*?)\s*([A-Za-z]{3})?$/);
+  if (!m) return {};
+  const t = m[1].replace(/\s/g, "");
+  const total = /^\d+(\.\d+)?$/.test(t) ? Number(t) : num(t);
+  return { total: total != null && total > 0 ? total : undefined, divisa: m[2]?.toUpperCase() };
+}
+
+interface Orden {
+  i: number;
+  fecha: string;
+  isin: string;
+  total: number;
+  divisa: string;
+  cantidad: number;
+}
+
+/** Hasta cuántos días después del reembolso entra el dinero en el otro
+ *  fondo. En este archivo son uno o dos; con un fin de semana o un festivo
+ *  por medio pueden ser cuatro. */
+const DIAS_TRASPASO = 6;
+
+/** Cuánto pueden diferir las dos patas de un traspaso. El reembolso se apunta
+ *  con un importe ESTIMADO —el valor liquidativo de la víspera— y la
+ *  suscripción con lo que de verdad salió; el caso más separado del archivo
+ *  real es un 4,4 % (World Gold 9,63 € → AXA 10,07 €). */
+const HOLGURA_TRASPASO = 0.06;
+
+/** Un importe con céntimos. Una suscripción la eliges tú y es un número
+ *  redondo —5, 10, 50 €—; las dos patas de un traspaso nunca lo son, porque
+ *  salen de multiplicar participaciones por valor liquidativo. */
+const conCentimos = (v: number) => Math.abs(v - Math.round(v)) > 0.004;
+
+/** Los traspasos del archivo: `reembolso → suscripción`, por posición en la
+ *  lista.
+ *
+ *  Un traspaso deja una huella que no tiene nada más: dos órdenes de fondos
+ *  distintos, en la misma divisa, la segunda entre uno y seis días después de
+ *  la primera, por casi el mismo dinero y las dos con céntimos. La primera es
+ *  el reembolso —el dinero sale antes de entrar— y la segunda la suscripción.
+ *
+ *  Y una comprobación que evita el error caro: sólo se puede reembolsar lo que
+ *  se tiene. Si antes de esa fecha no había participaciones suficientes de ese
+ *  fondo, la primera pata no es una venta, y no se empareja. */
+function traspasos(ordenes: Orden[]): Map<number, number> {
+  const cronologico = [...ordenes].sort((a, b) => a.fecha.localeCompare(b.fecha) || a.i - b.i);
+  const pares = new Map<number, number>();
+  const usadas = new Set<number>();
+  const dias = (de: string, a: string) => (Date.parse(a) - Date.parse(de)) / 86400e3;
+
+  for (const s of cronologico) {
+    if (usadas.has(s.i) || !conCentimos(s.total)) continue;
+
+    const candidatas = cronologico
+      .filter(
+        (e) =>
+          !usadas.has(e.i) &&
+          e.isin !== s.isin &&
+          e.divisa === s.divisa &&
+          conCentimos(e.total) &&
+          dias(s.fecha, e.fecha) > 0 &&
+          dias(s.fecha, e.fecha) <= DIAS_TRASPASO &&
+          Math.abs(e.total - s.total) / Math.max(e.total, s.total) <= HOLGURA_TRASPASO,
+      )
+      .sort(
+        (a, b) =>
+          Math.abs(a.total - s.total) - Math.abs(b.total - s.total) ||
+          dias(s.fecha, a.fecha) - dias(s.fecha, b.fecha),
+      );
+    if (candidatas.length === 0) continue;
+
+    // Lo que había de ese fondo antes de ese día, con los reembolsos que ya se
+    // han decidido restando. El archivo redondea las participaciones a dos o
+    // tres decimales: de ahí la holgura.
+    const tenia = cronologico
+      .filter((o) => o.isin === s.isin && o.fecha < s.fecha)
+      .reduce((acc, o) => acc + (pares.has(o.i) ? -o.cantidad : o.cantidad), 0);
+    if (tenia + 0.001 < s.cantidad) continue;
+
+    const e = candidatas[0];
+    pares.set(s.i, e.i);
+    usadas.add(s.i);
+    usadas.add(e.i);
+  }
+  return pares;
+}
+
+export function leerMyInvestorOrdenes(t: Tabla): Lectura {
+  const out = lecturaVacia("myinvestor-ordenes", "MyInvestor");
+  const descartes: Descarte[] = [];
+  const ordenes: (Orden & { linea: number })[] = [];
+
+  t.filas.forEach((f, i) => {
+    const linea = t.lineas[i] ?? i + 2;
+    const crudo = Object.values(f).join(" · ");
+
+    const estado = campo(f, "estado", "situación", "status");
+    if (estado && NO_EJECUTADA.test(estado)) {
+      descartes.push({ linea, motivo: `Orden no ejecutada («${estado}»)`, crudo });
+      return;
+    }
+
+    const d = fecha(campo(f, "fecha de la orden", "fecha orden", "fecha"), "dmy");
+    if (!d) {
+      descartes.push({ linea, motivo: "Sin fecha reconocible", crudo });
+      return;
+    }
+
+    const isin = (campo(f, "isin") ?? "").toUpperCase();
+    if (!ES_ISIN(isin)) {
+      descartes.push({ linea, motivo: "Sin ISIN", crudo });
+      return;
+    }
+
+    const { total, divisa } = importeConDivisa(campo(f, "importe estimado", "importe"));
+    const cantidad = participaciones(campo(f, "nº de participaciones", "participaciones"));
+    if (total == null || cantidad == null) {
+      descartes.push({
+        linea,
+        motivo: total == null ? "Sin importe" : "Sin participaciones",
+        crudo,
+      });
+      return;
+    }
+
+    ordenes.push({
+      i: ordenes.length,
+      linea,
+      fecha: d,
+      isin,
+      total,
+      divisa: divisa ?? (campo(f, "divisa", "moneda") ?? "EUR").toUpperCase(),
+      cantidad,
+    });
+  });
+
+  const pares = traspasos(ordenes);
+  const origen = new Map([...pares].map(([s, e]) => [e, s]));
+  const vistas = new Map<string, number>();
+
+  const filas: FilaImportada[] = ordenes.map((o) => {
+    const destino = pares.get(o.i);
+    const desde = origen.get(o.i);
+    const traspaso = destino != null || desde != null;
+    // Dos órdenes idénticas el mismo día son dos órdenes: pasa con los
+    // reembolsos de un traspaso partido en dos.
+    const k = [o.fecha, o.isin, o.total, o.cantidad, destino != null].join("|");
+    const vez = (vistas.get(k) ?? 0) + 1;
+    vistas.set(k, vez);
+
+    return {
+      linea: o.linea,
+      fecha: o.fecha,
+      tipo: destino != null ? "sell" : "buy",
+      isin: o.isin,
+      categoria: "fondo",
+      cantidad: o.cantidad,
+      precio: o.total / o.cantidad,
+      total: o.total,
+      divisa: o.divisa,
+      traspasoInterno: traspaso,
+      nota:
+        destino != null
+          ? `Traspaso a ${ordenes[destino].isin}`
+          : desde != null
+            ? `Traspaso desde ${ordenes[desde].isin}`
+            : "Suscripción",
+      ocurrencia: vez,
+    };
+  });
+
+  return { ...out, filas, descartes };
+}
+
+// ── LAS ÓRDENES Y LA CUENTA CORRIENTE, JUNTAS ────────────────────────────
+// Cada suscripción de fondo sale DOS veces: como orden, con su ISIN y sus
+// participaciones, y como cargo en la cuenta corriente, con el nombre cortado
+// y sin nada más. Importadas las dos, cada compra contaba doble —veintidós
+// activos en vez de siete, la mitad sin precio— y la pantalla sólo sabía
+// pedir que se cambiara el tipo de archivo a mano.
+//
+// Pero la cuenta trae lo que a las órdenes les falta: el dinero —ingresos,
+// intereses, y en el Excel el saldo— y las compras de la cuenta de VALORES,
+// los ETC y los ETF, que no son órdenes de fondos y no salen en ese archivo.
+// Así que no se tira el archivo entero: de la cuenta se quitan justo los
+// fondos que ya están en las órdenes, y lo demás se queda.
+//
+// Qué es «ya está en las órdenes» se decide por PRODUCTO y no fila a fila. El
+// Vanguard se compra 50 € cada lunes, y un ETC de 9,05 € puede caer por
+// casualidad junto a una orden de 10 USD. Uno a uno fallaría alguno; por
+// producto, si la mayoría de sus cargos casan con una orden, es un fondo de
+// las órdenes, y si casi ninguno casa, es otra cosa.
+
+/** Días entre la orden y su cargo en la cuenta. MyInvestor carga la
+ *  suscripción de uno a cuatro días después de la orden, y un puente estira
+ *  eso. Antes, nunca: con dos días de margen hacia atrás, el cargo del MSCI
+ *  World del 23 de abril se quedaba una orden de 5 € del 24 —la del MSCI
+ *  Europe— en vez de la suya del 19, y el Europe entraba dos veces. */
+const CARGO_DESPUES = 7;
+const CARGO_ANTES = 0;
+
+/** ¿Este cargo de la cuenta es esta orden? En la misma divisa, por el mismo
+ *  dinero —5 € de orden son 4,99 € de cargo—. En otra divisa, el cargo va en
+ *  euros al cambio de ese día: 10 USD son entre 8 y 10 €. */
+function esElCargoDe(cargo: FilaImportada, orden: FilaImportada): boolean {
+  const d = (Date.parse(cargo.fecha) - Date.parse(orden.fecha)) / 86400e3;
+  if (d < -CARGO_ANTES || d > CARGO_DESPUES) return false;
+  if (cargo.divisa.toUpperCase() === orden.divisa.toUpperCase()) {
+    return Math.abs(cargo.total - orden.total) <= Math.max(0.05, orden.total * 0.02);
+  }
+  const r = cargo.total / orden.total;
+  return r >= 0.8 && r <= 1.0;
+}
+
+export function cruzarConOrdenes(
+  cuenta: Lectura,
+  ordenes: Lectura,
+): { cuenta: Lectura; ordenes: Lectura } {
+  // Las patas de un traspaso no pasan por la cuenta: el dinero va de un fondo
+  // a otro sin tocarla.
+  const libres = ordenes.filas
+    .map((f, i) => ({ f, i }))
+    .filter(({ f }) => !f.traspasoInterno && (f.tipo === "buy" || f.tipo === "sell"));
+  const usadas = new Set<number>();
+  /** Fila de la cuenta → orden con la que casa */
+  const pareja = new Map<number, number>();
+
+  const productos = cuenta.filas
+    .map((f, i) => ({ f, i }))
+    .filter(({ f }) => f.nombre && (f.tipo === "buy" || f.tipo === "sell"))
+    .sort((a, b) => a.f.fecha.localeCompare(b.f.fecha));
+
+  for (const { f, i } of productos) {
+    const dias = (o: FilaImportada) => Math.abs(Date.parse(f.fecha) - Date.parse(o.fecha));
+    const mejor = libres
+      .filter(({ f: o, i: j }) => !usadas.has(j) && esElCargoDe(f, o))
+      .sort(
+        (a, b) =>
+          Math.abs(a.f.total - f.total) - Math.abs(b.f.total - f.total) || dias(a.f) - dias(b.f),
+      )[0];
+    if (!mejor) continue;
+    usadas.add(mejor.i);
+    pareja.set(i, mejor.i);
+  }
+
+  // El voto, producto a producto.
+  const votos = new Map<string, { filas: number; casan: number }>();
+  for (const { f, i } of productos) {
+    const k = f.nombre!.toUpperCase();
+    const v = votos.get(k) ?? { filas: 0, casan: 0 };
+    v.filas += 1;
+    if (pareja.has(i)) v.casan += 1;
+    votos.set(k, v);
+  }
+  const sobran = new Set([...votos].filter(([, v]) => v.casan * 2 >= v.filas).map(([k]) => k));
+  if (sobran.size === 0) return { cuenta, ordenes };
+
+  // Un abono de un fondo en la cuenta es un reembolso a efectivo. Las órdenes
+  // no dicen si una orden es compra o venta y la leían como compra; aquí está
+  // la prueba de que salió dinero del fondo.
+  const reembolsos = new Set<number>();
+  for (const { f, i } of productos) {
+    const j = pareja.get(i);
+    if (j != null && f.tipo === "sell" && sobran.has(f.nombre!.toUpperCase())) reembolsos.add(j);
+  }
+
+  const quitadas = productos.filter(({ f }) => sobran.has(f.nombre!.toUpperCase()));
+  const fuera = new Set(quitadas.map(({ i }) => i));
+
+  return {
+    cuenta: {
+      ...cuenta,
+      filas: cuenta.filas.filter((_, i) => !fuera.has(i)),
+      // «Este fondo entra sin participaciones» deja de ser verdad: sus
+      // compras entran por las órdenes, con ISIN y participaciones.
+      descartes: [
+        ...cuenta.descartes.filter((d) => !d.clave || !sobran.has(d.clave)),
+        {
+          linea: Math.min(...quitadas.map(({ f }) => f.linea)),
+          motivo:
+            `${quitadas.length} cargos de fondos de la cuenta corriente no entran por aquí: ` +
+            `son las mismas órdenes del CSV de órdenes, que las trae con ISIN y participaciones. ` +
+            `De la cuenta se usa el dinero y lo que no son fondos`,
+          crudo: [...sobran].join(" · "),
+        },
+      ],
+    },
+    ordenes: reembolsos.size
+      ? {
+          ...ordenes,
+          filas: ordenes.filas.map((f, j) =>
+            reembolsos.has(j) ? { ...f, tipo: "sell" as const, nota: "Reembolso a la cuenta" } : f,
+          ),
+        }
+      : ordenes,
+  };
+}
+
 // ── EL EXTRACTO DE LA CUENTA CORRIENTE ───────────────────────────────────
 // Un tercer archivo, distinto de los dos de arriba: Cuentas → Corriente →
 // Operaciones y consultas → Consulta de operaciones. Se descarga en CSV, con
@@ -345,7 +690,7 @@ function pareceFondo(concepto: string): boolean {
  *  Con cuidado de no pasarse: el metal sólo cuando el nombre dice PHYSICAL o
  *  ETC. «WORLD GOLD FUND» es un fondo de mineras, no oro, y llamarlo metal
  *  sería peor que dejarlo donde estaba. */
-function queEs(nombre: string): { cat: string; underlying?: string } {
+export function queEs(nombre: string): { cat: string; underlying?: string } {
   const n = nombre.toUpperCase();
   if (/\bBITCOIN\b|\bBTC\b/.test(n)) return { cat: "cripto", underlying: "Bitcoin" };
   if (/\bETHEREUM\b|\bETH\b/.test(n)) return { cat: "cripto", underlying: "Ethereum" };

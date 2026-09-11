@@ -16,10 +16,11 @@
 // la pantalla Importar— y luego repite lo que hace `confirmar()`. Si esto y la
 // app dieran números distintos, uno de los dos estaría mintiendo.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { combinar, detectar, leer, leerArchivo, planificar } from "../src/lib/import/index.ts";
+import { simular } from "../src/lib/import/simular.ts";
 import { calcularPosiciones, calcularFifo, calcularResumen } from "../src/lib/cartera.ts";
 
 const args = process.argv.slice(2);
@@ -30,7 +31,10 @@ const bandera = (n) => {
 const desdeCero = args.includes("--cero");
 const cuadra = Number(bandera("cuadra"));
 const correo = bandera("correo");
-const rutas = args.filter((a, i) => !a.startsWith("--") && !args[i - 1]?.startsWith("--"));
+// Sólo estas banderas se comen el argumento siguiente. Descartar el de después
+// de CUALQUIER `--` se tragaba el archivo cuando venía detrás de `--cero`.
+const CON_VALOR = new Set(["--cuadra", "--correo", "--valor", "--mismo", "--saldo", "--extra", "--volcar"]);
+const rutas = args.filter((a, i) => !a.startsWith("--") && !CON_VALOR.has(args[i - 1]));
 
 if (rutas.length === 0) {
   console.error("uso: npx vite-node scripts/simular-import.mjs [--cero] [--cuadra N] <archivos…>");
@@ -114,12 +118,87 @@ for (let i = 0; i < args.length; i++) {
   if (clave && v != null) valores[clave.toUpperCase()] = Number(v);
 }
 
-const plan = planificar(junto, { estado, fx, catalogo, cuentaId: cuenta?.id, valores });
+// --mismo "VANGUARD US 500 STOCK EUR=VANGUARD US 500 STOCK INDEX EU" cuando el
+// mismo fondo llega con dos nombres: MyInvestor cambió el rótulo y el concepto
+// viene cortado a 30 caracteres. Sin ISIN no se puede adivinar, así que lo dice
+// una persona —en la pantalla, un desplegable; aquí, esta bandera—.
+const mismos = {};
+for (let i = 0; i < args.length; i++) {
+  if (args[i] !== "--mismo") continue;
+  const [de, a] = (args[i + 1] ?? "").split("=");
+  if (de && a) mismos[de.toUpperCase()] = a.toUpperCase();
+}
+
+// --saldo 218.32: el dinero sin invertir, que la pantalla pregunta. Un archivo
+// de órdenes de fondos no dice nada del dinero parado.
+const saldo = bandera("saldo") != null ? Number(bandera("saldo")) : undefined;
+
+// --extra "Oro ETC=180" para lo que no está en ningún archivo, como en la
+// pantalla la línea «Añadir algo que no esté aquí».
+const extras = [];
+for (let i = 0; i < args.length; i++) {
+  if (args[i] !== "--extra") continue;
+  const [nombre, v] = (args[i + 1] ?? "").split("=");
+  if (nombre && v != null) extras.push({ nombre, valor: Number(v) });
+}
+
+const plan = planificar(junto, {
+  estado,
+  fx,
+  catalogo,
+  precios: porSimbolo,
+  cuentaId: cuenta?.id,
+  valores,
+  mismos,
+  saldo,
+  extras,
+});
 
 console.log(
-  `plan: ${plan.nuevas.length} nuevas · ${plan.duplicadas.length} ya estaban · ` +
-    `${plan.activosNuevos.length} activos por crear · ${plan.descartes.length} avisos`,
+  `plan: ${plan.nuevas.length} nuevas · ${plan.corregidas.length} se corrigen · ` +
+    `${plan.duplicadas.length} ya estaban · ${plan.activosNuevos.length} activos por crear · ` +
+    `${plan.renombrar.length} se renombran · ${plan.descartes.length} avisos`,
 );
+
+if (plan.corregidas.length) {
+  const por = {};
+  for (const p of plan.corregidas) {
+    for (const k of Object.keys(p.cambios ?? {})) {
+      const antes = p.corrige[k];
+      const ahora = p.cambios[k];
+      if (antes === ahora || ["import_hash", "source_format", "notes", "price", "total"].includes(k)) continue;
+      por[k] = (por[k] ?? 0) + 1;
+    }
+    if (p.corrige.account_id == null) por.cuenta = (por.cuenta ?? 0) + 1;
+  }
+  console.log(`  qué se corrige: ${Object.entries(por).map(([k, v]) => `${k} ×${v}`).join(" · ")}`);
+}
+for (const r of plan.renombrar) {
+  console.log(
+    `  renombra ${r.activo.name} → ${Object.entries(r.campos).map(([k, v]) => `${k}=${v}`).join(" ")}`,
+  );
+}
+const traspasos = plan.planeadas.filter((p) => p.fila.tipo === "sell" && p.fila.traspasoInterno);
+if (traspasos.length) {
+  console.log(`\n-- ${traspasos.length} traspasos entre fondos --`);
+  for (const p of traspasos) {
+    console.log(
+      `  ${p.fila.fecha}  ${plan.nombres[p.fila.isin] ?? p.fila.isin}  ${p.fila.total.toFixed(2)} ${p.fila.divisa}  ${p.fila.nota}`,
+    );
+  }
+}
+
+if (plan.activosNuevos.length) {
+  console.log("\n-- activos por crear --");
+  for (const { clave, activo } of plan.porCrear) {
+    const otros = Object.keys(plan.mismos).filter((k) => plan.mismos[k] === clave);
+    console.log(
+      `  ${(activo.name ?? clave).padEnd(34)} ${(activo.isin ?? activo.ticker ?? "sin ISIN").padEnd(14)}` +
+        (otros.length ? `  +une ${otros.join(", ")}` : ""),
+    );
+  }
+  console.log(`     usa --mismo "UN NOMBRE=OTRO NOMBRE" si dos son el mismo fondo`);
+}
 
 if (plan.posiciones.length) {
   console.log(`\n-- posiciones (el extracto cuadra su total: ${plan.extractoCuadra ? "sí" : "NO"}) --`);
@@ -156,75 +235,19 @@ if (plan.descartes.length) {
 }
 
 // ── Aplicar el plan en memoria: lo mismo que `confirmar()` ───────────────
-// El orden importa y es el de la pantalla: primero las posiciones, que son las
-// que fijan a qué activo van las compras, y luego las operaciones.
+// Con la MISMA función que usa la pantalla para enseñar cómo queda la cuenta.
 
-const despues = structuredClone(estado);
-const cuentaId = cuenta?.id ?? "cuenta-nueva";
-if (!cuenta && plan.cuentaNueva) despues.cuentas.push({ id: cuentaId, ...plan.cuentaNueva });
+const { estado: despues, delBroker: suyos } = simular(plan, estado, cuenta?.id);
 
-const porClave = new Map();
-let n = 0;
-for (const a of plan.activosNuevos) {
-  const id = `nuevo-${++n}`;
-  despues.activos.push({ id, archived: false, underlying: null, ...a });
-  for (const k of [a.isin, a.ticker, a.name]) if (k) porClave.set(k.toUpperCase(), id);
+// --volcar cartera.json: la cartera resultante, tal cual la guarda el modo
+// «sólo en este dispositivo» (`cartera:local`), para mirar las pantallas con
+// estos datos sin tocar la base.
+if (bandera("volcar")) {
+  writeFileSync(bandera("volcar"), JSON.stringify(despues));
+  console.log(`cartera volcada en ${bandera("volcar")}`);
 }
-
-const redirigir = new Map();
-let puestas = 0;
-for (const p of plan.posiciones) {
-  if (p.aldia) {
-    if (p.activo) for (const k of p.claves) porClave.set(k, p.activo.id);
-    continue;
-  }
-  let id;
-  if (p.activo) {
-    Object.assign(
-      despues.activos.find((a) => a.id === p.activo.id),
-      p.campos,
-    );
-    id = p.activo.id;
-  } else {
-    id = `posicion-${p.posicion.isin}`;
-    despues.activos.push({ id, archived: false, ...p.campos });
-  }
-  for (const k of p.claves) porClave.set(k, id);
-  for (const o of p.reasignar) despues.operaciones.find((x) => x.id === o.id).asset_id = id;
-  for (const a of p.absorbidos) {
-    redirigir.set(a.id, id);
-    despues.activos.find((x) => x.id === a.id).archived = true;
-  }
-  puestas++;
-}
-
-let m = 0;
-for (const p of plan.nuevas) {
-  const clave = (p.fila.isin || p.fila.ticker || p.fila.nombre || "").toUpperCase();
-  const suyo = p.activo ? (redirigir.get(p.activo.id) ?? p.activo.id) : undefined;
-  despues.operaciones.push({
-    ...p.operacion,
-    id: `op-${++m}`,
-    account_id: cuentaId,
-    asset_id: porClave.get(clave) ?? suyo ?? null,
-  });
-}
-
-if (plan.efectivo) {
-  const campos = {
-    name: plan.efectivo.activo.name,
-    cat: "liquidez",
-    currency: "EUR",
-    unit: "€",
-    mode: "manual",
-    manual_qty: plan.efectivo.saldo,
-    manual_cost_unit: 1,
-    manual_price: 1,
-  };
-  const existe = despues.activos.find((a) => a.id === plan.efectivo.existente?.id);
-  if (existe) Object.assign(existe, campos);
-  else despues.activos.push({ id: "efectivo", archived: false, isin: null, ticker: null, ...campos });
-}
+const puestas = plan.posiciones.filter((p) => !p.aldia).length;
+const m = plan.nuevas.length;
 
 // ── La cartera que saldría ───────────────────────────────────────────────
 
@@ -242,15 +265,7 @@ console.log(`  ${puestas} posiciones puestas al día · ${m} operaciones inserta
 // Los activos que salen de una POSICIÓN cuentan aunque no tengan ni una
 // operación: dos de los seis fondos de esta cartera se compraron antes de la
 // ventana del Excel y no aparecen en ningún movimiento.
-const suyos = new Set(
-  despues.operaciones.filter((o) => o.account_id === cuentaId && o.asset_id).map((o) => o.asset_id),
-);
-for (const p of plan.posiciones) {
-  suyos.add(p.activo?.id ?? `posicion-${p.posicion.isin}`);
-}
-const delBroker = posiciones.filter(
-  (p) => suyos.has(p.activo.id) || p.activo.name === plan.efectivo?.activo.name,
-);
+const delBroker = posiciones.filter((p) => suyos.has(p.activo.id) && Math.abs(p.qty) > 1e-9);
 if (delBroker.length) {
   console.log(`\n-- ${junto.broker || "la cuenta"} --`);
   let total = 0;

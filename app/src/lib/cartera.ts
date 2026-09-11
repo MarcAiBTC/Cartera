@@ -137,26 +137,91 @@ export interface SaldoFifo {
 
 const importeEur = (o: Operacion) => (o.total_eur != null ? o.total_eur : o.total);
 
+// ── TRASPASOS ────────────────────────────────────────────────────────────
+// Un traspaso entre fondos son dos operaciones —se reembolsa uno y el dinero
+// entra en otro— pero para Hacienda no es una venta: la ganancia NO tributa
+// entonces, se difiere. El fondo de destino hereda el coste de adquisición y
+// la antigüedad de las participaciones que salieron del de origen, y la
+// ganancia sólo aparece cuando se reembolsa de verdad, a dinero.
+//
+// Tratado como una venta más, la pantalla Fiscal pedía declarar cada traspaso
+// y el fondo de destino entraba con coste de mercado, así que su ganancia
+// salía casi a cero aunque llevara años ganando. El total no cambiaba —lo que
+// faltaba en lo latente sobraba en lo realizado— pero todo lo que se ve por
+// fondo y por ejercicio estaba mal repartido.
+
+/** Días que puede tardar el dinero de un reembolso en entrar en el fondo de
+ *  destino: uno o dos, y con un fin de semana o un puente por medio, más. */
+const DIAS_TRASPASO = 7;
+
+/** Cuánto pueden diferir las dos patas. El reembolso se apunta a veces con un
+ *  importe ESTIMADO y la suscripción con lo que de verdad llegó. */
+const HOLGURA_TRASPASO = 0.1;
+
+/** Cada reembolso de un traspaso, con la suscripción que le corresponde:
+ *  `id del reembolso → id de la suscripción`. Las dos vienen marcadas como
+ *  traspaso interno; se casan por fecha y dinero, de fondos distintos. */
+export function paresDeTraspaso(operaciones: Operacion[]): Map<string, string> {
+  const dias = (de: string, a: string) => (Date.parse(a) - Date.parse(de)) / 86400e3;
+  const porFecha = (a: Operacion, b: Operacion) => a.date.localeCompare(b.date);
+  const entradas = operaciones.filter((o) => o.is_internal_transfer && o.type === "buy" && o.asset_id);
+  const salidas = operaciones
+    .filter((o) => o.is_internal_transfer && o.type === "sell" && o.asset_id)
+    .sort(porFecha);
+
+  const usadas = new Set<string>();
+  const pares = new Map<string, string>();
+  for (const s of salidas) {
+    const eur = importeEur(s);
+    const candidata = entradas
+      .filter((e) => {
+        if (usadas.has(e.id) || e.asset_id === s.asset_id) return false;
+        const d = dias(s.date, e.date);
+        const otro = importeEur(e);
+        return d >= 0 && d <= DIAS_TRASPASO && Math.abs(otro - eur) <= HOLGURA_TRASPASO * Math.max(otro, eur);
+      })
+      .sort((a, b) => Math.abs(importeEur(a) - eur) - Math.abs(importeEur(b) - eur) || porFecha(a, b))[0];
+    if (candidata) {
+      pares.set(s.id, candidata.id);
+      usadas.add(candidata.id);
+    }
+  }
+  return pares;
+}
+
 /** Recorre las operaciones en orden y devuelve, por activo, la posición viva
  *  y la lista de ventas cerradas.
  *
  *  Método FIFO: se venden antes los lotes más antiguos. Es el que exige
  *  Hacienda en España para valores homogéneos, así que la pantalla Fiscal y
- *  la ganancia realizada salen del mismo sitio y no pueden discrepar. */
+ *  la ganancia realizada salen del mismo sitio y no pueden discrepar.
+ *
+ *  Los traspasos entre fondos no cierran nada: ver `paresDeTraspaso`. */
 export function calcularFifo(operaciones: Operacion[]): {
   saldos: Map<string, SaldoFifo>;
   realizadas: Realizada[];
+  /** Reembolsos que fueron un traspaso, con el coste que se llevaron al
+   *  fondo de destino. No están en `realizadas`: no tributan. */
+  traspasos: Map<string, { coste: number; destino: string }>;
 } {
   const saldos = new Map<string, SaldoFifo>();
   const realizadas: Realizada[] = [];
+  const pares = paresDeTraspaso(operaciones);
+  const destinos = new Set(pares.values());
+  /** Lo que un reembolso deja pendiente para su suscripción: los trozos de
+   *  lote que salieron, cada uno con su fecha de compra y su coste. */
+  const arrastre = new Map<string, { fecha: string; qty: number; coste: number }[]>();
+  const traspasos = new Map<string, { coste: number; destino: string }>();
 
   // Orden estable: por fecha y, dentro del día, comprar antes que vender —
   // si no, una compra y una venta el mismo día dejarían la posición en
-  // negativo y el coste sin lote del que tirar.
+  // negativo y el coste sin lote del que tirar. Salvo la suscripción de un
+  // traspaso, que va DESPUÉS de su reembolso: hereda lo que éste se lleva.
   const orden: Record<string, number> = { buy: 0, deposit: 0, transfer: 1, sell: 2 };
+  const rango = (o: Operacion) => (destinos.has(o.id) ? 3 : (orden[o.type] ?? 1));
   const ops = [...operaciones].sort((a, b) => {
     if (a.date !== b.date) return a.date.localeCompare(b.date);
-    return (orden[a.type] ?? 1) - (orden[b.type] ?? 1);
+    return rango(a) - rango(b);
   });
 
   const saldoDe = (id: string): SaldoFifo => {
@@ -177,6 +242,27 @@ export function calcularFifo(operaciones: Operacion[]): {
       const qty = o.quantity ?? 0;
       if (qty <= 0) continue;
       const s = saldoDe(o.asset_id);
+
+      // La suscripción de un traspaso no compra a precio de hoy: hereda los
+      // lotes que salieron del fondo de origen, con su fecha y su coste,
+      // repartidos entre las participaciones nuevas en la misma proporción.
+      const heredado = arrastre.get(o.id);
+      const salieron = heredado?.reduce((acc, t) => acc + t.qty, 0) ?? 0;
+      if (heredado && salieron > 1e-12) {
+        const costeHeredado = heredado.reduce((acc, t) => acc + t.coste, 0);
+        for (const t of heredado) {
+          const parte = (qty * t.qty) / salieron;
+          const coste = t.coste + (o.fees || 0) * (t.qty / salieron);
+          s.lotes.push({ fecha: t.fecha, qty: parte, costeUnit: coste / parte });
+        }
+        // Los heredados son más antiguos que lo que ya había: el FIFO tiene
+        // que seguir vendiendo primero lo más viejo.
+        s.lotes.sort((a, b) => a.fecha.localeCompare(b.fecha));
+        s.qty += qty;
+        s.coste += costeHeredado + (o.fees || 0);
+        continue;
+      }
+
       // La comisión de compra forma parte del coste de adquisición.
       const costeUnit = (eur + (o.fees || 0)) / qty;
       s.lotes.push({ fecha: o.date, qty, costeUnit });
@@ -192,12 +278,14 @@ export function calcularFifo(operaciones: Operacion[]): {
       let costeConsumido = 0;
       let vendido = 0;
       let fechaCompra: string | null = null;
+      const trozos: { fecha: string; qty: number; coste: number }[] = [];
 
       while (porVender > 1e-9 && s.lotes.length > 0) {
         const lote = s.lotes[0];
         if (fechaCompra == null) fechaCompra = lote.fecha;
         const trozo = Math.min(lote.qty, porVender);
         costeConsumido += trozo * lote.costeUnit;
+        trozos.push({ fecha: lote.fecha, qty: trozo, coste: trozo * lote.costeUnit });
         lote.qty -= trozo;
         porVender -= trozo;
         vendido += trozo;
@@ -209,6 +297,17 @@ export function calcularFifo(operaciones: Operacion[]): {
       // se da por coste cero, que es lo conservador para Hacienda.
       s.qty = Math.max(0, s.qty - (o.quantity ?? 0));
       s.coste = Math.max(0, s.coste - costeConsumido);
+
+      // El reembolso de un traspaso no cierra nada: su coste viaja al fondo
+      // de destino. Sólo si había lotes que llevarse — sin histórico del
+      // fondo de origen no hay coste que heredar, y entonces se queda como
+      // una venta normal para no hacer desaparecer la ganancia.
+      const destino = pares.get(o.id);
+      if (destino && trozos.length > 0) {
+        arrastre.set(destino, trozos);
+        traspasos.set(o.id, { coste: costeConsumido, destino });
+        continue;
+      }
 
       realizadas.push({
         opId: o.id,
@@ -223,7 +322,7 @@ export function calcularFifo(operaciones: Operacion[]): {
     }
   }
 
-  return { saldos, realizadas };
+  return { saldos, realizadas, traspasos };
 }
 
 // ── POSICIONES ───────────────────────────────────────────────────────────

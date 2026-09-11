@@ -151,10 +151,11 @@ export default function Fiscal() {
       </section>
 
       <Aviso>
-        Esto es una ayuda para preparar la declaración, no un cálculo fiscal. No contempla la regla
-        de los dos meses en valores homogéneos, ni las retenciones en origen de los dividendos
-        extranjeros, ni los ajustes de los fondos con traspaso. Contrasta las cifras antes de
-        presentarlas.
+        Esto es una ayuda para preparar la declaración, no un cálculo fiscal. Los traspasos entre
+        fondos no aparecen porque no tributan: el fondo de destino hereda el coste y la antigüedad
+        del de origen, y la ganancia sale cuando lo reembolses de verdad. No contempla la regla de
+        los dos meses en valores homogéneos ni las retenciones en origen de los dividendos
+        extranjeros. Contrasta las cifras antes de presentarlas.
       </Aviso>
     </div>
   );

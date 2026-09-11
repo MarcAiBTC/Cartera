@@ -10,6 +10,7 @@
 // cinco años es la mejor manera de meter cien líneas mal y no enterarse.
 
 import {
+  ES_ISIN,
   filaCabecera,
   nombrarColumnas,
   normaliza,
@@ -20,14 +21,18 @@ import {
 import { esRevolut, leerRevolut } from "./revolut";
 import { esTradeRepublic, leerTradeRepublic } from "./traderepublic";
 import {
+  cruzarConOrdenes,
   esMyInvestorExtracto,
   esMyInvestorJson,
   esMyInvestorMovimientos,
+  esMyInvestorOrdenes,
   esMyInvestorTabla,
   leerMyInvestorExtracto,
   leerMyInvestorJson,
   leerMyInvestorMovimientos,
+  leerMyInvestorOrdenes,
   leerMyInvestorTabla,
+  queEs,
 } from "./myinvestor";
 import { ES_PDF, leerPdf, type FilaPdf } from "./pdf";
 import { adivinarMapa, leerGenerico, leerGenericoJson, type Mapa } from "./generico";
@@ -40,8 +45,8 @@ import {
   type PosicionImportada,
 } from "./tipos";
 import type { Activo, Cuenta, EntradaCatalogo, EstadoCartera, Operacion } from "../tipos";
-import type { MapaFx } from "../cartera";
-import { tasa } from "../cartera";
+import type { MapaFx, MapaPrecios } from "../cartera";
+import { precioEur, tasa } from "../cartera";
 
 export * from "./tipos";
 export * from "./generico";
@@ -146,6 +151,9 @@ export function detectar(e: Entrada): Formato {
   const t = e.tabla;
   if (!t || t.filas.length === 0) return "desconocido";
   if (esRevolut(t)) return "revolut-csv";
+  // Antes que el extracto de fondos: los dos traen ISIN y participaciones, y
+  // lo que separa a éste es la columna de tipo que NO tiene.
+  if (esMyInvestorOrdenes(t)) return "myinvestor-ordenes";
   if (esMyInvestorTabla(t)) return "myinvestor-tabla";
   if (esMyInvestorMovimientos(t)) return "myinvestor-cuenta";
   if (esTradeRepublic(t)) return "traderepublic-csv";
@@ -157,6 +165,7 @@ export function detectar(e: Entrada): Formato {
 /** Los formatos que se leen de una tabla. Un PDF y un JSON no la tienen. */
 const NECESITA_TABLA: Formato[] = [
   "revolut-csv",
+  "myinvestor-ordenes",
   "myinvestor-tabla",
   "myinvestor-cuenta",
   "myinvestor-efectivo",
@@ -191,6 +200,8 @@ export function leer(e: Entrada, op: OpcionesLectura = {}): Lectura {
       return leerGenericoJson(Array.isArray(e.json) ? e.json : []);
     case "revolut-csv":
       return leerRevolut(e.tabla!);
+    case "myinvestor-ordenes":
+      return leerMyInvestorOrdenes(e.tabla!);
     case "myinvestor-tabla":
       return leerMyInvestorTabla(e.tabla!);
     case "myinvestor-cuenta":
@@ -223,6 +234,48 @@ export function combinar(lecturas: Lectura[]): Lectura {
   const vivas = lecturas.filter((l) => l.formato !== "desconocido");
   if (vivas.length === 0) return { formato: "desconocido", broker: "", filas: [], descartes: [] };
   if (vivas.length === 1) return vivas[0];
+
+  // Las órdenes de fondos y la cuenta corriente cuentan las mismas
+  // suscripciones: de la cuenta se quedan el dinero y lo que no son fondos.
+  const iOrdenes = vivas.findIndex(
+    (l) => l.formato === "myinvestor-ordenes" || l.formato === "myinvestor-tabla",
+  );
+  // Puede haber más de un extracto de cuenta: el Excel trae el saldo pero sólo
+  // un año, y el CSV toda la historia. Cada uno se cruza con las órdenes; lo
+  // que se repita entre ellos lo quita la huella al planificar.
+  if (iOrdenes >= 0) {
+    vivas.forEach((l, i) => {
+      if (l.formato !== "myinvestor-cuenta") return;
+      const { cuenta, ordenes } = cruzarConOrdenes(l, vivas[iOrdenes]);
+      vivas[i] = cuenta;
+      vivas[iOrdenes] = ordenes;
+    });
+  }
+
+  // Y con las órdenes delante, del PDF de posición sólo vale el saldo. Las
+  // órdenes cuentan cada participación desde el primer día; el PDF es una
+  // foto de hace unos días, y ponerlo encima dejaba los fondos sin las
+  // últimas compras —el Vanguard en 14,45 en vez de 15,07— y duplicaba los
+  // que el parecido de nombres no sabía casar.
+  const iPdf = vivas.findIndex((l) => l.formato === "myinvestor-extracto" && l.posiciones?.length);
+  if (iOrdenes >= 0 && iPdf >= 0) {
+    const pdf = vivas[iPdf];
+    vivas[iPdf] = {
+      ...pdf,
+      posiciones: undefined,
+      declarado: undefined,
+      descartes: [
+        ...pdf.descartes,
+        {
+          linea: 1,
+          motivo:
+            `Las ${pdf.posiciones!.length} posiciones del PDF no se usan: las participaciones ` +
+            `salen de las órdenes, que llegan hasta hoy. Del PDF se toma el saldo de efectivo`,
+          crudo: pdf.posiciones!.map((p) => p.isin).join(" · "),
+        },
+      ],
+    };
+  }
 
   const filas = vivas.flatMap((l) => l.filas.map((f) => ({ ...f, formato: f.formato ?? l.formato })));
   const posiciones = vivas.flatMap((l) => l.posiciones ?? []);
@@ -262,6 +315,11 @@ export interface Planeada {
   nuevoActivo?: Partial<Activo>;
   duplicada: boolean;
   aviso?: string;
+  /** La operación ya guardada que es ESTA misma pero escrita mal, cuando lo
+   *  es. En vez de insertar otra al lado se corrige: ver `diferencias`. */
+  corrige?: Operacion;
+  /** Lo que hay que cambiarle a `corrige` */
+  cambios?: Partial<Operacion>;
 }
 
 /** Una posición del extracto, ya casada con la cartera.
@@ -301,7 +359,22 @@ export interface Plan {
   planeadas: Planeada[];
   nuevas: Planeada[];
   duplicadas: Planeada[];
+  /** Ya estaban guardadas, pero el archivo dice otra cosa de ellas: se
+   *  corrigen en su sitio en vez de insertarlas otra vez. Es lo que arregla
+   *  una importación hecha con el lector equivocado —las órdenes de fondos de
+   *  MyInvestor leídas como «otro bróker» entraron todas como compras, con
+   *  0,707 participaciones convertidas en 707— sin tener que borrar nada. */
+  corregidas: Planeada[];
   activosNuevos: Partial<Activo>[];
+  /** Los mismos, con la clave con la que entran sus operaciones. Es lo que
+   *  necesita la pantalla para preguntar «¿éste y ése son el mismo fondo?»:
+   *  `activosNuevos` sólo lleva las columnas que van a la base de datos. */
+  porCrear: { clave: string; activo: Partial<Activo> }[];
+  /** Las uniones que ha pedido una persona, ya resueltas —si A es B y B es C,
+   *  aquí A es C—. Quien escriba las operaciones tiene que mirarlo: las compras
+   *  que entran con la clave de la izquierda van al activo de la derecha, que
+   *  es el único que se crea. */
+  mismos: Record<string, string>;
   /** Los avisos de los archivos, menos los que otro archivo de esta misma
    *  importación ya ha resuelto. Es lo que hay que enseñar; `lectura.descartes`
    *  es la lista cruda de cada archivo por separado. */
@@ -309,20 +382,22 @@ export interface Plan {
   /** Lo que el extracto dice que tienes hoy. Vacío en los archivos que sólo
    *  cuentan movimientos, que son casi todos. */
   posiciones: PosicionPlaneada[];
-  /** Valores que salen en las compras y NO en la lista de posiciones del
-   *  extracto. NO quiere decir que ya no sean tuyos: el «Extracto de cuenta»
-   *  de MyInvestor cuadra su total con el efectivo y los fondos de la CUENTA
-   *  DE EFECTIVO, y lo que tengas en la cuenta de valores —los ETC, los ETF—
-   *  no sale por ningún lado. Quiere decir que este archivo no dice nada de
-   *  ellos, y como el concepto viene cortado a 30 caracteres tampoco traen
-   *  participaciones: sin ayuda entran valiendo cero.
+  /** Los que van a entrar VALIENDO CERO: hay dinero dentro y no hay manera de
+   *  saber cuánto vale hoy, porque falta el precio, o los títulos, o los dos.
+   *
+   *  El caso extremo es el extracto de la cuenta corriente de MyInvestor: sin
+   *  ISIN no hay precio, y con el concepto cortado a 30 caracteres la mitad de
+   *  las compras vienen sin participaciones. El PDF de posición arregla los
+   *  fondos que lista, pero los ETC y los ETF viven en la cuenta de valores y
+   *  no salen en él, así que ni con los dos archivos se cubre todo.
    *
    *  Por eso lleva dentro lo que hace falta para preguntarlo: cuánto te
    *  costaron y cuántos títulos se han podido leer. Lo que conteste una
    *  persona entra por `valores`.
    *
-   *  Vacío en los archivos que no traen posiciones —casi todos—: sin una lista
-   *  de lo que tienes, «no está en la lista» no significa nada. */
+   *  No entra aquí lo que se calcula solo —títulos y un sitio donde mirar el
+   *  precio— ni lo que ya no tienes: una posición vendida entera es una
+   *  pérdida realizada, no un activo a cero. */
   sinCubrir: {
     clave: string;
     nombre: string;
@@ -357,7 +432,25 @@ export interface Plan {
     declarado: boolean;
     /** Lo que saldría de sumar los movimientos, cuando difiere del declarado */
     calculado: number;
+    /** De dónde sale el saldo: lo dice el archivo, lo ha dicho una persona o
+     *  es la suma de los movimientos. */
+    origen: "archivo" | "persona" | "calculado";
   };
+  /** La cuenta de efectivo de este bróker, exista o no, y el saldo que da el
+   *  archivo si da alguno. Es lo que necesita la pantalla para PREGUNTAR
+   *  cuánto dinero hay: un archivo de órdenes de fondos no dice nada del
+   *  dinero parado y sin preguntarlo el total no cuadra nunca con el banco. */
+  liquidez?: { nombre: string; existente?: Activo; delArchivo?: number };
+  /** Activos que ya existen y a los que les falta lo que el catálogo sí sabe:
+   *  un nombre que se entienda —los que entraron llamándose como su ISIN—, el
+   *  símbolo de cotización o la divisa. */
+  renombrar: { activo: Activo; campos: Partial<Activo> }[];
+  /** Lo que una persona ha añadido a mano porque no está en ningún archivo:
+   *  los ETC y los ETF de la cuenta de valores de MyInvestor, por ejemplo. */
+  extras: Partial<Activo>[];
+  /** El nombre legible de cada clave de fila —ISIN, ticker o nombre—, ya con
+   *  lo que vaya a renombrarse. Sin esto la vista previa enseñaba ISIN. */
+  nombres: Record<string, string>;
 }
 
 /** ¿Queda saldo de efectivo por escribir?
@@ -397,6 +490,26 @@ export interface OpcionesPlan {
    *  porque el concepto viene cortado a 30 caracteres. Sin preguntarlo, esos
    *  valores entran a cero y no hay manera de que la cartera cuadre. */
   valores?: Record<string, number>;
+  /** «Este activo y ése son el mismo»: `clave → clave del que se queda`.
+   *
+   *  MyInvestor escribe el mismo fondo de tres maneras —«VANGUARD US 500 STOCK
+   *  INDEX EU», «VANGUARD US 500 STOCK EUR», «VANGUARD US 500 STOCK EUR INS»—
+   *  porque cambió el rótulo por el camino y el corte a 30 caracteres hizo el
+   *  resto. Con el PDF delante los une el ISIN; sin él no hay nada que mirar, y
+   *  el parecido de los nombres no sirve: «MSCI EUROPE INDEX P ACC EUR» se
+   *  parece un 83 % a «MSCI WORLD INDEX P ACC EUR» y son fondos distintos. Así
+   *  que lo dice una persona. */
+  mismos?: Record<string, string>;
+  /** El dinero sin invertir que hay HOY en la cuenta, dicho por una persona.
+   *  Manda sobre el que dé el archivo: es lo único que sabe lo que hay ahora,
+   *  y hay archivos —las órdenes de fondos— que no dicen nada del dinero. */
+  saldo?: number;
+  /** Valores que no están en ningún archivo, con lo que valen hoy en euros. */
+  extras?: { nombre: string; valor: number }[];
+  /** Los precios de hoy. Con ellos, un valor que se sabe cuánto vale pero no
+   *  cuántos títulos tiene —un ETC comprado con el nombre cortado— sale con
+   *  sus títulos, y a partir de ahí se pone al día solo. */
+  precios?: MapaPrecios;
 }
 
 /** Hasta cuántos días atrás vale un cambio anterior. Un fin de semana largo
@@ -437,6 +550,70 @@ function categoriaDe(fila: FilaImportada, cat?: EntradaCatalogo): string {
   // que menos veces hay que corregir a mano.
   if (fila.isin && !fila.ticker) return "fondo";
   return "accion";
+}
+
+// ── UN ETC POR SU NOMBRE ─────────────────────────────────────────────────
+// La cuenta corriente de MyInvestor escribe los ETC de la cuenta de valores
+// como le caben en 30 caracteres: «FIDELITY PHYSICAL BITCOIN ET», «WT PHYSICAL
+// GOLD-EUR DLY HDG», «X GALAXY PHY ETHEREUM ETC». Sin ISIN no tienen precio, y
+// entraban valiendo cero. El catálogo los conoce con el nombre entero, y
+// comparten lo que los distingue: la marca, el metal o la cripto, la
+// cobertura.
+//
+// Sólo para ETC y cripto, nunca para fondos: «VANGUARD US 500 STOCK EUR»
+// casa igual de bien con dos clases distintas del mismo fondo, y ahí
+// equivocarse es ponerle el precio de otro.
+
+const ABREVIATURAS: Record<string, string> = {
+  WT: "WISDOMTREE",
+  X: "XTRACKERS",
+  PHY: "PHYSICAL",
+  DLY: "DAILY",
+  HDG: "HEDGED",
+};
+/** Lo que no distingue un producto de otro: el envoltorio, y el «ET» que deja
+ *  el corte de «ETP». */
+const SIN_SENTIDO = new Set(["ETC", "ETP", "ET", "ETF", "ETN", "C", "ACC", "UCITS", "THE"]);
+
+function palabrasDe(nombre: string): string[] {
+  return nombre
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/[^A-Z0-9]+/)
+    .filter(Boolean)
+    .map((w) => ABREVIATURAS[w] ?? w)
+    .filter((w) => !SIN_SENTIDO.has(w));
+}
+
+/** La entrada del catálogo que es este nombre cortado, si es UNA y se parece
+ *  de verdad: la misma marca y tres cuartas partes de las palabras. Con dos
+ *  candidatos igual de buenos, ninguno. */
+export function entradaPorNombre(
+  nombre: string,
+  catalogo: EntradaCatalogo[],
+): EntradaCatalogo | undefined {
+  const mias = new Set(palabrasDe(nombre));
+  if (mias.size < 2) return undefined;
+  let mejor: EntradaCatalogo | undefined;
+  let nota = 0;
+  let empate = false;
+  for (const c of catalogo) {
+    if (!c.name || c.retired) continue;
+    const suyas = palabrasDe(c.name);
+    // La marca manda: el oro de iShares no es el de WisdomTree.
+    if (suyas.length === 0 || !mias.has(suyas[0])) continue;
+    const n = suyas.filter((w) => mias.has(w)).length / Math.max(mias.size, suyas.length);
+    const mismo = mejor != null && (mejor.yahoo ?? mejor.symbol) === (c.yahoo ?? c.symbol);
+    if (n > nota + 1e-9) {
+      mejor = c;
+      nota = n;
+      empate = false;
+    } else if (Math.abs(n - nota) < 1e-9 && !mismo) {
+      empate = true;
+    }
+  }
+  return mejor && nota >= 0.75 && !empate ? mejor : undefined;
 }
 
 // ── CASAR POSICIONES CON ACTIVOS ─────────────────────────────────────────
@@ -531,6 +708,12 @@ interface ContextoPosiciones {
   /** Activos que las operaciones nuevas van a crear, por su clave. Una
    *  posición puede quedárselos en vez de dejar que nazcan mudos. */
   nuevosActivos: Map<string, Partial<Activo>>;
+  /** Claves que una persona ha dicho que son el mismo activo, ya resueltas.
+   *  Los activos nuevos están guardados por la clave de la derecha, así que
+   *  hay que pasar por aquí para juntar las operaciones de las dos. */
+  alias: Record<string, string>;
+  /** El nombre que se entiende de cada ISIN, del catálogo. */
+  nombrePorIsin: Map<string, string>;
 }
 
 /** Un activo con el que una posición puede casar: o ya existe en la cartera, o
@@ -563,7 +746,13 @@ const claveDe = (f: { isin?: string; ticker?: string; nombre?: string }) =>
   (f.isin || f.ticker || f.nombre || "").toUpperCase();
 
 function candidatos(ctx: ContextoPosiciones): Candidato[] {
-  const { estado, cuentaDestino, nuevas, nuevosActivos } = ctx;
+  const { estado, cuentaDestino, nuevas, nuevosActivos, alias } = ctx;
+  /** La clave con la que se ha guardado el activo, que no es la de la fila
+   *  cuando el mismo fondo llega con dos nombres. */
+  const canon = (f: FilaImportada) => {
+    const k = claveDe(f);
+    return alias[k] ?? k;
+  };
 
   // Los candidatos son los activos que han tenido movimiento en esta cuenta:
   // un extracto de MyInvestor no puede estar hablando de una acción que
@@ -600,12 +789,14 @@ function candidatos(ctx: ContextoPosiciones): Candidato[] {
   }
 
   for (const [clave, activo] of nuevosActivos) {
-    const suyas = nuevas.filter((p) => !p.activo && claveDe(p.fila) === clave);
+    const suyas = nuevas.filter((p) => !p.activo && canon(p.fila) === clave);
     if (suyas.length === 0) continue;
     lista.push({
       clave: "nuevo:" + clave,
       nombre: activo.name ?? clave,
-      claves: [clave],
+      // Las de VERDAD, no la canónica: quien escriba las operaciones las busca
+      // por la clave de su fila, que es la del nombre con el que vino.
+      claves: [...new Set(suyas.map((p) => claveDe(p.fila)))],
       coste: suyas.reduce((s, p) => s + dineroDe(p.operacion), 0),
       peso: suyas.length,
       ops: [],
@@ -616,7 +807,7 @@ function candidatos(ctx: ContextoPosiciones): Candidato[] {
 }
 
 function casarPosiciones(lectura: Lectura, ctx: ContextoPosiciones): PosicionPlaneada[] {
-  const { catPorIsin, emparejamientos, fx } = ctx;
+  const { catPorIsin, emparejamientos, fx, nombrePorIsin } = ctx;
   const posiciones = lectura.posiciones ?? [];
   if (posiciones.length === 0) return [];
 
@@ -726,7 +917,9 @@ function casarPosiciones(lectura: Lectura, ctx: ContextoPosiciones): PosicionPla
       catPorIsin.get(p.isin)?.yahoo ?? catPorIsin.get(p.isin)?.symbol ?? activo?.ticker ?? null;
 
     const campos: Partial<Activo> = {
-      name: p.nombre,
+      // El del catálogo antes que el del PDF, que es el rótulo del banco en
+      // mayúsculas —«VANGUARD US 500 STOCK EUR»— y a veces cortado.
+      name: nombrePorIsin.get(p.isin) ?? p.nombre,
       isin: p.isin,
       ticker,
       cat,
@@ -774,6 +967,94 @@ function casarPosiciones(lectura: Lectura, ctx: ContextoPosiciones): PosicionPla
 export const posicionesPendientes = (plan: Plan): boolean =>
   plan.posiciones.some((p) => !p.aldia);
 
+/** ¿Hay algo que escribir? Un archivo repetido no trae operaciones nuevas y
+ *  aun así puede traer trabajo: corregir las que entraron mal, ponerles
+ *  nombre, el saldo del efectivo. */
+export const hayTrabajo = (plan: Plan): boolean =>
+  plan.nuevas.length > 0 ||
+  plan.corregidas.length > 0 ||
+  plan.renombrar.length > 0 ||
+  plan.extras.length > 0 ||
+  efectivoPendiente(plan) ||
+  posicionesPendientes(plan);
+
+/** El nombre que se entiende de cada ISIN, sacado del catálogo.
+ *
+ *  Un archivo que sólo trae el ISIN —las órdenes de fondos de MyInvestor no
+ *  tienen ni una columna de nombre— dejaba los activos llamándose
+ *  «IE0032126645». El catálogo sabe cómo se llaman, pero guarda el nombre en
+ *  la fila del símbolo y no siempre en la del alias ISIN → símbolo, así que se
+ *  miran las dos. */
+export function nombresDelCatalogo(catalogo: EntradaCatalogo[]): Map<string, string> {
+  const porSimbolo = new Map<string, string>();
+  for (const c of catalogo) {
+    if (!c.name) continue;
+    for (const s of [c.symbol, c.yahoo]) {
+      if (s && !porSimbolo.has(s.toUpperCase())) porSimbolo.set(s.toUpperCase(), c.name);
+    }
+  }
+  const out = new Map<string, string>();
+  for (const c of catalogo) {
+    if (!c.isin) continue;
+    const k = c.isin.toUpperCase();
+    const n = c.name ?? porSimbolo.get((c.yahoo ?? "").toUpperCase());
+    if (n && !out.has(k)) out.set(k, n);
+  }
+  return out;
+}
+
+/** Un activo sin nombre de verdad: vacío, o llamado como su propio ISIN. */
+const sinNombre = (a: Activo) =>
+  !a.name?.trim() ||
+  ES_ISIN(a.name) ||
+  (a.isin != null && a.name.trim().toUpperCase() === a.isin.toUpperCase());
+
+/** Dos operaciones son la misma orden si son del mismo activo, el mismo día y
+ *  por el mismo dinero. El tipo y las participaciones NO entran: son justo lo
+ *  que un lector equivocado lee mal. */
+const claveGemela = (fecha: string, assetId: string, total: number) =>
+  `${fecha}|${assetId}|${Number(total).toFixed(2)}`;
+
+/** Lo que hay que cambiarle a una operación guardada para que diga lo que
+ *  dice el archivo, o `undefined` si ya lo dice.
+ *
+ *  Sólo cuenta lo que cambia la cartera: el tipo, las participaciones, la
+ *  divisa, si es un traspaso y —si esta importación va a una cuenta— que la
+ *  guardada no tenga ninguna. El cambio a euros NO: sin histórico de divisas
+ *  se usa el de hoy, y reimportar un archivo en dólares al día siguiente
+ *  «corregiría» todas sus operaciones por lo que se ha movido el dólar. */
+function diferencias(
+  o: Operacion,
+  nueva: Partial<Operacion>,
+  conCuenta: boolean,
+): Partial<Operacion> | undefined {
+  const a = o.quantity;
+  const b = nueva.quantity ?? null;
+  const otraCantidad =
+    a == null || b == null ? a !== b : Math.abs(a - b) > 1e-6 * Math.max(1, Math.abs(b));
+  const otraDivisa = (o.currency || "EUR").toUpperCase() !== (nueva.currency || "EUR").toUpperCase();
+  const material =
+    o.type !== nueva.type ||
+    otraCantidad ||
+    otraDivisa ||
+    Boolean(o.is_internal_transfer) !== Boolean(nueva.is_internal_transfer) ||
+    (conCuenta && o.account_id == null);
+  if (!material) return undefined;
+
+  return {
+    type: nueva.type,
+    quantity: b,
+    price: nueva.price ?? null,
+    total: nueva.total,
+    currency: nueva.currency,
+    ...(otraDivisa ? { total_eur: nueva.total_eur } : {}),
+    is_internal_transfer: nueva.is_internal_transfer ?? false,
+    source_format: nueva.source_format,
+    import_hash: nueva.import_hash,
+    notes: nueva.notes ?? null,
+  };
+}
+
 export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
   const { estado, fx, fxHistorico, catalogo = [] } = op;
 
@@ -803,16 +1084,93 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
   const catPorIsin = new Map<string, EntradaCatalogo>();
   const catPorTicker = new Map<string, EntradaCatalogo>();
   for (const c of catalogo) {
-    if (c.isin) catPorIsin.set(c.isin.toUpperCase(), c);
+    // Cada ISIN sale dos veces en el catálogo: en la fila del símbolo, con su
+    // nombre, su categoría y su subyacente, y en la del alias ISIN → símbolo,
+    // que no trae nada más. Gana la que sabe algo.
+    if (c.isin) {
+      const k = c.isin.toUpperCase();
+      const previa = catPorIsin.get(k);
+      if (!previa || (!previa.name && c.name)) catPorIsin.set(k, c);
+    }
     if (c.ticker) catPorTicker.set(c.ticker.toUpperCase(), c);
   }
+  const nombrePorIsin = nombresDelCatalogo(catalogo);
+  /** El ISIN de cada símbolo: en el catálogo va en la fila del alias. */
+  const isinPorYahoo = new Map<string, string>();
+  for (const c of catalogo) {
+    const s = (c.yahoo ?? c.symbol).toUpperCase();
+    if (c.isin && !isinPorYahoo.has(s)) isinPorYahoo.set(s, c.isin.toUpperCase());
+  }
+  const isinDe = (c: EntradaCatalogo) =>
+    c.isin?.toUpperCase() ?? isinPorYahoo.get((c.yahoo ?? c.symbol).toUpperCase());
   const yaImportadas = new Set(
     estado.operaciones.map((o) => o.import_hash).filter((h): h is string => Boolean(h)),
   );
 
+  const broker = op.broker ?? lectura.broker;
+  /** Esta importación va a una cuenta, exista ya o la cree ella. */
+  const hayDestino = Boolean(op.cuentaId || broker);
+
+  // ── Lo que ya se importó, pero mal ───────────────────────────────────
+  // Las órdenes guardadas de cada activo, por día y dinero. Una fila del
+  // archivo que casa con una de éstas ES esa orden aunque el tipo o las
+  // participaciones no coincidan —eso es justo lo que un lector equivocado
+  // lee mal—, y entonces se corrige en vez de insertarla otra vez al lado.
+  const gemelas = new Map<string, Operacion[]>();
+  for (const o of estado.operaciones) {
+    if (o.source !== "import" || !o.asset_id) continue;
+    const k = claveGemela(o.date, o.asset_id, o.total);
+    const l = gemelas.get(k);
+    if (l) l.push(o);
+    else gemelas.set(k, [o]);
+  }
+  /** Se la queda una sola fila: dos órdenes iguales el mismo día son dos. */
+  const tomarGemela = (assetId: string, fila: FilaImportada, h: string) => {
+    const l = gemelas.get(claveGemela(fila.fecha, assetId, fila.total));
+    if (!l?.length) return undefined;
+    // Mejor la que ya tiene esta misma huella: así no se cruzan dos gemelas.
+    const i = Math.max(0, l.findIndex((o) => o.import_hash === h));
+    return l.splice(i, 1)[0];
+  };
+
+  // ── Los mismos con dos nombres ───────────────────────────────────────
+  // «VANGUARD US 500 STOCK INDEX EU», «VANGUARD US 500 STOCK EUR» y «VANGUARD
+  // US 500 STOCK EUR INS» son un solo fondo: MyInvestor cambió cómo lo escribe
+  // y el corte a 30 caracteres hizo el resto. Con el PDF delante los une el
+  // ISIN; sin él no hay nada que mirar, y el parecido de los nombres no vale
+  // —«MSCI EUROPE INDEX P ACC EUR» se parece un 83% a «MSCI WORLD INDEX P ACC
+  // EUR» y son fondos distintos—. Así que lo dice una persona.
+  //
+  // Se resuelven las cadenas (A→B, B→C queda A→C) y se ignora lo que se muerda
+  // la cola, que si no un ciclo cuelga el bucle.
+  const alias: Record<string, string> = {};
+  for (const [de, a] of Object.entries(op.mismos ?? {})) {
+    let destino = a;
+    const vistos = new Set([de]);
+    while (op.mismos?.[destino] && !vistos.has(destino)) {
+      vistos.add(destino);
+      destino = op.mismos[destino];
+    }
+    if (destino && destino !== de) alias[de] = destino;
+  }
+  /** La clave con la que se guarda el activo de esta fila. */
+  const canon = (f: FilaImportada) => {
+    const k = claveDe(f);
+    return alias[k] ?? k;
+  };
+  /** Todas las maneras de llamar a un activo: la suya y las que se le han
+   *  unido. Hace falta para los avisos, que vienen con la clave cruda. */
+  const comoSeLlama = (clave: string) => [
+    clave,
+    ...Object.keys(alias).filter((k) => alias[k] === clave),
+  ];
+
   // Los activos nuevos se acumulan aquí para que dos compras del mismo fondo
   // en el mismo archivo no creen el activo dos veces.
   const nuevosPorClave = new Map<string, Partial<Activo>>();
+  /** Los que se llaman como en el catálogo porque el archivo sólo traía un
+   *  trozo del nombre: ése no se les vuelve a poner encima. */
+  const nombreDelCatalogo = new Set<string>();
   const planeadas: Planeada[] = [];
   const vistas = new Set<string>();
 
@@ -826,24 +1184,46 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
   for (const fila of lectura.filas) {
     const esValor = TOCA_UN_VALOR.has(fila.tipo);
     const clave = esValor ? (fila.isin || fila.ticker || fila.nombre || "").toUpperCase() : "";
+    // Un ETC que llega sólo con el nombre, y cortado: se busca en el catálogo
+    // por sus palabras. Los fondos no —ver `entradaPorNombre`—.
+    const delNombre =
+      esValor && !fila.isin && !fila.ticker && fila.nombre && fila.categoria && fila.categoria !== "fondo"
+        ? entradaPorNombre(fila.nombre, catalogo)
+        : undefined;
+    const isinDelNombre = delNombre ? isinDe(delNombre) : undefined;
     const existente =
       (fila.isin ? porIsin.get(fila.isin.toUpperCase()) : undefined) ??
       (fila.ticker ? porTicker.get(fila.ticker.toUpperCase()) : undefined) ??
+      (isinDelNombre ? porIsin.get(isinDelNombre) : undefined) ??
       (esValor && !fila.isin && !fila.ticker ? porPrefijo(fila.nombre) : undefined);
 
     const entradaCat =
       (fila.isin ? catPorIsin.get(fila.isin.toUpperCase()) : undefined) ??
-      (fila.ticker ? catPorTicker.get(fila.ticker.toUpperCase()) : undefined);
+      (fila.ticker ? catPorTicker.get(fila.ticker.toUpperCase()) : undefined) ??
+      delNombre;
 
     let nuevoActivo: Partial<Activo> | undefined;
     let aviso: string | undefined;
 
     if (!existente && clave) {
-      nuevoActivo = nuevosPorClave.get(clave);
+      // El mismo fondo puede llegar con dos nombres distintos: MyInvestor
+      // cambió cómo lo escribe y el corte a 30 caracteres hace el resto. Sin
+      // ISIN no hay forma de saberlo, así que lo dice una persona (`mismos`) y
+      // aquí las dos claves acaban en el MISMO activo.
+      const suya = alias[clave] ?? clave;
+      nuevoActivo = nuevosPorClave.get(suya);
       if (!nuevoActivo) {
         nuevoActivo = {
-          name: fila.nombre || clave,
-          isin: fila.isin ?? entradaCat?.isin ?? null,
+          // Un archivo que sólo trae el ISIN dejaba el activo llamándose
+          // «IE0032126645». El catálogo sabe cómo se llama.
+          name:
+            // El del catálogo, entero, antes que «FIDELITY PHYSICAL BITCOIN ET».
+            delNombre?.name ||
+            fila.nombre ||
+            (fila.isin ? nombrePorIsin.get(fila.isin.toUpperCase()) : undefined) ||
+            entradaCat?.name ||
+            clave,
+          isin: fila.isin ?? entradaCat?.isin ?? isinDelNombre ?? null,
           // El orden importa y costo que cuatro acciones entraran mudas: los
           // precios se buscan por `ticker` contra el mapa que llena el cron, y ese
           // mapa esta indexado por el simbolo de Yahoo. El campo `ticker` del
@@ -856,7 +1236,8 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
           unit: "títulos",
           mode: "operations",
         };
-        nuevosPorClave.set(clave, nuevoActivo);
+        nuevosPorClave.set(suya, nuevoActivo);
+        if (delNombre) nombreDelCatalogo.add(suya);
       }
       if (!entradaCat) {
         aviso = "Activo nuevo y sin precio en el catálogo: habrá que apuntarlo a mano";
@@ -864,10 +1245,6 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
     }
 
     const h = huella(fila);
-    // Un archivo puede traer la misma línea dos veces; la segunda también es
-    // duplicada aunque todavía no esté en la base de datos.
-    const duplicada = yaImportadas.has(h) || vistas.has(h);
-    vistas.add(h);
 
     // El cambio que venga en el extracto gana: es el que el broker aplico
     // de verdad ese dia, margen incluido. El historico es una aproximacion.
@@ -876,39 +1253,74 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
         ? fila.cambio
         : tasaEn(fila.divisa, fila.fecha, fx, fxHistorico);
 
+    const operacion: Partial<Operacion> = {
+      account_id: op.cuentaId ?? null,
+      asset_id: existente?.id ?? null,
+      type: fila.tipo,
+      date: fila.fecha,
+      quantity: fila.cantidad ?? null,
+      price: fila.precio ?? null,
+      total: fila.total,
+      fees: fila.comision ?? 0,
+      currency: fila.divisa,
+      total_eur: fila.total * cambio,
+      is_internal_transfer: fila.traspasoInterno ?? false,
+      source: "import",
+      // El formato de SU archivo, no el del conjunto: con varios archivos a
+      // la vez, deshacer una importación tiene que poder distinguirlos.
+      source_format: fila.formato ?? lectura.formato,
+      import_hash: h,
+      notes: fila.nota ?? null,
+    };
+
+    // ¿Ya estaba, aunque sea mal escrita? Entonces se corrige, o no se toca si
+    // ya dice lo mismo que el archivo.
+    const gemela = existente && esValor ? tomarGemela(existente.id, fila, h) : undefined;
+    const cambios = gemela ? diferencias(gemela, operacion, hayDestino) : undefined;
+    // La huella es única por usuario: si la nueva ya la lleva OTRA operación,
+    // ésta se queda con la suya.
+    if (cambios?.import_hash && cambios.import_hash !== gemela?.import_hash && yaImportadas.has(h)) {
+      delete cambios.import_hash;
+    }
+    // Un archivo puede traer la misma línea dos veces; la segunda también es
+    // duplicada aunque todavía no esté en la base de datos.
+    const duplicada = gemela ? cambios == null : yaImportadas.has(h) || vistas.has(h);
+    vistas.add(h);
+
     planeadas.push({
       fila,
       activo: existente,
       nuevoActivo,
       duplicada,
       aviso,
-      operacion: {
-        account_id: op.cuentaId ?? null,
-        asset_id: existente?.id ?? null,
-        type: fila.tipo,
-        date: fila.fecha,
-        quantity: fila.cantidad ?? null,
-        price: fila.precio ?? null,
-        total: fila.total,
-        fees: fila.comision ?? 0,
-        currency: fila.divisa,
-        total_eur: fila.total * cambio,
-        is_internal_transfer: fila.traspasoInterno ?? false,
-        source: "import",
-        // El formato de SU archivo, no el del conjunto: con varios archivos a
-        // la vez, deshacer una importación tiene que poder distinguirlos.
-        source_format: fila.formato ?? lectura.formato,
-        import_hash: h,
-        notes: fila.nota ?? null,
-      },
+      operacion,
+      corrige: cambios ? gemela : undefined,
+      cambios,
     });
   }
 
-  const nuevas = planeadas.filter((p) => !p.duplicada);
-  const suma = (tipos: string[]) =>
-    nuevas.reduce((s, p) => (tipos.includes(p.fila.tipo) ? s + (p.operacion.total_eur ?? 0) : s), 0);
+  // El activo unido se llama como el que se queda, no como el primero que
+  // llegó: las filas vienen por fecha, y la primera compra puede ser la del
+  // nombre viejo. Sin esto, unir «PICTET CHINA INDEX P ACC» a «PICTET-CHINA IX
+  // P EUR» dejaba el activo llamándose como el que se acaba de unir.
+  const nombreDeClave = new Map<string, string>();
+  for (const f of lectura.filas) {
+    const k = claveDe(f);
+    if (k && f.nombre && !nombreDeClave.has(k)) nombreDeClave.set(k, f.nombre);
+  }
+  for (const [clave, activo] of nuevosPorClave) {
+    const nombre = nombreDeClave.get(clave);
+    if (nombre && !nombreDelCatalogo.has(clave)) activo.name = nombre;
+  }
 
-  const broker = op.broker ?? lectura.broker;
+  const nuevas = planeadas.filter((p) => !p.duplicada && !p.corrige);
+  const corregidas = planeadas.filter((p) => p.corrige != null);
+  // Lo que el archivo trae y cuenta: lo nuevo y lo que se corrige. Con una
+  // importación que sólo corrige, el resumen de compras salía a cero.
+  const vivas = [...nuevas, ...corregidas];
+  const suma = (tipos: string[]) =>
+    vivas.reduce((s, p) => (tipos.includes(p.fila.tipo) ? s + (p.operacion.total_eur ?? 0) : s), 0);
+
   const cuentaExiste = estado.cuentas.some((c) => c.broker === broker);
 
   // ── El efectivo ──────────────────────────────────────────────────────
@@ -938,24 +1350,44 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
     }, 0);
 
   const cuentaDestino = op.cuentaId ?? estado.cuentas.find((c) => c.broker === broker)?.id;
-  const yaHabia = estado.operaciones.filter((o) => o.account_id === cuentaDestino);
-  const todas = [...yaHabia, ...nuevas.map((p) => p.operacion)];
+  // Las corregidas cuentan como quedarán, no como estaban.
+  const corregidaPorId = new Map(
+    corregidas.map((p) => [
+      p.corrige!.id,
+      { ...p.corrige!, ...p.cambios, account_id: p.corrige!.account_id ?? cuentaDestino ?? null },
+    ]),
+  );
+  const yaHabia = estado.operaciones.filter(
+    (o) => o.account_id === cuentaDestino && !corregidaPorId.has(o.id),
+  );
+  const todas = [...yaHabia, ...corregidaPorId.values(), ...nuevas.map((p) => p.operacion)];
   const calculado = efectivoDe(todas);
-  // El saldo que declara el archivo gana siempre. Un extracto es una ventana:
-  // el Excel de MyInvestor empieza el día que le pides y el dinero que ya
-  // había antes no está en ninguna fila. Sumando sólo movimientos, la cuenta
-  // salía en −173,39 € cuando en el banco había 218,32.
-  const saldo = lectura.saldo ?? calculado;
+  // El saldo que declara el archivo gana a la suma. Un extracto es una
+  // ventana: el Excel de MyInvestor empieza el día que le pides y el dinero
+  // que ya había antes no está en ninguna fila. Sumando sólo movimientos, la
+  // cuenta salía en −173,39 € cuando en el banco había 218,32.
+  const saldoDelArchivo = lectura.saldo ?? calculado;
+  // Y lo que diga una persona gana a los dos: es la única que sabe lo que hay
+  // HOY. Un archivo de órdenes de fondos no dice nada del dinero parado, y el
+  // extracto de la cuenta es de hace días.
+  const saldoAMano =
+    op.saldo != null && isFinite(op.saldo) && op.saldo >= 0 ? op.saldo : undefined;
+  const saldo = saldoAMano ?? saldoDelArchivo;
 
   // ── Las posiciones ───────────────────────────────────────────────────
+  const estadoCorregido: EstadoCartera = corregidaPorId.size
+    ? { ...estado, operaciones: estado.operaciones.map((o) => corregidaPorId.get(o.id) ?? o) }
+    : estado;
   const posiciones = casarPosiciones(lectura, {
-    estado,
+    estado: estadoCorregido,
+    nombrePorIsin,
     cuentaDestino,
     catPorIsin,
     emparejamientos: op.emparejamientos ?? {},
     fx,
     nuevas,
     nuevosActivos: nuevosPorClave,
+    alias,
   });
   /** Claves de operación que ya tienen dueño: se las ha quedado una posición. */
   const reclamadas = new Set(posiciones.flatMap((p) => p.claves));
@@ -986,7 +1418,9 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
   const extractoCuadra =
     posiciones.length > 0 &&
     totalDeclarado != null &&
-    Math.abs(saldo + sumaPos - totalDeclarado) <= 1 + 0.02 * enOtraDivisa;
+    // Con el saldo del ARCHIVO: se está midiendo el alcance del extracto, y el
+    // saldo que teclee una persona es de otro día.
+    Math.abs(saldoDelArchivo + sumaPos - totalDeclarado) <= 1 + 0.02 * enOtraDivisa;
 
   // Solo si la cuenta habla de dinero en algun momento. Un archivo que solo
   // trae compras y ventas no dice nada del saldo, e inventarle uno seria peor
@@ -1004,11 +1438,17 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
     (a) => a.cat === "liquidez" && a.name === nombreEfectivo,
   );
 
-  const efectivo = hayMovimientoDeCaja
+  const efectivo = hayMovimientoDeCaja || saldoAMano != null
     ? {
         saldo,
         calculado,
-        declarado: lectura.saldo != null,
+        declarado: saldoAMano == null && lectura.saldo != null,
+        origen:
+          saldoAMano != null
+            ? ("persona" as const)
+            : lectura.saldo != null
+              ? ("archivo" as const)
+              : ("calculado" as const),
         existente: efectivoExistente,
         activo: {
           ...(efectivoExistente ?? {}),
@@ -1031,31 +1471,40 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
   // quedado ya una posición del extracto: si no, la compra del Excel crearía un
   // activo mudo justo al lado del que el PDF crea con su ISIN y sus
   // participaciones.
+  //
+  // La clave es la canónica: si una persona ha dicho que dos nombres son el
+  // mismo fondo, las dos filas traen el mismo `nuevoActivo` y aquí tiene que
+  // quedar UNA entrada, o se insertaría el activo dos veces.
   const porCrear = [
     ...new Map(
       nuevas
         .filter((p) => p.nuevoActivo)
-        .map((p) => [claveDe(p.fila), p.nuevoActivo!] as const)
-        .filter(([k]) => !reclamadas.has(k)),
+        .map((p) => [canon(p.fila), p.nuevoActivo!] as const)
+        .filter(([k]) => !comoSeLlama(k).some((x) => reclamadas.has(x))),
     ),
   ];
 
-  // ── Lo que el extracto no cubre ──────────────────────────────────────
-  // Compras de un valor del que la lista de posiciones no dice nada. En
-  // MyInvestor son los ETC y los ETF: viven en la cuenta de valores y el
-  // «Extracto de cuenta» sólo cuadra la de efectivo. Con el concepto cortado a
-  // 30 caracteres tampoco traen participaciones, así que sin ayuda entran
-  // valiendo cero — 423 € de oro y cripto que desaparecían de la cartera.
+  // ── Lo que va a entrar valiendo cero ─────────────────────────────────
+  // Un activo vale «títulos × precio», y hay archivos que no dan ninguna de
+  // las dos cosas. El extracto de la cuenta corriente de MyInvestor es el caso
+  // extremo: sin ISIN no hay precio, y con el concepto cortado a 30 caracteres
+  // la mitad de las compras vienen sin participaciones. Todo lo que compraste
+  // entra a cero euros.
   //
-  // La única salida honesta es preguntarlo: aquí se prepara la pregunta, y lo
-  // que conteste una persona llega por `valores`.
+  // El PDF de posición arregla los fondos que lista —les pone ISIN y títulos—
+  // pero no llega a todo: los ETC y los ETF viven en la cuenta de valores y no
+  // salen en él. Y si no hay PDF, no se arregla ninguno.
+  //
+  // Así que la condición no es «el extracto no lo menciona» sino la de verdad:
+  // este activo va a entrar SIN VALOR y con dinero dentro. Eso hay que
+  // preguntarlo, con PDF o sin él. La respuesta llega por `valores`.
   const valores = op.valores ?? {};
   const sinCubrir: Plan["sinCubrir"] = [];
   /** Claves que ya no hace falta avisar: alguien ha dicho lo que valen. */
   const resueltos = new Set<string>();
-  if (posiciones.length > 0) {
+  {
     for (const [clave, activo] of porCrear) {
-      const suyas = nuevas.filter((p) => claveDe(p.fila) === clave);
+      const suyas = nuevas.filter((p) => canon(p.fila) === clave);
       const euros = suyas.reduce((s, p) => s + dineroDe(p.operacion), 0);
       // Los títulos sólo valen si están TODOS: sumar la mitad de las compras
       // da una posición a medias, que es peor que no dar ninguna.
@@ -1069,6 +1518,19 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
         : undefined;
       const valor = valores[clave];
 
+      // Nada que preguntar en dos casos, y la diferencia entre ellos es qué se
+      // sabe de los TÍTULOS, no del dinero:
+      //
+      //   · La posición está cerrada —vendida entera, o un warrant que
+      //     venció—. Da igual que las compras sumen más que las ventas: eso es
+      //     una pérdida realizada, no un activo a cero. Mirando el dinero en
+      //     vez de los títulos, el importador de Trade Republic preguntaba por
+      //     seis posiciones cerradas hace meses.
+      //   · O se calcula solo: títulos y un sitio donde mirar el precio.
+      const cerrada = titulos != null && titulos <= 0;
+      const seCalculaSolo = titulos != null && titulos > 0 && activo.ticker != null;
+      if (cerrada || seCalculaSolo || euros <= 0.005) continue;
+
       sinCubrir.push({ clave, nombre: activo.name ?? clave, euros, ops: suyas.length, titulos, valor });
 
       if (valor != null && valor >= 0) {
@@ -1079,22 +1541,105 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
         // OJO con la posición entera: `precioEur` prefiere el precio de
         // mercado y sólo cae a `manual_price` si no hay ninguno, así que un
         // ticker puesto encima de esto valdría «1 × lo que cuesta una unidad».
-        // Estos activos nacen sin ISIN y sin ticker —el Excel no los trae—, y
-        // quien le ponga uno a mano tiene que poner también las unidades.
-        const qty = titulos && titulos > 0 ? titulos : 1;
+        // Por eso, sin títulos, un activo que sí tiene cotización —un ETC
+        // encontrado en el catálogo por su nombre— saca los títulos del
+        // valor: 180 € a 7,50 € son 24, y desde ahí se pone al día solo. Si
+        // no hay precio para hacer la cuenta, se le quita el símbolo: mejor
+        // un valor fijo que «1 × lo que cuesta una unidad».
+        let qty = titulos && titulos > 0 ? titulos : undefined;
+        if (qty == null && (activo.ticker || activo.isin)) {
+          const p = op.precios
+            ? precioEur({ ...activo, mode: "manual", manual_price: null } as Activo, op.precios, fx)
+            : null;
+          if (p != null && p > 0 && valor > 0) qty = valor / p;
+          else Object.assign(activo, { ticker: null, isin: null });
+        }
+        const conTitulos = qty != null;
+        qty ??= 1;
         Object.assign(activo, {
           mode: "manual",
           currency: "EUR",
-          unit: titulos && titulos > 0 ? (activo.unit ?? "títulos") : "posición",
+          unit: conTitulos ? (activo.unit ?? "títulos") : "posición",
           manual_qty: qty,
           manual_price: valor / qty,
           // El coste sale de las compras, no del valor: si no, cada valor que
           // se teclea entraría sin ganancia ni pérdida.
           manual_cost_unit: euros > 0 ? euros / qty : valor / qty,
         });
-        resueltos.add(clave);
+        for (const k of comoSeLlama(clave)) resueltos.add(k);
       }
     }
+  }
+
+  // ── Los que ya estaban, pero sin nombre ──────────────────────────────
+  // Un activo que entró llamándose «IE0032126645» sigue llamándose así para
+  // siempre si nadie lo arregla, porque las importaciones siguientes casan
+  // con él por el ISIN y no crean nada. Aquí se le pone el nombre del
+  // catálogo, el símbolo con el que cotiza si no tenía y la divisa de sus
+  // órdenes: el Vanguard en dólares había quedado apuntado en euros.
+  //
+  // Los que tienen posición en el extracto no: ésos los pone al día ella.
+  const conPosicion = new Set(posiciones.map((p) => p.activo?.id).filter(Boolean));
+  const divisasDe = new Map<string, Set<string>>();
+  for (const p of planeadas) {
+    if (!p.activo || (p.fila.tipo !== "buy" && p.fila.tipo !== "sell")) continue;
+    const s = divisasDe.get(p.activo.id) ?? new Set<string>();
+    s.add((p.fila.divisa || "EUR").toUpperCase());
+    divisasDe.set(p.activo.id, s);
+  }
+  const renombrar: Plan["renombrar"] = [];
+  for (const a of estado.activos) {
+    if (!divisasDe.has(a.id) || conPosicion.has(a.id) || !a.isin) continue;
+    const isin = a.isin.toUpperCase();
+    const cat = catPorIsin.get(isin);
+    const campos: Partial<Activo> = {};
+    const bonito = nombrePorIsin.get(isin);
+    if (bonito && sinNombre(a) && bonito !== a.name) campos.name = bonito;
+    // El `yahoo` y no el `symbol`: en la fila del alias el símbolo ES el ISIN.
+    const ticker = cat?.yahoo ?? null;
+    if (!a.ticker && ticker && ticker.toUpperCase() !== isin) campos.ticker = ticker;
+    if (!a.underlying && cat?.underlying) campos.underlying = cat.underlying;
+    const divisas = divisasDe.get(a.id)!;
+    if (divisas.size === 1) {
+      const d = [...divisas][0];
+      if (d !== (a.currency || "EUR").toUpperCase()) campos.currency = d;
+    }
+    if (Object.keys(campos).length) renombrar.push({ activo: a, campos });
+  }
+
+  // ── Lo que no está en ningún archivo ─────────────────────────────────
+  // Entra con el valor que diga una persona y SIN ganancia ni pérdida —el
+  // coste es ese mismo valor—, porque no hay compras de las que sacarlo.
+  const extras: Partial<Activo>[] = (op.extras ?? [])
+    .filter((e) => e.nombre.trim() && isFinite(e.valor) && e.valor >= 0)
+    .map((e) => {
+      const q = queEs(e.nombre);
+      return {
+        name: e.nombre.trim(),
+        isin: null,
+        ticker: null,
+        cat: q.cat,
+        underlying: q.underlying ?? null,
+        currency: "EUR",
+        unit: "posición",
+        mode: "manual" as const,
+        manual_qty: 1,
+        manual_price: e.valor,
+        manual_cost_unit: e.valor,
+      };
+    });
+
+  // ── Cómo se llama cada cosa, para la vista previa ────────────────────
+  const nuevoNombre = new Map(renombrar.map((r) => [r.activo.id, r.campos.name]));
+  const nombres: Record<string, string> = {};
+  for (const p of planeadas) {
+    const k = claveDe(p.fila);
+    if (!k || nombres[k]) continue;
+    nombres[k] =
+      (p.activo ? (nuevoNombre.get(p.activo.id) ?? p.activo.name) : undefined) ||
+      p.nuevoActivo?.name ||
+      p.fila.nombre ||
+      k;
   }
 
   return {
@@ -1102,7 +1647,20 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
     planeadas,
     nuevas,
     duplicadas: planeadas.filter((p) => p.duplicada),
+    corregidas,
+    renombrar,
+    extras,
+    nombres,
+    liquidez: broker
+      ? {
+          nombre: nombreEfectivo,
+          existente: efectivoExistente,
+          delArchivo: hayMovimientoDeCaja ? saldoDelArchivo : undefined,
+        }
+      : undefined,
     activosNuevos: porCrear.map(([, a]) => a),
+    porCrear: porCrear.map(([clave, activo]) => ({ clave, activo })),
+    mismos: alias,
     // «Este fondo entra sin participaciones, sube también el PDF» sobra en
     // cuanto el PDF está delante: la posición ya le ha puesto los títulos. Y
     // sobra igual cuando alguien ha dicho a mano lo que vale. Dejarlo puesto

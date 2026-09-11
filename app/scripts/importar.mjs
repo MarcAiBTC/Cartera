@@ -97,7 +97,11 @@ const plan = planificar(lectura, {
 });
 
 console.log(`\nNuevas:      ${plan.nuevas.length}`);
+console.log(`Corregidas:  ${plan.corregidas.length}   (ya estaban, pero mal: se arreglan en su sitio)`);
 console.log(`Duplicadas:  ${plan.duplicadas.length}   (ya estaban: no se vuelven a insertar)`);
+for (const r of plan.renombrar) {
+  console.log(`Se renombra: ${r.activo.name} → ${Object.entries(r.campos).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+}
 console.log(`Activos que se crean: ${plan.activosNuevos.length}`);
 for (const a of plan.activosNuevos) {
   console.log(`   ${(a.name ?? "").slice(0, 26).padEnd(28)} isin=${(a.isin ?? "-").padEnd(13)} tick=${(a.ticker ?? "-").padEnd(6)} ${a.cat}`);
@@ -175,6 +179,26 @@ if (plan.activosNuevos.length) {
   }
   console.log(`Activos creados: ${data.length}`);
 }
+
+// ── Lo que ya estaba y se arregla ────────────────────────────────────────
+// Antes que las nuevas, igual que en la pantalla: una corrección puede soltar
+// una huella que una operación nueva necesita, y la huella es única.
+for (const r of plan.renombrar) {
+  const { error } = await db.from("assets").update(r.campos).eq("id", r.activo.id);
+  if (error) throw new Error(`renombrar ${r.activo.name}: ${error.message}`);
+}
+if (plan.renombrar.length) console.log(`Activos renombrados: ${plan.renombrar.length}`);
+
+let corregidas = 0;
+for (const p of plan.corregidas) {
+  const { error } = await db
+    .from("operations")
+    .update({ ...p.cambios, account_id: p.corrige.account_id ?? cuentaId })
+    .eq("id", p.corrige.id);
+  if (error) throw new Error(`corregir ${p.corrige.id}: ${error.message}`);
+  corregidas++;
+}
+if (corregidas) console.log(`Operaciones corregidas: ${corregidas}`);
 
 const trozos = (a, n) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
 

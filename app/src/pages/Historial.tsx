@@ -283,6 +283,14 @@ function Movimientos() {
                       cobrado menos lo que te habia costado el lote. El
                       importe de arriba no lo dice — vender 200 EUR puede ser
                       una ganancia o un desastre. */}
+                  {/* El reembolso de un traspaso no cierra nada: su coste pasa
+                      al otro fondo. Sin esta línea parecía una venta a la que
+                      se le hubiera olvidado el resultado. */}
+                  {o.type === "sell" && o.is_internal_transfer && !resultados.has(o.id) && (
+                    <span className="block text-[11px] font-semibold text-fg2">
+                      traspaso · no tributa
+                    </span>
+                  )}
                   {o.type === "sell" && resultados.has(o.id) && (
                     <span
                       className={`block text-[11px] font-semibold ${

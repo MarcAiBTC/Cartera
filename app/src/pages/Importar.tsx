@@ -24,10 +24,10 @@ import {
   combinar,
   desdeTexto,
   detectar,
-  efectivoPendiente,
   ETIQUETA_CAMPO,
   FORMATO_LBL,
   FORMATO_NOTA,
+  hayTrabajo,
   leer,
   leerArchivo,
   planificar,
@@ -39,7 +39,9 @@ import {
   type Mapa,
   type Plan,
 } from "../lib/import";
-import type { Activo, Cuenta, EntradaCatalogo, Operacion } from "../lib/tipos";
+import { simular } from "../lib/import/simular";
+import { calcularPosiciones, type MapaFx, type MapaPrecios } from "../lib/cartera";
+import type { Activo, Cuenta, EntradaCatalogo, EstadoCartera, Operacion } from "../lib/tipos";
 import { OP_LBL } from "../lib/tipos";
 import { fd, fe, fn } from "../lib/formato";
 import { hayNube } from "../lib/supabase";
@@ -68,8 +70,8 @@ const AYUDA: { broker: string; pasos: string; ojo?: string }[] = [
   {
     broker: "MyInvestor",
     pasos:
-      "Hacen falta DOS archivos, y los dos sólo desde la web, con ordenador: la app no exporta. Primero el PDF «Extracto de cuenta» —Perfil → Documentos y extractos—, que es el que dice qué fondos tienes, con su ISIN, sus participaciones y el saldo de la cuenta. Y después el Excel de movimientos —Cuentas → Corriente → Operaciones y consultas → Consulta de operaciones—, eligiendo el rango de fechas MÁS LARGO que te deje, que es de donde sale lo que te costó cada cosa.",
-    ojo: "El Excel por sí solo no vale: corta el nombre del fondo a 30 caracteres y con él se van el ISIN y las participaciones, así que los fondos entran a cero euros. Por eso hace falta el PDF. Y no abras ninguno de los dos en Excel antes de subirlos, que al guardarlos cambia fechas y decimales.",
+      "Desde la web, con ordenador: la app no exporta. Lo más cómodo es el CSV de «Órdenes» de la sección de fondos: trae cada compra desde el primer día con su ISIN y sus participaciones, y los traspasos entre fondos se reconocen solos. Al importarlo te preguntamos cuánto dinero tienes sin invertir y si tienes algo fuera de los fondos, para que el total cuadre con el banco. La otra manera son dos archivos juntos: el PDF «Extracto de cuenta» —Perfil → Documentos y extractos— y el Excel de movimientos de la cuenta corriente.",
+    ojo: "Ninguno de los archivos de MyInvestor trae lo de la cuenta de valores —ETC y ETF—: eso lo añades a mano al importar. Y no abras el archivo en Excel antes de subirlo, que al guardarlo cambia fechas y decimales.",
   },
   {
     broker: "Cualquier otro",
@@ -87,11 +89,42 @@ function formatosDe(e: Entrada): Formato[] {
   return [
     "traderepublic-csv",
     "revolut-csv",
+    "myinvestor-ordenes",
     "myinvestor-cuenta",
     "myinvestor-efectivo",
     "myinvestor-tabla",
     "generico-csv",
   ];
+}
+
+/** Lo que se teclea en una casilla de dinero: «1.234,56», «218,32» o
+ *  «218.32». Vacío o ilegible es «no lo sé», que no es lo mismo que un cero. */
+function leerImporte(t: string | null | undefined): number | undefined {
+  if (t == null) return undefined;
+  const s = t.trim().replace(/[€\s]/g, "");
+  if (!s) return undefined;
+  const n = s.includes(",") ? Number(s.replace(/\./g, "").replace(",", ".")) : Number(s);
+  return isFinite(n) && n >= 0 ? n : undefined;
+}
+
+/** Una línea añadida a mano porque no está en ningún archivo. */
+interface Extra {
+  id: number;
+  nombre: string;
+  valor: string;
+}
+
+/** Qué hará el botón, dicho con lo que va a pasar de verdad. */
+function etiquetaBoton(plan: Plan): string {
+  const n = plan.nuevas.length;
+  const c = plan.corregidas.length;
+  const ops = (x: number) => `${x} ${x === 1 ? "operación" : "operaciones"}`;
+  if (n > 0 && c > 0) return `Importar ${ops(n)} y corregir ${c}`;
+  if (n > 0) return `Importar ${ops(n)}`;
+  if (c > 0) return `Corregir ${ops(c)}`;
+  if (posicionesPendientes(plan)) return "Poner al día las posiciones";
+  if (plan.renombrar.length > 0 || plan.extras.length > 0) return "Guardar los cambios";
+  return "Poner al día el saldo de efectivo";
 }
 
 /** Un archivo ya leído y esperando a que se confirme la importación. */
@@ -140,6 +173,22 @@ export default function Importar() {
   // compras vienen sin participaciones— y la única salida honesta es
   // preguntarlo en vez de dejarlo entrar valiendo cero.
   const [valores, setValores] = useState<Record<string, number>>({});
+  // «Estos dos son el mismo fondo». MyInvestor escribe el mismo producto de
+  // varias maneras —cambió el rótulo, y el concepto viene cortado a 30
+  // caracteres— y sin ISIN no hay forma de saberlo: por el nombre, «MSCI
+  // EUROPE INDEX P ACC EUR» y «MSCI WORLD INDEX P ACC EUR» se parecen tanto
+  // como los que sí son el mismo. Lo dice una persona o no lo dice nadie.
+  const [mismos, setMismos] = useState<Record<string, string>>({});
+  // El dinero sin invertir, tal y como lo teclea una persona. `null` es que no
+  // lo ha tocado: vale lo que diga el archivo o lo que ya hubiera apuntado.
+  // Hay archivos —las órdenes de fondos de MyInvestor— que no dicen nada del
+  // dinero, y sin preguntarlo el total no cuadra nunca con el banco.
+  const [saldo, setSaldo] = useState<string | null>(null);
+  // Lo que no está en ningún archivo: los ETC y los ETF de la cuenta de
+  // valores de MyInvestor no salen en ninguno de los que exporta.
+  const [extras, setExtras] = useState<Extra[]>([]);
+  // Lo que marca el banco en total, sólo para comparar. No se guarda.
+  const [totalBanco, setTotalBanco] = useState("");
   const [cuentaId, setCuentaId] = useState<string>("");
   const [sobre, setSobre] = useState(false);
   const [pegando, setPegando] = useState(false);
@@ -148,6 +197,7 @@ export default function Importar() {
   const [guardando, setGuardando] = useState(false);
   const [hecho, setHecho] = useState<{
     ops: number;
+    corregidas: number;
     activos: number;
     posiciones: number;
   } | null>(null);
@@ -176,24 +226,48 @@ export default function Importar() {
       // Los alias recien resueltos van DELANTE: son mas frescos que el
       // catalogo que se cargo al abrir la app.
       catalogo: [...resueltos, ...mercado.catalogo],
+      precios: mercado.precios,
       cuentaId: cuentaId || undefined,
       emparejamientos,
       valores,
+      mismos,
+      saldo: leerImporte(saldo),
+      extras: extras
+        .map((e) => ({ nombre: e.nombre, valor: leerImporte(e.valor) ?? NaN }))
+        .filter((e) => e.nombre.trim() && isFinite(e.valor)),
     });
-  }, [archivos, lecturas, estado, mercado, cuentaId, resueltos, emparejamientos, valores]);
+  }, [
+    archivos,
+    lecturas,
+    estado,
+    mercado,
+    cuentaId,
+    resueltos,
+    emparejamientos,
+    valores,
+    mismos,
+    saldo,
+    extras,
+  ]);
 
   /** El archivo que falta. Con MyInvestor hacen falta dos y ninguno de los dos
    *  vale solo, así que decirlo aquí ahorra la importación a medias y el
    *  «pues sigue sin salir» de después. */
   const falta = useMemo(() => {
     const fs = archivos.map((a) => a.formato);
-    const movimientos = fs.some((f) => f.startsWith("myinvestor-") && f !== "myinvestor-extracto");
+    // Las órdenes de fondos ya traen ISIN y participaciones: con ellas no hace
+    // falta nada más, y pedir el PDF sería mandar a buscar un archivo que
+    // sobra.
+    const ordenes = fs.includes("myinvestor-ordenes") || fs.includes("myinvestor-tabla");
+    const cuenta = fs.includes("myinvestor-cuenta");
     const posicion = fs.includes("myinvestor-extracto");
-    if (posicion && !movimientos) {
-      return "Con esto sabremos qué fondos tienes y cuánto valen, pero no lo que te costaron. Añade también el Excel de movimientos de la cuenta corriente y se importa todo de una vez.";
+    // Órdenes y cuenta juntas ya no es un problema: los fondos salen de las
+    // órdenes y de la cuenta sólo el dinero y los ETC (`cruzarConOrdenes`).
+    if (posicion && !ordenes && !cuenta && !fs.includes("myinvestor-efectivo")) {
+      return "Con esto sabremos qué fondos tienes y cuánto valen, pero no lo que te costaron. Añade también el CSV de órdenes de fondos, o el Excel de movimientos de la cuenta corriente, y se importa todo de una vez.";
     }
-    if (movimientos && !posicion && !fs.includes("myinvestor-tabla")) {
-      return "Falta el PDF «Extracto de cuenta» de MyInvestor. Sin él los fondos entran sin ISIN y sin participaciones, o sea a cero euros. Añádelo aquí y se importa todo junto.";
+    if (cuenta && !posicion && !ordenes) {
+      return "Falta el PDF «Extracto de cuenta» de MyInvestor. Sin él los fondos entran sin ISIN y sin participaciones, o sea a cero euros. Añádelo aquí y se importa todo junto — o, mejor, usa el CSV de órdenes de fondos en lugar de este Excel.";
     }
     return null;
   }, [archivos]);
@@ -348,6 +422,9 @@ export default function Importar() {
     setResueltos([]);
     setEmparejamientos({});
     setValores({});
+    setSaldo(null);
+    setExtras([]);
+    setTotalBanco("");
     setError(null);
     setHecho(null);
   }
@@ -363,8 +440,10 @@ export default function Importar() {
     // primera vez —falló la escritura, o se cerró la pestaña— salir aquí la
     // condenaba a no existir nunca, porque el archivo ya no traería nada
     // nuevo jamás. El saldo se calcula sobre TODAS las operaciones, así que
-    // reimportar es exactamente la manera de arreglarlo.
-    if (plan.nuevas.length === 0 && !efectivoPendiente(plan) && !posicionesPendientes(plan)) return;
+    // reimportar es exactamente la manera de arreglarlo. Lo mismo con las
+    // operaciones que entraron mal la primera vez: el archivo repetido no trae
+    // nada nuevo y aun así hay que corregirlas.
+    if (!hayTrabajo(plan)) return;
 
     setGuardando(true);
     setError(null);
@@ -385,6 +464,16 @@ export default function Importar() {
         if (a.isin) porClave.set(a.isin.toUpperCase(), a.id);
         if (a.ticker) porClave.set(a.ticker.toUpperCase(), a.id);
         porClave.set(a.name.toUpperCase(), a.id);
+      }
+      // Un ETC que el plan ha encontrado en el catálogo por su nombre nace
+      // llamándose como allí y con su ISIN, pero sus compras siguen llegando
+      // con el nombre cortado del archivo: cada clave del plan apunta al
+      // activo que le toca.
+      for (const { clave, activo } of plan.porCrear) {
+        const id = [activo.isin, activo.ticker, activo.name]
+          .map((k) => (k ? porClave.get(k.toUpperCase()) : undefined))
+          .find(Boolean);
+        if (id && !porClave.has(clave)) porClave.set(clave, id);
       }
 
       // ── Las posiciones ─────────────────────────────────────────────────
@@ -428,6 +517,31 @@ export default function Importar() {
         posiciones++;
       }
 
+      // El mismo fondo con dos nombres se ha creado UNA vez, con el nombre
+      // del que se queda. Las compras que entran con el otro nombre buscan su
+      // clave en este índice y no la encontrarían: aquí se les enseña el
+      // camino. Va después de las posiciones porque una posición puede haberse
+      // quedado el activo, y entonces el id bueno es el suyo.
+      for (const [de, a] of Object.entries(plan.mismos)) {
+        const id = porClave.get(a);
+        if (id) porClave.set(de, id);
+      }
+
+      // ── Lo que ya estaba y se arregla ──────────────────────────────────
+      // Los activos que entraron llamándose como su ISIN, y las operaciones
+      // que un lector equivocado dejó mal: se corrigen en su sitio. Van antes
+      // que las nuevas porque una corrección puede soltar una huella que una
+      // operación nueva necesita, y la huella es única.
+      for (const r of plan.renombrar) {
+        await actualizar<Activo>("assets", r.activo.id, r.campos);
+      }
+      for (const p of plan.corregidas) {
+        await actualizar<Operacion>("operations", p.corrige!.id, {
+          ...p.cambios,
+          account_id: p.corrige!.account_id ?? (cuenta || null),
+        });
+      }
+
       const ops = plan.nuevas.map((p) => {
         const clave = (p.fila.isin || p.fila.ticker || p.fila.nombre || "").toUpperCase();
         const suyo = p.activo ? (redirigir.get(p.activo.id) ?? p.activo.id) : undefined;
@@ -438,7 +552,11 @@ export default function Importar() {
         };
       });
 
-      await insertar<Operacion>("operations", ops);
+      if (ops.length) await insertar<Operacion>("operations", ops);
+
+      // Lo añadido a mano: no hay operaciones de las que salga, así que entra
+      // como posición manual con el valor que se ha dicho.
+      if (plan.extras.length) await insertar<Activo>("assets", plan.extras);
 
       // ── El efectivo ────────────────────────────────────────────────────
       // Sin esto el patrimonio sale corto: el extracto trae los ingresos y
@@ -481,7 +599,15 @@ export default function Importar() {
       setResueltos([]);
       setEmparejamientos({});
       setValores({});
-      setHecho({ ops: ops.length, activos: creados.length, posiciones });
+      setSaldo(null);
+      setExtras([]);
+      setTotalBanco("");
+      setHecho({
+        ops: ops.length,
+        corregidas: plan.corregidas.length,
+        activos: creados.length + plan.extras.length,
+        posiciones,
+      });
       await recargar();
     } catch (e) {
       setError(
@@ -509,6 +635,11 @@ export default function Importar() {
         <Aviso>
           Importadas <strong>{hecho.ops}</strong>{" "}
           {hecho.ops === 1 ? "operación" : "operaciones"}
+          {hecho.corregidas > 0 && (
+            <>
+              , corregidas <strong>{hecho.corregidas}</strong>
+            </>
+          )}
           {hecho.activos > 0 && (
             <>
               {" "}
@@ -814,6 +945,25 @@ export default function Importar() {
                   return nuevo;
                 })
               }
+              mismos={mismos}
+              onMismo={(clave, destino) =>
+                setMismos((m) => {
+                  const nuevo = { ...m };
+                  if (destino) nuevo[clave] = destino;
+                  else delete nuevo[clave];
+                  return nuevo;
+                })
+              }
+              estado={estado}
+              precios={mercado.precios}
+              fx={mercado.fx}
+              cuentaId={cuentaId}
+              saldo={saldo}
+              onSaldo={setSaldo}
+              extras={extras}
+              onExtras={setExtras}
+              totalBanco={totalBanco}
+              onTotalBanco={setTotalBanco}
               valores={valores}
               onValor={(clave, texto) =>
                 setValores((m) => {
@@ -835,9 +985,7 @@ export default function Importar() {
               nuevas y cuarenta viejas: se importan las dos y, a la siguiente,
               el mismo archivo no trae nada. */}
           {plan &&
-            plan.nuevas.length === 0 &&
-            !efectivoPendiente(plan) &&
-            !posicionesPendientes(plan) &&
+            !hayTrabajo(plan) &&
             archivos.some((a) => a.buzon) && (
               <Boton
                 tipo="suave"
@@ -855,25 +1003,18 @@ export default function Importar() {
               </Boton>
             )}
 
-          {plan &&
-            (plan.nuevas.length > 0 || efectivoPendiente(plan) || posicionesPendientes(plan)) && (
-              <div className="sticky bottom-24 z-20">
-                <Boton
-                  tipo="principal"
-                  onClick={() => void confirmar()}
-                  disabled={guardando}
-                  className="w-full py-3 shadow-e2"
-                >
-                  {guardando
-                    ? "Guardando…"
-                    : plan.nuevas.length > 0
-                      ? `Importar ${plan.nuevas.length} ${plan.nuevas.length === 1 ? "operación" : "operaciones"}`
-                      : posicionesPendientes(plan)
-                        ? "Poner al día las posiciones"
-                        : "Poner al día el saldo de efectivo"}
-                </Boton>
-              </div>
-            )}
+          {plan && hayTrabajo(plan) && (
+            <div className="sticky bottom-24 z-20">
+              <Boton
+                tipo="principal"
+                onClick={() => void confirmar()}
+                disabled={guardando}
+                className="w-full py-3 shadow-e2"
+              >
+                {guardando ? "Guardando…" : etiquetaBoton(plan)}
+              </Boton>
+            </div>
+          )}
           {guardando && <Cargando texto="Escribiendo en la cartera…" />}
         </>
       )}
@@ -932,6 +1073,18 @@ function Resumen({
   candidatos,
   emparejamientos,
   onEmparejar,
+  mismos,
+  onMismo,
+  estado,
+  precios,
+  fx,
+  cuentaId,
+  saldo,
+  onSaldo,
+  extras,
+  onExtras,
+  totalBanco,
+  onTotalBanco,
   valores,
   onValor,
 }: {
@@ -939,12 +1092,56 @@ function Resumen({
   candidatos: Activo[];
   emparejamientos: Record<string, string>;
   onEmparejar(isin: string, valor: string): void;
+  mismos: Record<string, string>;
+  onMismo(clave: string, destino: string): void;
+  estado: EstadoCartera;
+  precios: MapaPrecios;
+  fx: MapaFx;
+  cuentaId: string;
+  saldo: string | null;
+  onSaldo(texto: string): void;
+  extras: Extra[];
+  onExtras(extras: Extra[]): void;
+  totalBanco: string;
+  onTotalBanco(texto: string): void;
   valores: Record<string, number>;
   onValor(clave: string, texto: string): void;
 }) {
   const [verDescartes, setVerDescartes] = useState(false);
   // Un extracto de posición no trae operaciones y no por eso está vacío.
-  const nada = plan.nuevas.length === 0 && plan.posiciones.length === 0;
+  const nada =
+    plan.nuevas.length === 0 && plan.corregidas.length === 0 && plan.posiciones.length === 0;
+  /** Qué se va a corregir de lo ya importado, contado por motivo. */
+  const motivos = useMemo(() => {
+    let titulos = 0;
+    let ventas = 0;
+    let traspasos = 0;
+    let divisa = 0;
+    let sinCuenta = 0;
+    for (const p of plan.corregidas) {
+      const o = p.corrige!;
+      const x = p.cambios ?? {};
+      if ("quantity" in x && Math.abs((x.quantity ?? 0) - (o.quantity ?? 0)) > 1e-6) titulos++;
+      if (x.type && x.type !== o.type) ventas++;
+      if ("is_internal_transfer" in x && Boolean(x.is_internal_transfer) !== Boolean(o.is_internal_transfer)) {
+        traspasos++;
+      }
+      if (x.currency && x.currency !== o.currency) divisa++;
+      if (o.account_id == null) sinCuenta++;
+    }
+    return [
+      titulos > 0 && `${titulos} con las participaciones mal leídas`,
+      ventas > 0 && `${ventas} ventas apuntadas como compras`,
+      traspasos > 0 && `${traspasos} traspasos sin marcar`,
+      divisa > 0 && `${divisa} en dólares apuntadas en euros`,
+      sinCuenta > 0 && `${sinCuenta} sin cuenta`,
+    ].filter((m): m is string => Boolean(m));
+  }, [plan]);
+  /** Los reembolsos de un traspaso, que el archivo no marca y se han
+   *  deducido. Se enseñan para que se vea qué se ha supuesto. */
+  const traspasos = plan.planeadas.filter(
+    (p) => p.fila.tipo === "sell" && p.fila.traspasoInterno && !p.duplicada,
+  );
   /** Alguno de los archivos trae compras. Cambia lo que hay que decirle a
    *  alguien de un fondo sin coste: si no las trae, que suba el Excel; si las
    *  trae, que ese fondo no está en ellas — y pedirle otra vez el archivo que
@@ -953,6 +1150,25 @@ function Resumen({
   /** Claves de los valores que el extracto no cubre, para señalarlos en el
    *  detalle: entran, pero valiendo cero mientras nadie diga lo que valen. */
   const sinCubrir = new Map(plan.sinCubrir.map((c) => [c.clave, c]));
+  /** Cómo se llama cada clave. El activo que se ha unido a otro ya no sale
+   *  entre los que se van a crear —se han quedado en uno solo—, así que su
+   *  nombre se busca donde sigue estando: en las filas de sus compras. */
+  const nombres = new Map<string, string>();
+  for (const p of plan.planeadas) {
+    const k = (p.fila.isin || p.fila.ticker || p.fila.nombre || "").toUpperCase();
+    // El de la fila si lo trae; si no —las órdenes de fondos sólo traen el
+    // ISIN— el que ha sacado el plan del catálogo.
+    if (k && !nombres.has(k)) nombres.set(k, p.fila.nombre || plan.nombres[k] || k);
+  }
+  for (const { clave, activo } of plan.porCrear) nombres.set(clave, activo.name ?? clave);
+  const nombreDe = (clave: string) => nombres.get(clave) ?? plan.nombres[clave] ?? clave;
+  /** «Traspaso a IE00BYX5NX33» → «Traspaso a Fidelity MSCI World Index». */
+  const conNombres = (t: string | undefined) =>
+    t?.replace(/\b[A-Z]{2}[A-Z0-9]{9}\d\b/g, (isin) => nombreDe(isin));
+  /** Las uniones que ha pedido una persona y el plan ha aplicado. Se leen del
+   *  plan y no del formulario porque el plan es el que ha resuelto las cadenas:
+   *  si A es B y B es C, lo que de verdad pasa es que A entra como C. */
+  const unidos = Object.entries(plan.mismos);
 
   return (
     <>
@@ -992,6 +1208,65 @@ function Resumen({
             {plan.activosNuevos.map((a) => a.name).join(", ")}. Revisa después su categoría en la
             cartera si alguno no ha caído donde tocaba.
           </Aviso>
+        )}
+
+        {/* El mismo fondo con dos nombres. No se adivina: por el nombre,
+            «MSCI EUROPE INDEX P ACC EUR» y «MSCI WORLD INDEX P ACC EUR» se
+            parecen tanto como los que sí son el mismo, y juntarlos por su
+            cuenta mezclaría dos fondos distintos. Se pregunta, y sólo cuando
+            hay más de uno que juntar. */}
+        {(plan.porCrear.length > 1 || unidos.length > 0) && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-[11.5px] text-fg2">
+              ¿Alguno de estos es el mismo que otro, con el nombre cambiado?
+            </summary>
+            <div className="mt-2 flex flex-col gap-2">
+              {plan.porCrear.map(({ clave, activo }) => (
+                <div key={clave} className="tile px-3.5 py-2.5">
+                  <p className="truncate text-[12.5px] font-bold text-fg0">
+                    {activo.name ?? clave}
+                  </p>
+                  <div className="mt-1.5">
+                    <Selector
+                      valor={mismos[clave] ?? ""}
+                      onChange={(v) => onMismo(clave, v)}
+                      opciones={[
+                        { valor: "", texto: "Es un activo aparte" },
+                        ...plan.porCrear
+                          .filter((o) => o.clave !== clave)
+                          .map((o) => ({
+                            valor: o.clave,
+                            texto: `Es el mismo que ${o.activo.name ?? o.clave}`,
+                          })),
+                      ]}
+                    />
+                  </div>
+                </div>
+              ))}
+
+              {/* Lo ya unido desaparece de la lista de arriba —se ha quedado
+                  en uno solo—, así que sin esto no habría manera de
+                  deshacerlo. */}
+              {unidos.map(([de, a]) => (
+                <div
+                  key={de}
+                  className="tile flex flex-wrap items-center gap-x-3 gap-y-1 px-3.5 py-2.5"
+                >
+                  <p className="min-w-0 flex-1 text-[11.5px] leading-relaxed text-fg1">
+                    <strong className="text-fg0">{nombreDe(de)}</strong> entra como{" "}
+                    <strong className="text-fg0">{nombreDe(a)}</strong>: sus compras cuentan ahí.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onMismo(de, "")}
+                    className="shrink-0 text-[11.5px] font-semibold text-blue"
+                  >
+                    Separarlos
+                  </button>
+                </div>
+              ))}
+            </div>
+          </details>
         )}
 
         {/* Lo que compraste y el extracto no cubre. Va aquí arriba y no
@@ -1049,32 +1324,42 @@ function Resumen({
           </div>
         )}
 
-        {/* El efectivo se escribe al confirmar, así que tiene que verse antes.
-            Es la única línea de la importación que no sale de una operación
-            del archivo sino de la suma de todas, y por eso es la que más
-            sorprende cuando aparece sola en la cartera. */}
-        {plan.efectivo &&
-          (plan.nuevas.length > 0 || efectivoPendiente(plan) || posicionesPendientes(plan)) && (
-            <div className="mt-2">
-              <Aviso>
-                {plan.efectivo.existente ? "Se actualizará" : "Se creará"} la cuenta de efectivo{" "}
-                <strong>{plan.efectivo.activo.name}</strong> con un saldo de{" "}
-                <strong>{fe(plan.efectivo.saldo, 2)}</strong>
-                {plan.efectivo.declarado ? (
-                  <>
-                    , que es el que dice el propio extracto. Sumando sólo los movimientos
-                    importados saldrían {fe(plan.efectivo.calculado, 2)}: la diferencia es el
-                    dinero que ya había en la cuenta antes de la primera línea del archivo.
-                  </>
-                ) : (
-                  <>
-                    , que es lo que suman los ingresos, las retiradas, las compras y los cobros del
-                    extracto.
-                  </>
-                )}
-              </Aviso>
-            </div>
-          )}
+        {/* Lo que ya estaba y entró mal. Se dice cuánto y por qué: «se
+            corrigen 150» a secas asusta más que explica. */}
+        {plan.corregidas.length > 0 && (
+          <div className="mt-2">
+            <Aviso>
+              Ya habías importado <strong>{plan.corregidas.length}</strong> de estas operaciones y
+              entraron mal{motivos.length > 0 && <>: {motivos.join(", ")}</>}. Se corrigen en su
+              sitio, sin duplicar nada.
+            </Aviso>
+          </div>
+        )}
+
+        {/* Los traspasos no los dice el archivo: se deducen. Por eso se
+            enseñan uno a uno, plegados, para quien quiera comprobarlos. */}
+        {traspasos.length > 0 && (
+          <details className="tile mt-2 px-3.5 py-2.5">
+            <summary className="cursor-pointer text-[12px] font-bold text-fg0">
+              {traspasos.length} {traspasos.length === 1 ? "traspaso" : "traspasos"} entre fondos,
+              reconocidos solos
+            </summary>
+            <p className="mt-1.5 text-[11.5px] leading-relaxed text-fg2">
+              El archivo no dice qué órdenes son ventas. Éstas lo son: un fondo se reembolsa y a los
+              pocos días el mismo dinero entra en otro. Cuentan como venta de uno y compra del otro,
+              así que no suben lo que has aportado.
+            </p>
+            <ul className="mt-2 flex flex-col gap-1 text-[11.5px] text-fg1">
+              {traspasos.map((p) => (
+                <li key={p.operacion.import_hash ?? p.fila.linea}>
+                  {fd(p.fila.fecha)} · <strong>{nombreDe((p.fila.isin ?? "").toUpperCase())}</strong>{" "}
+                  → {conNombres(p.fila.nota?.replace(/^Traspaso a /, ""))} ·{" "}
+                  {fe(p.operacion.total_eur ?? p.fila.total, 2)}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
 
         {nada && plan.duplicadas.length > 0 && (
           <Aviso>
@@ -1090,6 +1375,22 @@ function Resumen({
           </Aviso>
         )}
       </Tarjeta>
+
+      {plan.liquidez && (
+        <ComoQueda
+          plan={plan}
+          estado={estado}
+          precios={precios}
+          fx={fx}
+          cuentaId={cuentaId}
+          saldo={saldo}
+          onSaldo={onSaldo}
+          extras={extras}
+          onExtras={onExtras}
+          totalBanco={totalBanco}
+          onTotalBanco={onTotalBanco}
+        />
+      )}
 
       {/* ── Las posiciones ──────────────────────────────────────────────
           Lo que el extracto dice que TIENES, que es distinto de lo que has
@@ -1224,7 +1525,7 @@ function Resumen({
         </section>
       )}
 
-      {plan.nuevas.length > 0 && (
+      {plan.nuevas.length + plan.corregidas.length > 0 && (
         <section>
           <TituloSeccion nota="Las 40 primeras. Se guardan todas.">Detalle</TituloSeccion>
           <div className="overflow-x-auto rounded-card border border-line">
@@ -1238,16 +1539,22 @@ function Resumen({
                 </tr>
               </thead>
               <tbody>
-                {plan.nuevas.slice(0, 40).map((p, i) => (
+                {[...plan.nuevas, ...plan.corregidas].slice(0, 40).map((p, i) => (
                   <tr key={i} className="border-t border-line">
                     <td className="px-2.5 py-2 whitespace-nowrap text-fg2">{fd(p.fila.fecha)}</td>
                     <td className="px-2.5 py-2">
                       <span className="block truncate font-semibold text-fg0">
-                        {p.fila.nombre ?? p.fila.isin ?? p.fila.ticker}
+                        {nombreDe(
+                          (p.fila.isin || p.fila.ticker || p.fila.nombre || "").toUpperCase(),
+                        )}
                       </span>
                       <span className="text-[10.5px] text-fg2">
                         {OP_LBL[p.fila.tipo]}
-                        {p.fila.traspasoInterno && " · traspaso interno"}
+                        {p.fila.traspasoInterno &&
+                          (p.fila.nota?.startsWith("Traspaso")
+                            ? ` · t${conNombres(p.fila.nota)?.slice(1)}`
+                            : " · traspaso interno")}
+                        {p.corrige && " · se corrige"}
                         {p.nuevoActivo &&
                           (() => {
                             const s = sinCubrir.get(
@@ -1298,6 +1605,228 @@ function Resumen({
         </section>
       )}
     </>
+  );
+}
+
+// ── Cómo queda la cuenta ──────────────────────────────────────────────────
+
+/** Cómo queda la cuenta de ese bróker después de importar, y su total.
+ *
+ *  Es la respuesta a «¿cuadra con el banco?» ANTES de guardar nada. Se calcula
+ *  con el mismo motor que la cartera sobre una copia con el plan ya aplicado
+ *  (`simular`), así que lo que se ve aquí es lo que se verá después.
+ *
+ *  Y es donde se pregunta lo que ningún archivo sabe. El dinero sin invertir:
+ *  las órdenes de fondos de MyInvestor no dicen nada del dinero parado. Y lo
+ *  que haya fuera de los fondos: los ETC y los ETF de la cuenta de valores no
+ *  salen en ningún archivo del banco. Sin esas dos respuestas el total no
+ *  cuadra nunca, y preguntarlas aquí, al lado del total, deja ver en el acto
+ *  si con ellas ya cuadra. */
+function ComoQueda({
+  plan,
+  estado,
+  precios,
+  fx,
+  cuentaId,
+  saldo,
+  onSaldo,
+  extras,
+  onExtras,
+  totalBanco,
+  onTotalBanco,
+}: {
+  plan: Plan;
+  estado: EstadoCartera;
+  precios: MapaPrecios;
+  fx: MapaFx;
+  cuentaId: string;
+  saldo: string | null;
+  onSaldo(texto: string): void;
+  extras: Extra[];
+  onExtras(extras: Extra[]): void;
+  totalBanco: string;
+  onTotalBanco(texto: string): void;
+}) {
+  const broker = plan.lectura.broker || plan.cuentaNueva?.broker || "la cuenta";
+  const { lineas, total, sinPrecio } = useMemo(() => {
+    const s = simular(plan, estado, cuentaId || undefined);
+    const ps = calcularPosiciones(s.estado, precios, fx).filter(
+      (p) => s.delBroker.has(p.activo.id) && Math.abs(p.qty) > 1e-9,
+    );
+    return {
+      // El efectivo y lo añadido a mano van aparte, con su casilla.
+      lineas: ps.filter((p) => p.activo.cat !== "liquidez" && !p.activo.id.startsWith("extra-")),
+      total: ps.reduce((acc, p) => acc + (p.valor ?? 0), 0),
+      sinPrecio: ps.filter((p) => p.valor == null).map((p) => p.activo.name),
+    };
+  }, [plan, estado, precios, fx, cuentaId]);
+
+  const liq = plan.liquidez;
+  const defecto = liq?.delArchivo ?? liq?.existente?.manual_qty ?? undefined;
+  const valorCaja = saldo ?? (defecto != null ? defecto.toFixed(2).replace(".", ",") : "");
+  const sinSaldo = saldo == null && defecto == null;
+  const notaCaja =
+    saldo != null
+      ? `Lo que has puesto tú. Se guarda como «${liq?.nombre}» y puedes cambiarlo cuando quieras.`
+      : plan.efectivo?.origen === "archivo"
+        ? "Lo dice el propio archivo. Si hoy tienes otra cantidad, cámbiala."
+        : plan.efectivo?.origen === "calculado"
+          ? "Sale de sumar los ingresos, las retiradas y las compras del archivo. Si no coincide con lo que ves en el banco, pon el de verdad."
+          : liq?.existente
+            ? "El que tenías apuntado. Si ha cambiado, ponlo al día aquí."
+            : "Este archivo no dice cuánto dinero tienes sin invertir. Míralo en la app del banco y ponlo aquí, o sube también el Excel de movimientos de la cuenta corriente y sale solo.";
+
+  const banco = leerImporte(totalBanco);
+  const diferencia = banco != null ? total - banco : null;
+  // Los fondos se valoran con el último valor liquidativo publicado y el banco
+  // con el suyo: un medio por ciento de baile es un día de mercado, no un error.
+  const margen = banco != null ? Math.max(2, banco * 0.005) : 0;
+
+  const campoDinero =
+    "w-28 rounded-field border bg-bg1 px-2 py-1.5 text-right text-[13px] font-bold text-fg0 outline-none focus:border-blue";
+
+  return (
+    <Tarjeta>
+      <TituloSeccion nota="Con los precios de hoy. Compáralo con lo que te dice el banco.">
+        Así queda {broker}
+      </TituloSeccion>
+
+      <div className="flex flex-col divide-y divide-line">
+        {lineas.map((p) => (
+          <div key={p.activo.id} className="flex items-center gap-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[12.5px] font-bold text-fg0">{p.activo.name}</p>
+              <p className="text-[10.5px] text-fg2">
+                {fn(p.qty, 4)} {p.activo.unit === "posición" ? "" : "part."}
+                {p.precio != null ? ` × ${fe(p.precio, 2)}` : " · sin precio todavía"}
+              </p>
+            </div>
+            <p className="shrink-0 text-right text-[13px] font-bold text-fg0">
+              {p.valor != null ? fe(p.valor, 2) : "—"}
+            </p>
+          </div>
+        ))}
+
+        {extras.map((e) => (
+          <div key={e.id} className="flex flex-wrap items-center gap-2 py-2">
+            <input
+              value={e.nombre}
+              onChange={(ev) =>
+                onExtras(extras.map((x) => (x.id === e.id ? { ...x, nombre: ev.target.value } : x)))
+              }
+              placeholder="Qué es: ETC de oro, ETF…"
+              aria-label="Qué es"
+              className="min-w-0 flex-1 rounded-field border border-line2 bg-bg1 px-2 py-1.5 text-[12.5px] font-semibold text-fg0 outline-none focus:border-blue"
+            />
+            <input
+              value={e.valor}
+              onChange={(ev) =>
+                onExtras(extras.map((x) => (x.id === e.id ? { ...x, valor: ev.target.value } : x)))
+              }
+              inputMode="decimal"
+              placeholder="vale hoy"
+              aria-label={`Cuánto vale hoy ${e.nombre || "esto"}`}
+              className={`${campoDinero} border-line2`}
+            />
+            <span className="text-[12px] text-fg2">€</span>
+            <button
+              type="button"
+              onClick={() => onExtras(extras.filter((x) => x.id !== e.id))}
+              className="text-[11.5px] font-semibold text-fg2 hover:text-dn"
+            >
+              Quitar
+            </button>
+          </div>
+        ))}
+
+        <div className="flex flex-col gap-1 py-2.5">
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] font-bold text-fg0">Dinero sin invertir</p>
+              <p className="truncate text-[10.5px] text-fg2">{liq?.nombre}</p>
+            </div>
+            <input
+              value={valorCaja}
+              onChange={(e) => onSaldo(e.target.value)}
+              inputMode="decimal"
+              placeholder="¿cuánto?"
+              aria-label={`Dinero sin invertir en ${broker}`}
+              className={`${campoDinero} ${sinSaldo ? "border-blue" : "border-line2"}`}
+            />
+            <span className="text-[12px] text-fg2">€</span>
+          </div>
+          <p className={`text-[11px] leading-relaxed ${sinSaldo ? "text-fg1" : "text-fg2"}`}>
+            {notaCaja}
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onExtras([...extras, { id: Date.now(), nombre: "", valor: "" }])}
+        className="mt-1 text-[12px] font-semibold text-blue"
+      >
+        + Añadir algo que no esté aquí (un ETC, un ETF…)
+      </button>
+
+      <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-line pt-3">
+        <span className="text-[12px] font-bold text-fg1">Total en {broker}</span>
+        <span className="font-disp text-[21px] font-bold text-fg0">{fe(total, 2)}</span>
+      </div>
+      {sinPrecio.length > 0 && (
+        <p className="mt-1 text-[11px] leading-relaxed text-fg2">
+          Sin contar <strong>{sinPrecio.join(", ")}</strong>, que aún no{" "}
+          {sinPrecio.length === 1 ? "tiene" : "tienen"} precio: se suma
+          {sinPrecio.length === 1 ? "" : "n"} solo{sinPrecio.length === 1 ? "" : "s"} en cuanto
+          llegue la cotización.
+        </p>
+      )}
+
+      <label className="mt-3 flex items-center gap-2">
+        <span className="min-w-0 flex-1 text-[12px] leading-snug text-fg1">
+          ¿Cuánto te marca {broker} en total?
+        </span>
+        <input
+          value={totalBanco}
+          onChange={(e) => onTotalBanco(e.target.value)}
+          inputMode="decimal"
+          placeholder="opcional"
+          className={`${campoDinero} border-line2`}
+        />
+        <span className="text-[12px] text-fg2">€</span>
+      </label>
+      {diferencia != null &&
+        (Math.abs(diferencia) <= margen ? (
+          <p className="mt-2 text-[12px] font-bold text-up">
+            ✓ Cuadra con el banco
+            {Math.abs(diferencia) >= 0.01 && (
+              <span className="font-normal text-fg2">
+                {" "}
+                ({fe(diferencia, 2)}: lo que se mueven los precios de un día a otro)
+              </span>
+            )}
+          </p>
+        ) : (
+          <div className="mt-2">
+            <Aviso tono="alerta">
+              {diferencia < 0 ? (
+                <>
+                  Faltan <strong>{fe(-diferencia, 2)}</strong>.{" "}
+                  {sinPrecio.length > 0 && <>Parte es lo que aún no tiene precio. </>}
+                  Si tienes algo en la cuenta de valores —ETC, ETF—, ningún archivo del banco lo
+                  trae: añádelo arriba con lo que valga hoy. Y revisa el dinero sin invertir.
+                </>
+              ) : (
+                <>
+                  Sobran <strong>{fe(diferencia, 2)}</strong>. Revisa el dinero sin invertir y lo
+                  añadido a mano; ten en cuenta también que el banco valora los fondos con el precio
+                  de su último cierre.
+                </>
+              )}
+            </Aviso>
+          </div>
+        ))}
+    </Tarjeta>
   );
 }
 

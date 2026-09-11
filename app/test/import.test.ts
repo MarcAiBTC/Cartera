@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import { fecha, num, partir, separador, tabular } from "../src/lib/import/csv";
-import { desdeTexto, detectar, leer, planificar } from "../src/lib/import";
+import { desdeMatriz, desdeTexto, detectar, leer, planificar } from "../src/lib/import";
 import { huella } from "../src/lib/import/tipos";
 import type { EstadoCartera, Operacion } from "../src/lib/tipos";
 import { ESTADO_VACIO } from "../src/lib/tipos";
@@ -270,6 +270,136 @@ describe("planificar", () => {
     expect(suyas).toHaveLength(2);
     expect(suyas.every((p) => p.operacion.asset_id === "existente")).toBe(true);
     expect(plan.activosNuevos).toHaveLength(1); // sólo el bitcoin
+  });
+});
+
+// ── A quién hay que preguntarle cuánto vale ──────────────────────────────
+// Un activo vale «títulos × precio». Cuando el archivo no da ninguna de las
+// dos cosas, el activo entra a cero euros y hay que preguntarlo. Cuando sí las
+// da —o cuando la posición está cerrada y no queda nada que valorar— preguntar
+// es ruido: el importador de Trade Republic pedía el valor de seis posiciones
+// vendidas hacía meses.
+
+const TR_VENDIDO = `Fecha;Tipo;Estado;ISIN;Nombre;Cantidad;Precio;Importe;Divisa
+04/11/2024;Compra;Ejecutada;JE00B8DFY052;WisdomTree Physical Gold;7;21,51;-150,57;EUR
+05/12/2025;Venta;Ejecutada;JE00B8DFY052;WisdomTree Physical Gold;7;19,00;133,00;EUR`;
+
+describe("lo que entra valiendo cero", () => {
+  it("no pregunta por una posición cerrada, aunque se perdiera dinero", () => {
+    const plan = planificar(leer(desdeTexto(TR_VENDIDO, "tr.csv")), {
+      estado: estadoVacio(),
+      fx: { EUR: 1 },
+    });
+    // Compró por 150,57 y vendió por 133: la diferencia es una pérdida
+    // realizada, no un activo a cero que haya que valorar.
+    expect(plan.sinCubrir).toEqual([]);
+  });
+
+  it("no pregunta por lo que se calcula solo: títulos y un sitio donde mirar el precio", () => {
+    const conPrecio = planificar(leer(desdeTexto(TRADE_REPUBLIC, "tr.csv")), {
+      estado: estadoVacio(),
+      fx: { EUR: 1 },
+      catalogo: [
+        {
+          symbol: "WGLD.L",
+          name: "WisdomTree Physical Gold",
+          isin: "JE00B8DFY052",
+          ticker: "WGLD",
+          yahoo: "WGLD.L",
+          coingecko: null,
+          currency: "EUR",
+          cat: "metal",
+          underlying: "Oro",
+          retired: false,
+        },
+      ],
+    });
+    // El oro tiene ticker y títulos: se valora solo. El bitcoin no está en el
+    // catálogo, así que ése sí hay que preguntarlo.
+    expect(conPrecio.sinCubrir.map((c) => c.nombre)).toEqual(["Fidelity Physical Bitcoin"]);
+  });
+});
+
+// ── El mismo fondo con dos nombres ───────────────────────────────────────
+// MyInvestor cambió el rótulo de un fondo por el camino, y el concepto del
+// extracto viene cortado a 30 caracteres: el mismo producto entra tres veces
+// con tres nombres. Sin ISIN no hay nada que mirar —el parecido de los nombres
+// no vale: «MSCI EUROPE INDEX P ACC EUR» se parece un 83 % a «MSCI WORLD INDEX
+// P ACC EUR» y son fondos distintos— así que lo dice una persona.
+
+const CUENTA_TRES_NOMBRES: string[][] = [
+  ["", "", "Saldo:", "325,00€", "", ""],
+  ["Fecha Operación", "Fecha Valor", "Movimiento", "", "Importe", "Saldo"],
+  ["02/01/2026", "02/01/2026", "VANGUARD US 500 STOCK INDEX EU", "", "-100,00€", "400,00€"],
+  ["03/02/2026", "03/02/2026", "VANGUARD US 500 STOCK EUR", "", "-50,00€", "350,00€"],
+  ["04/03/2026", "04/03/2026", "VANGUARD US 500 STOCK EUR INS", "", "-25,00€", "325,00€"],
+];
+
+const A = "VANGUARD US 500 STOCK INDEX EU";
+const B = "VANGUARD US 500 STOCK EUR";
+const C = "VANGUARD US 500 STOCK EUR INS";
+
+const tresNombres = () =>
+  leer(
+    { nombre: "cuenta.xlsx", tabla: desdeMatriz(CUENTA_TRES_NOMBRES) },
+    { formato: "myinvestor-cuenta" },
+  );
+
+describe("el mismo fondo con dos nombres", () => {
+  it("sin decir nada entran como tres activos distintos", () => {
+    const plan = planificar(tresNombres(), { estado: estadoVacio(), fx: { EUR: 1 } });
+    expect(plan.porCrear.map((p) => p.clave)).toEqual([A, B, C]);
+    expect(plan.mismos).toEqual({});
+  });
+
+  it("unidos a mano se crea uno solo y el dinero de los tres cuenta ahí", () => {
+    const plan = planificar(tresNombres(), {
+      estado: estadoVacio(),
+      fx: { EUR: 1 },
+      // En cadena, que es como sale del desplegable: C es B, y B es A.
+      mismos: { [C]: B, [B]: A },
+    });
+
+    expect(plan.activosNuevos).toHaveLength(1);
+    expect(plan.porCrear.map((p) => p.clave)).toEqual([A]);
+    // La cadena queda resuelta: C no entra como B, entra como A.
+    expect(plan.mismos).toEqual({ [B]: A, [C]: A });
+
+    // Y se pregunta UNA vez por los 175 €, no tres veces por trozos.
+    expect(plan.sinCubrir).toHaveLength(1);
+    expect(plan.sinCubrir[0]).toMatchObject({ clave: A, euros: 175, ops: 3 });
+  });
+
+  it("las compras del nombre unido acaban en el activo que se queda", () => {
+    const plan = planificar(tresNombres(), {
+      estado: estadoVacio(),
+      fx: { EUR: 1 },
+      mismos: { [C]: B, [B]: A },
+    });
+
+    // Lo mismo que hace la pantalla al confirmar: indexar lo que se crea y
+    // enseñarle el camino a las claves unidas.
+    const porClave = new Map<string, string>();
+    plan.activosNuevos.forEach((a, i) => porClave.set((a.name ?? "").toUpperCase(), `nuevo-${i}`));
+    for (const [de, a] of Object.entries(plan.mismos)) {
+      const id = porClave.get(a);
+      if (id) porClave.set(de, id);
+    }
+
+    const destinos = plan.nuevas.map((p) =>
+      porClave.get((p.fila.isin || p.fila.ticker || p.fila.nombre || "").toUpperCase()),
+    );
+    expect(destinos).toEqual(["nuevo-0", "nuevo-0", "nuevo-0"]);
+  });
+
+  it("una unión que se muerde la cola no cuelga ni junta nada", () => {
+    const plan = planificar(tresNombres(), {
+      estado: estadoVacio(),
+      fx: { EUR: 1 },
+      mismos: { [A]: B, [B]: A },
+    });
+    expect(plan.porCrear).toHaveLength(3);
+    expect(plan.mismos).toEqual({});
   });
 });
 

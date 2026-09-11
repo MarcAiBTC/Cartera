@@ -7,6 +7,7 @@ export type Formato =
   | "traderepublic-csv"
   | "revolut-csv"
   | "myinvestor-json"
+  | "myinvestor-ordenes"
   | "myinvestor-tabla"
   | "myinvestor-cuenta"
   | "myinvestor-efectivo"
@@ -26,6 +27,7 @@ export const FORMATO_LBL: Record<Formato, string> = {
   "myinvestor-extracto": "MyInvestor · extracto de posición (PDF)",
   "myinvestor-cuenta": "MyInvestor · cuenta corriente",
   "myinvestor-efectivo": "MyInvestor · cuenta corriente, sólo el dinero",
+  "myinvestor-ordenes": "MyInvestor · órdenes de fondos",
   "myinvestor-tabla": "MyInvestor · operaciones de fondos",
   "myinvestor-json": "MyInvestor · JSON de la web",
   "generico-csv": "Otro bróker · CSV o Excel",
@@ -41,6 +43,8 @@ export const FORMATO_NOTA: Record<Formato, string> = {
     "Qué fondos tienes hoy, con ISIN y participaciones, y el saldo real de la cuenta.",
   "myinvestor-cuenta": "El dinero y las compras de fondos, pero sin ISIN ni participaciones.",
   "myinvestor-efectivo": "Sólo ingresos, retiradas e intereses. Deja fuera las compras.",
+  "myinvestor-ordenes":
+    "Cada orden de fondos desde el primer día, con su ISIN y sus participaciones. Los traspasos entre fondos se reconocen solos.",
   "myinvestor-tabla": "Cada orden con su ISIN, sus participaciones y su valor liquidativo.",
   "myinvestor-json": "Como el anterior, y además distingue los traspasos internos.",
   "generico-csv": "Una fila por movimiento. Las columnas se eligen a mano.",
@@ -77,6 +81,14 @@ export interface FilaImportada {
   /** Traspaso entre cuentas propias: no es dinero nuevo */
   traspasoInterno?: boolean;
   nota?: string;
+  /** Qué vez es que aparece esta MISMA orden en el archivo: 2 para la segunda.
+   *
+   *  Dos órdenes idénticas el mismo día existen —el 1 de septiembre de 2025
+   *  salieron del Vanguard dos reembolsos de 49,50 € con 0,74 participaciones
+   *  cada uno— y sin esto la segunda tenía la misma huella que la primera y se
+   *  quedaba fuera como «duplicada». Sólo lo pone quien sabe que en su formato
+   *  dos líneas iguales son dos operaciones. */
+  ocurrencia?: number;
   /** De qué archivo salió, cuando se importan varios de una vez. Se guarda en
    *  la operación para poder deshacer una importación concreta. */
   formato?: Formato;
@@ -204,14 +216,19 @@ export function huella(f: {
   ticker?: string;
   cantidad?: number;
   total: number;
+  ocurrencia?: number;
 }): string {
-  const clave = [
-    f.fecha,
-    f.tipo,
-    (f.isin || f.ticker || "").toUpperCase(),
-    f.cantidad != null ? f.cantidad.toFixed(6) : "",
-    f.total.toFixed(2),
-  ].join("|");
+  const clave =
+    [
+      f.fecha,
+      f.tipo,
+      (f.isin || f.ticker || "").toUpperCase(),
+      f.cantidad != null ? f.cantidad.toFixed(6) : "",
+      f.total.toFixed(2),
+    ].join("|") +
+    // Sólo a partir de la segunda: la primera conserva la huella de siempre y
+    // lo ya importado sigue reconociéndose como tal.
+    (f.ocurrencia != null && f.ocurrencia > 1 ? `#${f.ocurrencia}` : "");
 
   // FNV-1a de 64 bits en dos mitades: suficiente para distinguir operaciones y
   // sin necesidad de crypto.subtle, que es asíncrono y obligaría a esperar.
