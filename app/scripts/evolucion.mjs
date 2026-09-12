@@ -12,7 +12,12 @@
 import { createClient } from "@supabase/supabase-js";
 import { POST } from "../api/historico.ts";
 import { cargarMercado } from "../src/lib/precios.ts";
-import { calcularFifo, calcularPosiciones, calcularResumen } from "../src/lib/cartera.ts";
+import {
+  calcularFifo,
+  calcularPosiciones,
+  calcularResumen,
+  porSubyacente,
+} from "../src/lib/cartera.ts";
 import { evolucion, frenteAlIndice, valorEn } from "../src/lib/evolucion.ts";
 
 const args = process.argv.slice(2);
@@ -86,6 +91,13 @@ console.log(
     `ganancia ${resumen.ganancia.toFixed(2)} (${resumen.gananciaPct?.toFixed(2)} % sobre lo aportado)`,
 );
 console.log(`posiciones abiertas: ${posiciones.length} · activos guardados: ${estado.activos.length}`);
+// La tarta de Análisis: qué se suma con qué.
+console.log(
+  "tarta: " +
+    porSubyacente(posiciones, true, mercado.catalogo)
+      .map((g) => `${g.clave} ${g.peso.toFixed(1)} % (${g.posiciones.length})`)
+      .join(" · "),
+);
 
 // ── La evolución ─────────────────────────────────────────────────────────
 const puntos = evolucion(estado, historico, {
@@ -142,7 +154,11 @@ for (let k = 1; k < puntos.length - 1; k++) {
   }
 }
 
-const c = frenteAlIndice(puntos, historico.sp500 ?? []);
+const primeraCompra = estado.operaciones
+  .filter((o) => o.type === "buy")
+  .map((o) => o.date)
+  .sort()[0];
+const c = frenteAlIndice(puntos, historico.sp500 ?? [], primeraCompra);
 console.log("\n-- contra el S&P 500 --");
 if (!c) console.log("  sin comparación");
 else {

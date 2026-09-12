@@ -1,7 +1,7 @@
 // ── INICIO ───────────────────────────────────────────────────────────────
 // Una pantalla, dos niveles. El titular contesta «¿cuánto tengo?» sin pedir
 // nada, y las posiciones contestan «¿en qué?»: por tipo, en bandas que se
-// despliegan, o todas en una lista. Las dos se ordenan igual —tamaño,
+// despliegan, o todas en una lista. Las dos se ordenan igual —tamaño, peso,
 // rentabilidad, ganancia, lo de hoy o el nombre— y cada posición se abre en
 // una ficha con sus cifras, sus operaciones y un enlace para verla en
 // TradingView. Es la forma de getquin: la lista es la cartera, y el detalle
@@ -10,7 +10,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useDatos } from "../lib/datos";
-import { CAT_COLOR, CAT_LBL, OP_LBL, type Activo } from "../lib/tipos";
+import { CAT_COLOR, CAT_LBL, OP_LBL } from "../lib/tipos";
 import {
   catConocida,
   esLiquidez,
@@ -22,7 +22,8 @@ import {
   type Posicion,
 } from "../lib/cartera";
 import { enlacesDe } from "../lib/enlaces";
-import { fd, fe, fn, fp, fpc, signo } from "../lib/formato";
+import { usePrefPosiciones } from "../lib/prefPosiciones";
+import { fd, fe, fn, fp, fpc } from "../lib/formato";
 import {
   Boton,
   Delta,
@@ -34,66 +35,21 @@ import {
   TituloSeccion,
   Vacio,
 } from "../components/base";
+import { Cambio, Orden, Sigla } from "../components/posiciones";
 import { Tira } from "../components/graficos";
 
-type Vista = "tipo" | "todas";
-
-interface Preferencia {
-  vista: Vista;
-  orden: OrdenPosiciones;
-  asc: boolean;
-}
-
-const ORDENES: { valor: OrdenPosiciones; texto: string }[] = [
-  { valor: "valor", texto: "Tamaño" },
-  { valor: "rentabilidad", texto: "Rentabilidad" },
-  { valor: "ganancia", texto: "Ganancia" },
-  { valor: "hoy", texto: "Hoy" },
-  { valor: "nombre", texto: "Nombre" },
-];
-
-// Cómo la dejaste la última vez, en este dispositivo. Si no se puede leer
-// —una ventana privada—, la de siempre.
-const PREF = "cartera:posiciones";
-const PREF_DEF: Preferencia = { vista: "tipo", orden: "valor", asc: false };
-
-function leerPref(): Preferencia {
-  try {
-    const p = JSON.parse(localStorage.getItem(PREF) ?? "null") as Partial<Preferencia> | null;
-    if (!p) return PREF_DEF;
-    return {
-      vista: p.vista === "todas" ? "todas" : "tipo",
-      orden: ORDENES.find((o) => o.valor === p.orden)?.valor ?? "valor",
-      asc: p.asc === true,
-    };
-  } catch {
-    return PREF_DEF;
-  }
-}
+/** La cifra que acompaña al valor en cada fila: la que explica el orden. */
+type Metrica = "total" | "hoy" | "peso";
+const metricaDe = (o: OrdenPosiciones): Metrica =>
+  o === "hoy" ? "hoy" : o === "peso" ? "peso" : "total";
 
 export default function Inicio() {
   const { resumen, categorias, posiciones, estado } = useDatos();
   const [abierta, setAbierta] = useState<string | null>(null);
-  const [pref, setPrefEstado] = useState(leerPref);
+  const { pref, cambiar, elegirOrden } = usePrefPosiciones();
   // Por id y no la posición entera: si los precios se refrescan con la ficha
   // abierta, la ficha tiene que enseñar los nuevos.
   const [fichaId, setFichaId] = useState<string | null>(null);
-
-  const setPref = (cambios: Partial<Preferencia>) =>
-    setPrefEstado((p) => {
-      const n = { ...p, ...cambios };
-      try {
-        localStorage.setItem(PREF, JSON.stringify(n));
-      } catch {
-        /* sin almacenamiento: se olvida al cerrar, nada más */
-      }
-      return n;
-    });
-
-  // Pulsar el orden que ya está le da la vuelta; uno nuevo empieza por lo
-  // más grande, salvo el nombre, que empieza por la A.
-  const elegirOrden = (o: OrdenPosiciones) =>
-    o === pref.orden ? setPref({ asc: !pref.asc }) : setPref({ orden: o, asc: o === "nombre" });
 
   const grupos = useMemo(
     () => ordenarGrupos(categorias, pref.orden, pref.asc, (k) => CAT_LBL[k] ?? k),
@@ -104,7 +60,7 @@ export default function Inicio() {
     [posiciones, pref.orden, pref.asc],
   );
   const ficha = posiciones.find((p) => p.activo.id === fichaId) ?? null;
-  const metrica = pref.orden === "hoy" ? "hoy" : "total";
+  const metrica = metricaDe(pref.orden);
 
   const vacia = estado.activos.length === 0;
   const movers = movimientoDelDia(posiciones).slice(0, 3);
@@ -199,7 +155,7 @@ export default function Inicio() {
                         }`}
                       >
                         {(p.dia ?? 0) >= 0 ? "+" : ""}
-                        {fe(p.dia, 0)}
+                        {fe(p.dia, Math.abs(p.dia ?? 0) < 10 ? 2 : 0)}
                       </span>
                     </button>
                   </li>
@@ -217,7 +173,7 @@ export default function Inicio() {
               extra={
                 <Segmentos
                   valor={pref.vista}
-                  onChange={(v) => setPref({ vista: v })}
+                  onChange={(v) => cambiar({ vista: v })}
                   opciones={[
                     { valor: "tipo", texto: "Por tipo" },
                     { valor: "todas", texto: "Todas" },
@@ -302,72 +258,6 @@ function Cifra({
   );
 }
 
-/** Los órdenes, en píldoras que se deslizan si no caben. */
-function Orden({
-  orden,
-  asc,
-  onElegir,
-}: {
-  orden: OrdenPosiciones;
-  asc: boolean;
-  onElegir: (o: OrdenPosiciones) => void;
-}) {
-  return (
-    <div
-      role="group"
-      aria-label="Ordenar las posiciones"
-      className="mt-3 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]"
-    >
-      {ORDENES.map((o) => {
-        const activo = o.valor === orden;
-        return (
-          <button
-            key={o.valor}
-            type="button"
-            aria-pressed={activo}
-            aria-label={
-              activo ? `${o.texto}, ${asc ? "de menor a mayor" : "de mayor a menor"}` : o.texto
-            }
-            onClick={() => onElegir(o.valor)}
-            className={`shrink-0 rounded-full border px-3 py-1 text-[11.5px] font-bold transition-colors ${
-              activo
-                ? "border-transparent bg-fg0 text-bg1"
-                : "border-line2 bg-bg1 text-fg2 hover:text-fg0"
-            }`}
-          >
-            {o.texto}
-            {activo && <span aria-hidden> {asc ? "↑" : "↓"}</span>}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/** Un importe con su porcentaje, en su color. Sin dato, un guion. Por
- *  debajo de 10 €, con céntimos: si no, 47 céntimos de pérdida se leen
- *  «−0 €». */
-function Cambio({
-  v,
-  pct,
-  className = "text-[11px]",
-}: {
-  v: number | null | undefined;
-  pct?: number | null;
-  className?: string;
-}) {
-  if (v == null || !isFinite(v)) return <span className={`${className} font-bold text-fg3`}>—</span>;
-  const s = signo(v);
-  const color = s === "up" ? "text-up" : s === "dn" ? "text-dn" : "text-fg2";
-  return (
-    <span className={`${className} font-bold ${color}`}>
-      {s === "up" ? "+" : ""}
-      {fe(v, Math.abs(v) < 10 ? 2 : 0)}
-      {pct != null && isFinite(pct) ? ` (${fp(pct)})` : ""}
-    </span>
-  );
-}
-
 function Banda({
   grupo,
   filas,
@@ -379,7 +269,7 @@ function Banda({
 }: {
   grupo: Grupo;
   filas: Posicion[];
-  metrica: "total" | "hoy";
+  metrica: Metrica;
   total: number;
   abierta: boolean;
   onAbrir: () => void;
@@ -439,43 +329,6 @@ function Banda({
   );
 }
 
-/** Las letras del activo en un círculo de su color: lo que en getquin es el
- *  logo. El ticker si es legible; si es un código de Morningstar o un ISIN,
- *  las iniciales del nombre. */
-function sigla(a: Activo): string {
-  if (esLiquidez(a)) return "€";
-  const t = a.ticker?.trim().toUpperCase() ?? "";
-  if (t && !t.startsWith("0P") && !/^[A-Z]{2}[A-Z0-9]{9}\d/.test(t)) {
-    return t.split(/[.\-=]/)[0].slice(0, 4);
-  }
-  const palabras = a.name.replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
-  return (
-    palabras
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase() || "·"
-  );
-}
-
-function Sigla({ a }: { a: Activo }) {
-  const color = CAT_COLOR[catConocida(a.cat)] ?? CAT_COLOR.otro;
-  const s = sigla(a);
-  return (
-    <span
-      aria-hidden
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-disp font-bold tracking-tight"
-      style={{
-        background: `color-mix(in srgb, ${color} 14%, transparent)`,
-        color,
-        fontSize: s.length > 3 ? 8.5 : 10.5,
-      }}
-    >
-      {s}
-    </span>
-  );
-}
-
 function Fila({
   p,
   metrica,
@@ -483,7 +336,7 @@ function Fila({
   onFicha,
 }: {
   p: Posicion;
-  metrica: "total" | "hoy";
+  metrica: Metrica;
   total: number;
   onFicha: (id: string) => void;
 }) {
@@ -502,19 +355,20 @@ function Fila({
           </span>
           <span className="block truncate text-[10.5px] text-fg2">
             {liquidez ? "saldo" : `${fn(p.qty, 4)} ${p.activo.unit}`}
-            {peso != null && ` · ${fpc(peso)}`}
+            {peso != null && metrica !== "peso" && ` · ${fpc(peso)}`}
             {p.estado === "sin-precio" && " · sin precio"}
             {p.estado === "viejo" && " · precio antiguo"}
           </span>
         </span>
         <span className="shrink-0 text-right">
           <span className="block text-[13px] font-bold text-fg0">{fe(p.valor, 0)}</span>
-          {!liquidez &&
-            (metrica === "hoy" ? (
-              <Cambio v={p.dia} pct={p.diaPct} className="text-[10.5px]" />
-            ) : (
-              <Cambio v={p.ganancia} pct={p.gananciaPct} className="text-[10.5px]" />
-            ))}
+          {metrica === "peso" ? (
+            <span className="text-[10.5px] font-bold text-fg1">{fpc(peso)} de la cartera</span>
+          ) : liquidez ? null : metrica === "hoy" ? (
+            <Cambio v={p.dia} pct={p.diaPct} className="text-[10.5px]" />
+          ) : (
+            <Cambio v={p.ganancia} pct={p.gananciaPct} className="text-[10.5px]" />
+          )}
         </span>
       </button>
     </li>

@@ -23,6 +23,7 @@
 
 import type {
   Activo,
+  EntradaCatalogo,
   EstadoCartera,
   Operacion,
   Precio,
@@ -579,14 +580,65 @@ export function porCategoria(posiciones: Posicion[]): Grupo[] {
   );
 }
 
+/** La ficha del catálogo de un activo: por su ticker —como símbolo, como
+ *  símbolo de Yahoo o como ticker pelado— o por su ISIN. */
+export function entradaCatalogo(
+  a: Activo,
+  catalogo: EntradaCatalogo[],
+): EntradaCatalogo | undefined {
+  const t = a.ticker?.trim().toUpperCase() || undefined;
+  const i = a.isin?.trim().toUpperCase() || undefined;
+  const por = (campo: (c: EntradaCatalogo) => string | null, v: string | undefined) =>
+    v ? catalogo.find((c) => campo(c)?.toUpperCase() === v) : undefined;
+  return (
+    por((c) => c.symbol, t) ??
+    por((c) => c.yahoo, t) ??
+    por((c) => c.ticker, t) ??
+    por((c) => c.isin, i) ??
+    por((c) => c.symbol, i)
+  );
+}
+
+/** Los índices de siempre, reconocidos por el nombre del producto. Es el
+ *  último recurso, para lo que llega sin subyacente ni en el activo ni en el
+ *  catálogo: el «Vanguard US 500 Stock Index EUR» de MyInvestor entró así, y
+ *  en la tarta salía aparte del otro Vanguard siendo el mismo S&P 500. */
+const INDICES: [RegExp, string][] = [
+  [/S\s*&\s*P\s*500|\bSP\s?500\b|\bUS\s?500\b/i, "S&P 500"],
+  [/NASDAQ[\s-]*100/i, "Nasdaq 100"],
+  [/MSCI\s+WORLD/i, "MSCI World"],
+  [/ALL[\s-]*WORLD/i, "Global All-World"],
+  // Con límite de palabra: «Goldman Sachs» no es oro.
+  [/\bGOLD\b|\bORO\b/i, "Oro"],
+  [/\bSILVER\b|\bPLATA\b/i, "Plata"],
+];
+
+/** Qué hay debajo de un activo: lo que diga el activo —se puede corregir a
+ *  mano en Historial—, si no el catálogo, si no el nombre, y si nada de eso,
+ *  el activo es su propia cosa. */
+export function subyacenteDe(a: Activo, catalogo: EntradaCatalogo[] = []): string {
+  if (esLiquidez(a)) return "Efectivo";
+  if (a.underlying?.trim()) return a.underlying.trim();
+  const c = entradaCatalogo(a, catalogo);
+  if (c?.underlying) return c.underlying;
+  for (const [re, nombre] of INDICES) {
+    if (re.test(a.name) || (c?.name != null && re.test(c.name))) return nombre;
+  }
+  return a.name;
+}
+
 /** Cuánto hay de cada COSA, que no es lo mismo que cuántos productos hay: el
  *  fondo del S&P 500 de un bróker y el ETF del S&P 500 de otro son la misma
  *  apuesta, y sumados pesan lo que de verdad pesa el índice en la cartera. */
-export function porSubyacente(posiciones: Posicion[], conLiquidez = true): Grupo[] {
+export function porSubyacente(
+  posiciones: Posicion[],
+  conLiquidez = true,
+  catalogo: EntradaCatalogo[] = [],
+): Grupo[] {
   const filtradas = conLiquidez ? posiciones : posiciones.filter((p) => enMercado(p.activo));
   return agrupar(
     filtradas,
-    (p) => (esLiquidez(p.activo) ? "Efectivo" : p.activo.underlying || p.activo.name),
+    (p) => subyacenteDe(p.activo, catalogo),
     (k) => k,
   );
 }
@@ -611,7 +663,9 @@ export function movimientoDelDia(posiciones: Posicion[]): Posicion[] {
 // Las posiciones y las bandas se ordenan por lo mismo. «Hoy» va en euros,
 // como «Qué la mueve hoy»: un +9 % sobre 30 € no es lo que más se ha movido.
 
-export type OrdenPosiciones = "valor" | "rentabilidad" | "ganancia" | "hoy" | "nombre";
+/** «peso» ordena igual que «valor»; lo que cambia es la cifra que se enseña
+ *  al lado: el porcentaje de la cartera en vez de los euros. */
+export type OrdenPosiciones = "valor" | "peso" | "rentabilidad" | "ganancia" | "hoy" | "nombre";
 
 interface Medidas {
   nombre: string;
@@ -625,7 +679,7 @@ const COTEJO = new Intl.Collator("es", { sensitivity: "base", numeric: true });
 
 function ordenar<T>(xs: T[], medir: (x: T) => Medidas, orden: OrdenPosiciones, asc: boolean): T[] {
   const clave = (m: Medidas): number | string | null =>
-    orden === "valor"
+    orden === "valor" || orden === "peso"
       ? m.valor
       : orden === "rentabilidad"
         ? m.pct

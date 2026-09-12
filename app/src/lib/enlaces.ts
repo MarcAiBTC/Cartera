@@ -11,6 +11,7 @@
 // ISIN: por eso no están.
 
 import type { Activo, EntradaCatalogo } from "./tipos";
+import { entradaCatalogo as entradaDe } from "./cartera";
 
 export interface Enlace {
   texto: string;
@@ -84,20 +85,6 @@ export function urlTradingView(simbolo: string): string | null {
   if (ES_ISIN.test(s)) return null;
   // Sin sufijo es Estados Unidos, y la clase se escribe con punto: BRK.B.
   return `${TV}${encodeURIComponent(s.replace(/-/g, "."))}/`;
-}
-
-function entradaDe(a: Activo, catalogo: EntradaCatalogo[]): EntradaCatalogo | undefined {
-  const t = a.ticker?.trim().toUpperCase() || undefined;
-  const i = a.isin?.trim().toUpperCase() || undefined;
-  const por = (campo: (c: EntradaCatalogo) => string | null, v: string | undefined) =>
-    v ? catalogo.find((c) => campo(c)?.toUpperCase() === v) : undefined;
-  return (
-    por((c) => c.symbol, t) ??
-    por((c) => c.yahoo, t) ??
-    por((c) => c.ticker, t) ??
-    por((c) => c.isin, i) ??
-    por((c) => c.symbol, i)
-  );
 }
 
 /** Dónde mirar este activo, del mejor sitio al peor. Nunca vacío salvo en el

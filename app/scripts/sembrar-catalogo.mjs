@@ -84,8 +84,10 @@ function leerSimbolos() {
       yahoo: s.cg ? null : s.sym || null,
       coingecko: s.cg || null,
       currency: null,
-      cat: s.cg ? "cripto" : null,
-      underlying: null,
+      // `c` y `u`, como en el catálogo embebido: sin ellos, el Vanguard US 500
+      // EUR entraba sin subyacente y en la tarta no se sumaba al S&P 500.
+      cat: s.c || (s.cg ? "cripto" : null),
+      underlying: s.u || null,
       retired: false,
     }));
 }

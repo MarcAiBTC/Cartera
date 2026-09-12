@@ -9,6 +9,7 @@ import {
   rentabilidadPorTiempo,
   type Historico,
   type PuntoEvolucion,
+  type SerieEur,
 } from "../src/lib/evolucion";
 import { calcularFifo, calcularPosiciones } from "../src/lib/cartera";
 import { planificar } from "../src/lib/import";
@@ -196,6 +197,35 @@ describe("contra el S&P 500", () => {
       ["2024-06-01", 5000],
     ])!;
     expect(c.desdeIndice).toBe("2024-02-01");
+  });
+});
+
+describe("desde la primera compra", () => {
+  // Un ingreso que espera una semana en efectivo y luego compra.
+  const puntos = [
+    { fecha: "2024-01-01", valor: 100, aportado: 100, flujo: 100 },
+    { fecha: "2024-01-08", valor: 100, aportado: 100, flujo: 0 },
+    { fecha: "2024-01-15", valor: 110, aportado: 100, flujo: 0 },
+  ];
+  const sp: SerieEur = [
+    ["2024-01-01", 90],
+    ["2024-01-08", 100],
+    ["2024-01-15", 105],
+  ];
+
+  it("el índice se mide desde la compra, no desde el ingreso", () => {
+    const c = frenteAlIndice(puntos, sp, "2024-01-08")!;
+    expect(c.desde).toBe("2024-01-08");
+    expect(c.indicePct).toBeCloseTo(5, 9);
+    expect(c.tuyoPct).toBeCloseTo(10, 9);
+    expect(c.indice).toBeCloseTo(105, 9);
+  });
+
+  it("las dos curvas salen de cero y acaban en las cifras de arriba", () => {
+    const c = frenteAlIndice(puntos, sp, "2024-01-08")!;
+    expect(c.curva[0]).toEqual({ fecha: "2024-01-08", tuyo: 0, indice: 0 });
+    expect(c.curva.at(-1)!.tuyo).toBeCloseTo(c.tuyoPct!, 9);
+    expect(c.curva.at(-1)!.indice).toBeCloseTo(c.indicePct, 9);
   });
 });
 

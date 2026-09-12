@@ -9,8 +9,9 @@
 //   · Separación de 2px entre porciones y barras contiguas, para que dos
 //     colores parecidos no se toquen nunca.
 
-import { useId, useState } from "react";
-import { fe, fpc } from "../lib/formato";
+import { useId, useState, type PointerEvent } from "react";
+import { fd, fe, fp, fpc } from "../lib/formato";
+import { SERIE_COLOR } from "../lib/tipos";
 
 // ── TARTA ────────────────────────────────────────────────────────────────
 
@@ -194,6 +195,251 @@ export function BarraObjetivo({
         title={`Objetivo ${fpc(objetivo)}`}
       />
     </div>
+  );
+}
+
+// ── DOS RENTABILIDADES ───────────────────────────────────────────────────
+
+export interface PuntoComparativa {
+  fecha: string;
+  /** % acumulado de la primera serie */
+  a: number;
+  /** % acumulado de la segunda; null donde todavía no hay dato */
+  b: number | null;
+}
+
+// Los dos primeros del juego de series, ya comprobados par a par para
+// daltonismo en claro y en oscuro. La segunda va además a trazos: quién es
+// quién no depende sólo del color.
+const COLOR_A = SERIE_COLOR[0];
+const COLOR_B = SERIE_COLOR[1];
+
+/** Dos rentabilidades acumuladas desde el mismo día. Un solo eje —las dos
+ *  son un porcentaje sobre la misma fecha— y la línea del cero marcada, que
+ *  es la que dice si se gana o se pierde. Al pasar el dedo, las dos cifras de
+ *  esa semana arriba. */
+export function Comparativa({
+  puntos,
+  nombreA,
+  nombreB,
+  alto = 170,
+}: {
+  puntos: PuntoComparativa[];
+  nombreA: string;
+  nombreB: string;
+  alto?: number;
+}) {
+  const [señalado, setSeñalado] = useState<number | null>(null);
+  if (puntos.length < 2) return null;
+
+  const A = 320;
+  const B = alto;
+  const M = { arriba: 10, abajo: 16, izq: 4, der: 4 };
+
+  const valores = puntos.flatMap((p) => (p.b == null ? [p.a] : [p.a, p.b]));
+  const min = Math.min(0, ...valores);
+  const max = Math.max(0, ...valores);
+  const rango = max - min || 1;
+  const x = (i: number) => M.izq + (i / (puntos.length - 1)) * (A - M.izq - M.der);
+  const y = (v: number) => M.arriba + (1 - (v - min) / rango) * (B - M.arriba - M.abajo);
+
+  // Rejilla en cifras redondas, tres o cuatro rayas como mucho.
+  const paso = [5, 10, 20, 25, 50, 100, 200].find((s) => rango / s <= 4) ?? 500;
+  const marcas: number[] = [];
+  for (let v = Math.ceil(min / paso) * paso; v <= max; v += paso) marcas.push(v);
+
+  // Una línea que se corta donde no hay dato, en vez de inventarlo.
+  const linea = (sel: (p: PuntoComparativa) => number | null) => {
+    let d = "";
+    let dentro = false;
+    puntos.forEach((p, i) => {
+      const v = sel(p);
+      if (v == null) {
+        dentro = false;
+        return;
+      }
+      d += `${dentro ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
+      dentro = true;
+    });
+    return d.trim();
+  };
+
+  const señalar = (e: PointerEvent<SVGSVGElement>) => {
+    const caja = e.currentTarget.getBoundingClientRect();
+    const rel = ((e.clientX - caja.left) / caja.width) * A;
+    const k = Math.round(((rel - M.izq) / (A - M.izq - M.der)) * (puntos.length - 1));
+    setSeñalado(Math.max(0, Math.min(puntos.length - 1, k)));
+  };
+
+  const ultimo = puntos[puntos.length - 1];
+  const p = puntos[señalado ?? puntos.length - 1];
+  const mes = (f: string) =>
+    new Date(`${f}T12:00:00`).toLocaleDateString("es-ES", { month: "short", year: "numeric" });
+  // Para la tabla: una fila cada cuatro semanas, y la de hoy.
+  const cada = Math.max(1, Math.ceil(puntos.length / 14));
+  const filas = puntos.filter((_, i) => i % cada === 0 || i === puntos.length - 1);
+
+  return (
+    <div className="w-full">
+      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[11px]">
+        <span className="text-fg2">{señalado == null ? "Hoy" : fd(p.fecha)}</span>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          <Leyenda color={COLOR_A} texto={nombreA} v={p.a} />
+          <Leyenda color={COLOR_B} texto={nombreB} v={p.b} trazos />
+        </span>
+      </div>
+
+      <svg
+        viewBox={`0 0 ${A} ${B}`}
+        className="w-full touch-pan-y"
+        style={{ height: alto }}
+        role="img"
+        aria-label={`Desde el ${fd(puntos[0].fecha)}: ${nombreA} ${fp(ultimo.a)}, ${nombreB} ${fp(ultimo.b)}`}
+        onPointerMove={señalar}
+        onPointerDown={señalar}
+        onPointerLeave={() => setSeñalado(null)}
+      >
+        {marcas.map((v) => (
+          <g key={v}>
+            <line
+              x1={M.izq}
+              x2={A - M.der}
+              y1={y(v)}
+              y2={y(v)}
+              stroke={v === 0 ? "var(--line3)" : "var(--line)"}
+              strokeWidth="1"
+            />
+          </g>
+        ))}
+
+        <path
+          d={linea((q) => q.b)}
+          fill="none"
+          stroke={COLOR_B}
+          strokeWidth="2"
+          strokeDasharray="4 3"
+          strokeLinejoin="round"
+        />
+        <path
+          d={linea((q) => q.a)}
+          fill="none"
+          stroke={COLOR_A}
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+
+        {/* Las cifras del eje, encima de las líneas y con un halo del color
+            del fondo: el «0 %» quedaba tapado por el arranque de las dos. */}
+        {marcas.map((v) => (
+          <text
+            key={`t${v}`}
+            x={M.izq}
+            y={y(v) - 3}
+            fontSize="8"
+            fill="var(--fg3)"
+            stroke="var(--bg1)"
+            strokeWidth="3"
+            paintOrder="stroke"
+          >
+            {v > 0 ? "+" : ""}
+            {v} %
+          </text>
+        ))}
+
+        {señalado != null && (
+          <>
+            <line
+              x1={x(señalado)}
+              y1={M.arriba}
+              x2={x(señalado)}
+              y2={B - M.abajo}
+              stroke="var(--line3)"
+              strokeWidth="1"
+            />
+            {p.b != null && (
+              <circle
+                cx={x(señalado)}
+                cy={y(p.b)}
+                r="4.5"
+                fill={COLOR_B}
+                stroke="var(--bg1)"
+                strokeWidth="2"
+              />
+            )}
+            <circle
+              cx={x(señalado)}
+              cy={y(p.a)}
+              r="4.5"
+              fill={COLOR_A}
+              stroke="var(--bg1)"
+              strokeWidth="2"
+            />
+          </>
+        )}
+
+        <text x={M.izq} y={B - 3} fontSize="8" fill="var(--fg3)">
+          {mes(puntos[0].fecha)}
+        </text>
+        <text x={A - M.der} y={B - 3} fontSize="8" fill="var(--fg3)" textAnchor="end">
+          hoy
+        </text>
+      </svg>
+
+      <details className="mt-1">
+        <summary className="cursor-pointer text-[11px] font-semibold text-fg2">Ver en tabla</summary>
+        <div className="mt-1 overflow-x-auto">
+          <table className="w-full text-[11px] tabular-nums">
+            <thead>
+              <tr className="text-left text-fg3">
+                <th className="py-1 font-semibold">Semana</th>
+                <th className="py-1 text-right font-semibold">{nombreA}</th>
+                <th className="py-1 text-right font-semibold">{nombreB}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((f) => (
+                <tr key={f.fecha} className="border-t border-line text-fg1">
+                  <td className="py-1">{fd(f.fecha)}</td>
+                  <td className="py-1 text-right">{fp(f.a)}</td>
+                  <td className="py-1 text-right">{fp(f.b)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+/** El nombre de la serie con su trazo al lado y su cifra en tinta normal: el
+ *  color identifica, no se usa para escribir. */
+function Leyenda({
+  color,
+  texto,
+  v,
+  trazos,
+}: {
+  color: string;
+  texto: string;
+  v: number | null;
+  trazos?: boolean;
+}) {
+  return (
+    <span className="flex items-center gap-1.5 text-fg1">
+      <svg width="16" height="4" aria-hidden className="shrink-0">
+        <line
+          x1="0"
+          y1="2"
+          x2="16"
+          y2="2"
+          stroke={color}
+          strokeWidth="2.5"
+          strokeDasharray={trazos ? "4 3" : undefined}
+        />
+      </svg>
+      {texto} <strong className="text-fg0">{fp(v)}</strong>
+    </span>
   );
 }
 

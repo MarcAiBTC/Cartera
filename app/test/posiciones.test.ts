@@ -2,7 +2,14 @@
 // El orden de la lista y de las bandas de Inicio, y adónde lleva cada enlace.
 
 import { describe, expect, it } from "vitest";
-import { ordenarGrupos, ordenarPosiciones, type Grupo, type Posicion } from "../src/lib/cartera";
+import {
+  ordenarGrupos,
+  ordenarPosiciones,
+  porSubyacente,
+  subyacenteDe,
+  type Grupo,
+  type Posicion,
+} from "../src/lib/cartera";
 import { enlacesDe, urlTradingView } from "../src/lib/enlaces";
 import type { Activo, EntradaCatalogo } from "../src/lib/tipos";
 
@@ -104,6 +111,47 @@ describe("ordenar las posiciones", () => {
       "ganancia",
     );
     expect(orden.map((x) => x.clave)).toEqual(["fondo", "cripto", "liquidez"]);
+  });
+});
+
+describe("peso en la cartera", () => {
+  it("ordena como el tamaño", () => {
+    expect(nombres(ordenarPosiciones(LISTA, "peso"))).toEqual(
+      nombres(ordenarPosiciones(LISTA, "valor")),
+    );
+  });
+});
+
+describe("de qué es cada cosa", () => {
+  it("el Vanguard US 500 EUR sin subyacente cuenta como S&P 500", () => {
+    expect(
+      subyacenteDe(activo("Vanguard US 500 Stock Index EUR", { cat: "fondo", isin: "IE0032126645" })),
+    ).toBe("S&P 500");
+  });
+
+  it("manda el activo; después, el catálogo; después, el nombre", () => {
+    expect(subyacenteDe(activo("Mi fondo S&P 500", { underlying: "Otra cosa" }))).toBe("Otra cosa");
+    expect(
+      subyacenteDe(activo("Raro", { isin: "IE0000000001" }), [
+        { symbol: "X", isin: "IE0000000001", underlying: "MSCI World" } as EntradaCatalogo,
+      ]),
+    ).toBe("MSCI World");
+    expect(subyacenteDe(activo("Amazon.com"))).toBe("Amazon.com");
+  });
+
+  it("la plata y el oro físicos, también por el nombre; Goldman Sachs no es oro", () => {
+    expect(subyacenteDe(activo("Physical Silver", { cat: "metal" }))).toBe("Plata");
+    expect(subyacenteDe(activo("iShares Physical Gold", { cat: "metal" }))).toBe("Oro");
+    expect(subyacenteDe(activo("Goldman Sachs"))).toBe("Goldman Sachs");
+  });
+
+  it("en la tarta, los dos Vanguard del S&P 500 van juntos", () => {
+    const g = porSubyacente([
+      pos("Vanguard US500 USD Acc", 500, 0, 0, null, { underlying: "S&P 500" }),
+      pos("Vanguard US 500 Stock Index EUR", 1000, 0, 0, null, { cat: "fondo" }),
+    ]);
+    expect(g).toHaveLength(1);
+    expect(g[0]).toMatchObject({ clave: "S&P 500", valor: 1500 });
   });
 });
 

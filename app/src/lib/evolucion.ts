@@ -255,8 +255,16 @@ export function rentabilidadPorTiempo(puntos: PuntoEvolucion[]): number | null {
   return (factor - 1) * 100;
 }
 
+/** Un punto de las dos curvas: lo acumulado desde la primera compra, en %. */
+export interface PuntoComparado {
+  fecha: string;
+  tuyo: number;
+  /** null antes de que empiece la serie del índice */
+  indice: number | null;
+}
+
 export interface FrenteAlIndice {
-  /** Tu primera operación */
+  /** Tu primera compra: desde aquí se miden los dos */
   desde: string;
   /** Desde dónde se ha medido el índice: `desde`, salvo que la serie empiece
    *  más tarde */
@@ -273,35 +281,77 @@ export interface FrenteAlIndice {
    *  día que lo pusiste */
   indice: number | null;
   diferencia: number | null;
+  /** Las dos rentabilidades acumuladas, punto a punto, para dibujarlas */
+  curva: PuntoComparado[];
 }
 
-export function frenteAlIndice(puntos: PuntoEvolucion[], sp: SerieEur): FrenteAlIndice | null {
+/** Tu cartera contra el índice desde tu primera compra hasta hoy.
+ *
+ *  `primeraCompra` es la fecha de la primera compra; sin ella, la primera
+ *  operación. Antes de comprar nada lo que había era dinero esperando, y
+ *  medir el índice desde un ingreso de semanas antes le regalaba esas
+ *  semanas. */
+export function frenteAlIndice(
+  puntos: PuntoEvolucion[],
+  sp: SerieEur,
+  primeraCompra?: string,
+): FrenteAlIndice | null {
   if (puntos.length < 2 || sp.length < 2) return null;
-  const desde = puntos[0].fecha;
+  const desde =
+    primeraCompra && primeraCompra > puntos[0].fecha ? primeraCompra : puntos[0].fecha;
+  // El tramo empieza en la última semana anterior a la compra, o en ella.
+  let b = 0;
+  for (let i = 0; i < puntos.length; i++) if (puntos[i].fecha <= desde) b = i;
+  const tramo = puntos.slice(b);
+  if (tramo.length < 2) return null;
+
   const alEmpezar = valorEn(sp, desde);
   const inicio = alEmpezar ?? sp[0][1];
+  const desdeIndice = alEmpezar != null ? desde : sp[0][0];
   const [hasta, final] = sp[sp.length - 1];
   if (!(inicio > 0) || !(final > 0)) return null;
 
   // Cada euro que entra compra índice al precio de su semana; cada euro que
-  // sale lo vende.
-  let unidades = 0;
-  for (const p of puntos) {
+  // sale lo vende. Lo que ya estaba dentro al empezar el tramo compra al
+  // precio del primer día.
+  let unidades = tramo[0].aportado / inicio;
+  for (const p of tramo.slice(1)) {
     if (Math.abs(p.flujo) < 0.005) continue;
-    unidades += p.flujo / (valorEn(sp, p.fecha) ?? sp[0][1]);
+    unidades += p.flujo / (valorEn(sp, p.fecha) ?? inicio);
   }
-  const ultimo = puntos[puntos.length - 1];
+  const ultimo = tramo[tramo.length - 1];
   const indice = unidades > 0 ? unidades * final : null;
+
+  // Las dos curvas: la tuya, encadenando el Dietz de cada semana como
+  // `rentabilidadPorTiempo`; la del índice, su precio frente al del primer
+  // día. El último punto de la del índice es su último dato.
+  const curva: PuntoComparado[] = [];
+  let factor = 1;
+  tramo.forEach((p, i) => {
+    if (i > 0) {
+      const v0 = tramo[i - 1].valor;
+      const base = v0 + p.flujo / 2;
+      const r = base > 1 ? (p.valor - v0 - p.flujo) / base : NaN;
+      if (isFinite(r) && r > -1) factor *= 1 + r;
+    }
+    const s = i === 0 ? inicio : i === tramo.length - 1 ? final : valorEn(sp, p.fecha);
+    curva.push({
+      fecha: p.fecha,
+      tuyo: (factor - 1) * 100,
+      indice: s != null && p.fecha >= desdeIndice ? (s / inicio - 1) * 100 : i === 0 ? 0 : null,
+    });
+  });
 
   return {
     desde,
-    desdeIndice: alEmpezar != null ? desde : sp[0][0],
+    desdeIndice,
     hasta,
-    tuyoPct: rentabilidadPorTiempo(puntos),
+    tuyoPct: rentabilidadPorTiempo(tramo),
     indicePct: (final / inicio - 1) * 100,
     tuyo: ultimo.valor,
     aportado: ultimo.aportado,
     indice,
     diferencia: indice != null ? ultimo.valor - indice : null,
+    curva,
   };
 }

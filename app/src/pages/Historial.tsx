@@ -9,7 +9,10 @@
 import { useMemo, useState } from "react";
 import { useDatos } from "../lib/datos";
 import { CAT_LBL, CATEGORIAS, OP_LBL, type Activo, type Operacion, type TipoOperacion } from "../lib/tipos";
-import { fd, fe, fn, hoyISO } from "../lib/formato";
+import { fd, fe, fn, fpc, hoyISO } from "../lib/formato";
+import { esLiquidez, ordenarPosiciones } from "../lib/cartera";
+import { usePrefPosiciones } from "../lib/prefPosiciones";
+import { Cambio, Orden } from "../components/posiciones";
 import {
   Aviso,
   Boton,
@@ -555,7 +558,12 @@ function FormOperacion({
 // ════════════════════════════════════════════════════════════════════════
 
 function Posiciones() {
-  const { estado, posiciones, borrar, borrarVarios } = useDatos();
+  const { estado, posiciones, resumen, borrar, borrarVarios } = useDatos();
+  const { pref, elegirOrden } = usePrefPosiciones();
+  const ordenadas = useMemo(
+    () => ordenarPosiciones(posiciones, pref.orden, pref.asc),
+    [posiciones, pref.orden, pref.asc],
+  );
   const abiertas = new Set(posiciones.map((p) => p.activo.id));
   const fuera = estado.activos
     .filter((a) => !abiertas.has(a.id))
@@ -623,11 +631,15 @@ function Posiciones() {
         </Boton>
       </div>
 
+      {posiciones.length > 1 && (
+        <Orden orden={pref.orden} asc={pref.asc} onElegir={elegirOrden} />
+      )}
+
       {posiciones.length === 0 ? (
         <Vacio titulo="Sin posiciones" texto="Importa un archivo o añade la primera a mano." />
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {posiciones.map((p) => (
+          {ordenadas.map((p) => (
             <li key={p.activo.id}>
               <button
                 onClick={() => (modoSeleccion ? alterna(p.activo.id) : setEditando(p.activo))}
@@ -659,9 +671,25 @@ function Posiciones() {
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block text-[13px] font-bold text-fg0">{fe(p.valor, 0)}</span>
-                  <span className="text-[10.5px] text-fg2">
-                    {fn(p.qty, 4)} {p.activo.unit}
-                  </span>
+                  {/* Al lado del valor, la cifra por la que se está ordenando:
+                      sin ella, el orden no se entiende. */}
+                  {pref.orden === "peso" ? (
+                    <span className="text-[10.5px] font-bold text-fg1">
+                      {fpc(resumen.valor > 0 ? ((p.valor ?? 0) / resumen.valor) * 100 : null)}
+                    </span>
+                  ) : pref.orden === "rentabilidad" || pref.orden === "ganancia" ? (
+                    esLiquidez(p.activo) ? null : (
+                      <Cambio v={p.ganancia} pct={p.gananciaPct} className="text-[10.5px]" />
+                    )
+                  ) : pref.orden === "hoy" ? (
+                    esLiquidez(p.activo) ? null : (
+                      <Cambio v={p.dia} pct={p.diaPct} className="text-[10.5px]" />
+                    )
+                  ) : (
+                    <span className="text-[10.5px] text-fg2">
+                      {fn(p.qty, 4)} {p.activo.unit}
+                    </span>
+                  )}
                 </span>
               </button>
             </li>
