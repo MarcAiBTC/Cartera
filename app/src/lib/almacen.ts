@@ -110,9 +110,14 @@ class AlmacenNube implements Almacen {
   // esquema, que es quien puede hacerla de verdad.
   async insertar<T extends { id: string }>(tabla: Tabla, filas: Partial<T>[]): Promise<T[]> {
     if (filas.length === 0) return [];
+    // `defaultToNull: false`: en un lote, lo que una fila no trae lo pone la
+    // base con su valor por defecto. Sin esto supabase-js manda la unión de
+    // las columnas de todas las filas y a la que no la trae le pone NULL: al
+    // importar Revolut, MCD iba archivada y MSTR sin `archived`, y el NULL en
+    // una columna NOT NULL tumbaba el lote entero.
     const { data, error } = await supabase!
       .from(tabla)
-      .insert(filas as never)
+      .insert(filas as never, { defaultToNull: false })
       .select();
     if (error) throw error;
     return (data ?? []) as T[];
