@@ -72,7 +72,7 @@ const AYUDA: { broker: string; pasos: string; ojo?: string }[] = [
     broker: "MyInvestor",
     pasos:
       "Desde la web, con ordenador: la app no exporta. Lo más cómodo es el CSV de «Órdenes» de la sección de fondos: trae cada compra desde el primer día con su ISIN y sus participaciones, y los traspasos entre fondos se reconocen solos. Al importarlo te preguntamos cuánto dinero tienes sin invertir y si tienes algo fuera de los fondos, para que el total cuadre con el banco. La otra manera son dos archivos juntos: el PDF «Extracto de cuenta» —Perfil → Documentos y extractos— y el Excel de movimientos de la cuenta corriente.",
-    ojo: "Las compras de ETC y ETF de la cuenta de valores sólo salen en el Excel de la cuenta corriente, y sin participaciones: súbelo junto al CSV de órdenes y se calculan con el precio de cierre de cada día, una orden por compra. Si nos dices cuántas tienes, se ajustan a eso. Y no abras el archivo en Excel antes de subirlo, que al guardarlo cambia fechas y decimales.",
+    ojo: "Los ETF y los ETC de la cuenta de valores no salen como posición en ningún archivo, pero sus compras sí están en los movimientos de la cuenta corriente (Cuentas → Cuenta corriente → Consulta de operaciones), aunque sin participaciones. Súbelos junto al CSV de órdenes —el CSV de la cuenta desde el primer día, o el Excel si sólo quieres el último año— y cada compra entra como la orden de ese día, con las participaciones calculadas con el precio de cierre. Si nos dices cuántas tienes, se ajustan a eso. Y no abras el archivo en Excel antes de subirlo, que al guardarlo cambia fechas y decimales.",
   },
   {
     broker: "Cualquier otro",

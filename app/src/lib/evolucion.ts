@@ -285,6 +285,83 @@ export interface FrenteAlIndice {
   curva: PuntoComparado[];
 }
 
+// ── POR PERIODOS ─────────────────────────────────────────────────────────
+
+export type TipoPeriodo = "trimestre" | "año";
+
+export interface Periodo {
+  /** «2025», «2025-T3» */
+  clave: string;
+  /** «2025», «T3 2025» */
+  etiqueta: string;
+  /** El punto del que parte: el último del periodo anterior */
+  desde: string;
+  /** El último punto del periodo */
+  hasta: string;
+  /** Tu rentabilidad por tiempo en el periodo, en % */
+  tuyo: number;
+  /** Lo que hizo el índice entre los mismos dos puntos; null sin su serie */
+  indice: number | null;
+  /** Empieza con tu primera compra, no con el periodo */
+  empiezaTarde: boolean;
+  /** Es el de ahora: todavía no ha terminado */
+  enCurso: boolean;
+}
+
+const clavePeriodo = (fecha: string, tipo: TipoPeriodo) => {
+  const y = fecha.slice(0, 4);
+  if (tipo === "año") return y;
+  return `${y}-T${Math.floor((Number(fecha.slice(5, 7)) - 1) / 3) + 1}`;
+};
+
+/** Primer y último día del periodo. */
+const limitesPeriodo = (clave: string, tipo: TipoPeriodo): [string, string] => {
+  const y = Number(clave.slice(0, 4));
+  if (tipo === "año") return [`${y}-01-01`, `${y}-12-31`];
+  const t = Number(clave.slice(6));
+  const ini = new Date(Date.UTC(y, (t - 1) * 3, 1)).toISOString().slice(0, 10);
+  const fin = new Date(Date.UTC(y, t * 3, 0)).toISOString().slice(0, 10);
+  return [ini, fin];
+};
+
+/** Las dos curvas de `frenteAlIndice`, cortadas por años o por trimestres.
+ *
+ *  Cada periodo va del último punto del anterior al último suyo, y los dos
+ *  —tú y el índice— se miden entre esos MISMOS dos puntos: encadenados, dan
+ *  exactamente el total. Los puntos son semanales, así que el corte cae en
+ *  la última semana de cada periodo y no en su último día; es igual para los
+ *  dos, que es lo que importa al compararlos. */
+export function porPeriodos(curva: PuntoComparado[], tipo: TipoPeriodo): Periodo[] {
+  if (curva.length < 2) return [];
+  const f = (x: number) => 1 + x / 100;
+  const out: Periodo[] = [];
+  let ref = 0;
+  let i = 1;
+  while (i < curva.length) {
+    const k = clavePeriodo(curva[i].fecha, tipo);
+    let j = i;
+    while (j + 1 < curva.length && clavePeriodo(curva[j + 1].fecha, tipo) === k) j++;
+    const a = curva[ref];
+    const b = curva[j];
+    const [ini, fin] = limitesPeriodo(k, tipo);
+    out.push({
+      clave: k,
+      etiqueta: tipo === "año" ? k : `${k.slice(5)} ${k.slice(0, 4)}`,
+      desde: a.fecha,
+      hasta: b.fecha,
+      tuyo: (f(b.tuyo) / f(a.tuyo) - 1) * 100,
+      indice: a.indice != null && b.indice != null ? (f(b.indice) / f(a.indice) - 1) * 100 : null,
+      // Una semana de margen: el punto de partida es semanal y puede caer
+      // unos días antes del 1 de enero sin que el año empiece tarde.
+      empiezaTarde: out.length === 0 && Date.parse(a.fecha) > Date.parse(ini) + 6 * DIA,
+      enCurso: j === curva.length - 1 && b.fecha < fin,
+    });
+    ref = j;
+    i = j + 1;
+  }
+  return out;
+}
+
 /** Tu cartera contra el índice desde tu primera compra hasta hoy.
  *
  *  `primeraCompra` es la fecha de la primera compra; sin ella, la primera

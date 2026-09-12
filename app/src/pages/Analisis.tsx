@@ -8,7 +8,7 @@
 //   4. ¿Qué la mueve hoy?
 //   5. ¿Lo habría hecho mejor comprando el índice?
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDatos } from "../lib/datos";
 import { CAT_COLOR, SERIE_COLOR } from "../lib/tipos";
 import { movimientoDelDia, porSubyacente } from "../lib/cartera";
@@ -16,9 +16,11 @@ import { cargarBenchmark, pedirHistorico } from "../lib/precios";
 import {
   evolucion,
   frenteAlIndice,
+  porPeriodos,
   type Historico,
   type PuntoEvolucion,
   type SerieEur,
+  type TipoPeriodo,
 } from "../lib/evolucion";
 import { fd, fdl, fe, fp, fpc, hoyISO } from "../lib/formato";
 import {
@@ -29,13 +31,21 @@ import {
   TituloSeccion,
   Vacio,
 } from "../components/base";
-import { Comparativa, Serie, Tarta } from "../components/graficos";
+import {
+  BarrasPeriodos,
+  Comparativa,
+  Serie,
+  SerieAmpliada,
+  Tarta,
+} from "../components/graficos";
 
 export default function Analisis() {
   const { resumen, posiciones, estado, mercado } = useDatos();
   const [conLiquidez, setConLiquidez] = useState<"todo" | "mercado">("todo");
   /** `undefined` mientras se pide; `null` sin cuenta o sin servidor. */
   const [historico, setHistorico] = useState<Historico | null | undefined>(undefined);
+  const [ampliado, setAmpliado] = useState(false);
+  const cerrarAmpliado = useCallback(() => setAmpliado(false), []);
 
   const subyacentes = useMemo(
     () => porSubyacente(posiciones, conLiquidez === "todo", mercado.catalogo),
@@ -72,7 +82,7 @@ export default function Analisis() {
     [estado, historico, resumen.valor, resumen.aportado],
   );
   const serie = useMemo(
-    () => puntos.map((p) => ({ fecha: fd(p.fecha), valor: p.valor, base: p.aportado })),
+    () => puntos.map((p) => ({ fecha: p.fecha, valor: p.valor, base: p.aportado })),
     [puntos],
   );
   // La comparación con el índice empieza aquí, no en el primer ingreso.
@@ -132,9 +142,44 @@ export default function Analisis() {
 
       {/* 2 · ¿Cómo ha crecido? */}
       <Tarjeta>
-        <TituloSeccion nota={notaSerie}>Patrimonio y dinero aportado</TituloSeccion>
-        <Serie puntos={serie} />
+        <TituloSeccion
+          nota={notaSerie}
+          extra={
+            serie.length > 1 ? (
+              <button
+                type="button"
+                onClick={() => setAmpliado(true)}
+                aria-label="Ampliar el gráfico"
+                className="flex items-center gap-1.5 rounded-field border border-line2 bg-bg2 px-2.5 py-1.5 text-[11px] font-bold text-fg1 transition-colors hover:text-fg0"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden>
+                  <path
+                    d="M10 2h4v4M6 14H2v-4M14 2 9.5 6.5M2 14l4.5-4.5"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Ampliar
+              </button>
+            ) : undefined
+          }
+        >
+          Patrimonio y dinero aportado
+        </TituloSeccion>
+        <Serie
+          puntos={serie}
+          onDobleClic={() => setAmpliado(true)}
+          pista="Doble clic para ampliar"
+        />
       </Tarjeta>
+      {ampliado && (
+        <SerieAmpliada
+          puntos={serie}
+          titulo="Patrimonio y dinero aportado"
+          onCerrar={cerrarAmpliado}
+        />
+      )}
 
       {/* 3 · ¿Cuánto tengo de cada COSA? */}
       <Tarjeta>
@@ -276,6 +321,29 @@ function ContraElIndice({
     [c],
   );
   const dif = c?.tuyoPct != null ? c.tuyoPct - c.indicePct : null;
+  // Total, o cortado por años o por trimestres: la curva acumulada no deja
+  // ver qué año se le ganó al índice y cuál no.
+  const [vista, setVista] = useState<"total" | TipoPeriodo>("total");
+  const periodos = useMemo(
+    () => (c && vista !== "total" ? porPeriodos(c.curva, vista) : []),
+    [c, vista],
+  );
+  const barras = useMemo(
+    () =>
+      periodos.map((q) => ({
+        clave: q.clave,
+        etiqueta: q.etiqueta,
+        detalle:
+          [q.empiezaTarde && `desde el ${fd(q.desde)}`, q.enCurso && "en curso"]
+            .filter(Boolean)
+            .join(" · ") || undefined,
+        a: q.tuyo,
+        b: q.indice,
+      })),
+    [periodos],
+  );
+  const comparables = periodos.filter((q) => q.indice != null);
+  const ganados = comparables.filter((q) => q.tuyo > (q.indice ?? 0)).length;
   // La serie del servidor es un ETF que reinvierte los dividendos; la de
   // respaldo, el índice de precio. Se dice cuál es: son seis puntos en tres
   // años.
@@ -292,6 +360,19 @@ function ContraElIndice({
           esEtf
             ? "El S&P 500 es un ETF en euros que reinvierte los dividendos (SXR8): lo que de verdad podías haber comprado, con su comisión."
             : "El S&P 500 en euros, sin contar sus dividendos."
+        }
+        extra={
+          c && !sinHistoria ? (
+            <Segmentos
+              valor={vista}
+              onChange={setVista}
+              opciones={[
+                { valor: "total", texto: "Total" },
+                { valor: "año", texto: "Años" },
+                { valor: "trimestre", texto: "Trimestres" },
+              ]}
+            />
+          ) : undefined
         }
       >
         Contra el S&amp;P 500
@@ -314,6 +395,38 @@ function ContraElIndice({
               semana necesita la historia de precios de tus activos, y ésa sólo llega entrando con
               tu cuenta.
             </p>
+          ) : (
+          vista !== "total" ? (
+            <>
+              <p className="mt-2 text-[12.5px] text-fg1">
+                {comparables.length > 0 ? (
+                  <>
+                    Por delante del índice en{" "}
+                    <strong>
+                      {ganados} de {comparables.length}
+                    </strong>{" "}
+                    {vista === "año"
+                      ? comparables.length === 1
+                        ? "año"
+                        : "años"
+                      : comparables.length === 1
+                        ? "trimestre"
+                        : "trimestres"}
+                    .
+                  </>
+                ) : (
+                  "Todavía no hay ningún periodo con dato del índice."
+                )}
+              </p>
+              <div className="mt-3">
+                <BarrasPeriodos periodos={barras} nombreA="Tu cartera" nombreB="S&P 500" />
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-fg3">
+                Cada {vista === "año" ? "año" : "trimestre"} empieza donde acabó el anterior, en su
+                última semana, y se mide igual para los dos. Encadenados dan el total: tu cartera{" "}
+                {fp(c.tuyoPct)}, el S&amp;P 500 {fp(c.indicePct)}.
+              </p>
+            </>
           ) : (
           <>
           <div className="mt-2 grid grid-cols-2 gap-3">
@@ -353,6 +466,7 @@ function ContraElIndice({
               ` No es la ganancia sobre lo aportado (${fp(sobreAportado)}, arriba del todo): esa baja cuando entra dinero nuevo que aún no ha tenido tiempo de rendir.`}
           </p>
           </>
+          )
           )}
 
           {c.indice != null && c.diferencia != null && (
