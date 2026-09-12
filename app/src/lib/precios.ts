@@ -322,6 +322,34 @@ export async function pedirHistorico(firma: string): Promise<Historico | null> {
   }
 }
 
+/** Cierres diarios en euros de unos tickers desde una fecha, de
+ *  /api/cierres: con ellos la importación calcula lo que el archivo no trae.
+ *  Sin cuenta o sin servidor, null, y lo que haga falta se pregunta. */
+export async function pedirCierres(
+  simbolos: string[],
+  desde: string,
+): Promise<Record<string, [string, number][]> | null> {
+  if (!supabase || simbolos.length === 0) return null;
+  const { data } = await supabase.auth.getSession();
+  const sesion = data.session;
+  if (!sesion) return null;
+  try {
+    const r = await fetch("/api/cierres", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${sesion.access_token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ simbolos, desde }),
+    });
+    if (!r.ok || !(r.headers.get("content-type") ?? "").includes("json")) return null;
+    const d = (await r.json()) as { series?: Record<string, [string, number][]> };
+    return d.series ?? {};
+  } catch {
+    return null;
+  }
+}
+
 /** La tabla `benchmark` de Supabase tiene cinco años pero la escribe un cron
  *  diario que se puede quedar atrás; el feed público está al día pero sólo
  *  trae dos años, y no llega a una primera inversión de 2023. Se juntan: la

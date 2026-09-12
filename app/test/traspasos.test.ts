@@ -6,9 +6,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  calcularCartera,
   calcularFifo,
-  calcularPosiciones,
-  calcularResumen,
   paresDeTraspaso,
   porEjercicio,
 } from "../src/lib/cartera";
@@ -113,22 +112,33 @@ describe("traspasos entre fondos", () => {
     expect(realizadas[0].fechaCompra).toBe("2024-01-10");
   });
 
-  it("no cambia lo aportado ni la ganancia total, sólo cómo se reparte", () => {
+  it("en la cartera, cada fondo enseña lo suyo; el total y lo aportado no cambian", () => {
     const estado: EstadoCartera = {
       ...structuredClone(ESTADO_VACIO),
       activos: [activo("A"), activo("B")],
       operaciones: ops,
     };
     const precios = { A: precio("A", 15), B: precio("B", 32) };
-    const posiciones = calcularPosiciones(estado, precios, { EUR: 1 });
-    const { realizadas } = calcularFifo(ops);
-    const r = calcularResumen(posiciones, ops, realizadas, "2026-09-10");
-    // Sólo entraron 100 € de fuera.
+    const { posiciones, resumen: r } = calcularCartera(estado, precios, { EUR: 1 }, "2026-09-10");
+    // Sólo entraron 100 € de fuera, aunque la suscripción llegara con 50
+    // céntimos más que el reembolso estimado.
     expect(r.aportado).toBeCloseTo(100, 9);
-    // 6 × 15 + 2 × 32 = 154 → 54 de ganancia, toda latente.
+    // 6 × 15 + 2 × 32 = 154 → 54 de ganancia.
     expect(r.ganancia).toBeCloseTo(54, 9);
-    expect(r.realizado).toBe(0);
-    expect(posiciones.find((p) => p.activo.id === "B")!.ganancia).toBeCloseTo(24, 9);
+    // Lo que A ganó hasta el traspaso ya está hecho: 60,50 que costaron 40.
+    expect(r.realizado).toBeCloseTo(20.5, 9);
+    const b = posiciones.find((p) => p.activo.id === "B")!;
+    // B rinde desde lo que valía al entrar —2 × 32 − 60,50—, no lo que traía A.
+    expect(b.ganancia).toBeCloseTo(3.5, 9);
+    // Y para Hacienda hereda el coste de A.
+    expect(b.costeFiscal).toBeCloseTo(40, 9);
+  });
+
+  it("la vista de rentabilidad lo cuenta como venta, marcada como traspaso", () => {
+    const { realizadas } = calcularFifo(ops, { traspasos: false });
+    expect(realizadas).toHaveLength(1);
+    expect(realizadas[0]).toMatchObject({ traspaso: true, ingreso: 60.5 });
+    expect(realizadas[0].resultado).toBeCloseTo(20.5, 9);
   });
 
   it("sin histórico del fondo de origen se queda como venta, para no perder la ganancia", () => {

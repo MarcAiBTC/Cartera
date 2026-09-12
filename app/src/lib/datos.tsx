@@ -30,9 +30,7 @@ import { cargarBuzon, type EntradaBuzon } from "./buzon";
 import { useSesion } from "./sesion";
 import { hoyISO } from "./formato";
 import {
-  calcularFifo,
-  calcularPosiciones,
-  calcularResumen,
+  calcularCartera,
   porCategoria,
   type Grupo,
   type Posicion,
@@ -277,9 +275,12 @@ export function ProveedorDatos({ children }: { children: ReactNode }) {
   // ── Derivados ──────────────────────────────────────────────────────────
 
   const derivado = useMemo(() => {
-    const posiciones = calcularPosiciones(estado, mercado.precios, mercado.fx);
-    const { realizadas } = calcularFifo(estado.operaciones);
-    const resumen = calcularResumen(posiciones, estado.operaciones, realizadas, hoyISO());
+    const { posiciones, realizadas, resumen } = calcularCartera(
+      estado,
+      mercado.precios,
+      mercado.fx,
+      hoyISO(),
+    );
     return { posiciones, realizadas, resumen, categorias: porCategoria(posiciones) };
   }, [estado, mercado]);
 

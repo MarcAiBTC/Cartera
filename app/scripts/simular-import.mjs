@@ -21,7 +21,7 @@ import { basename } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { combinar, detectar, leer, leerArchivo, planificar } from "../src/lib/import/index.ts";
 import { simular } from "../src/lib/import/simular.ts";
-import { calcularPosiciones, calcularFifo, calcularResumen } from "../src/lib/cartera.ts";
+import { calcularCartera } from "../src/lib/cartera.ts";
 
 const args = process.argv.slice(2);
 const bandera = (n) => {
@@ -33,7 +33,7 @@ const cuadra = Number(bandera("cuadra"));
 const correo = bandera("correo");
 // Sólo estas banderas se comen el argumento siguiente. Descartar el de después
 // de CUALQUIER `--` se tragaba el archivo cuando venía detrás de `--cero`.
-const CON_VALOR = new Set(["--cuadra", "--correo", "--valor", "--mismo", "--saldo", "--extra", "--volcar"]);
+const CON_VALOR = new Set(["--cuadra", "--correo", "--valor", "--mismo", "--saldo", "--extra", "--volcar", "--titulos"]);
 const rutas = args.filter((a, i) => !a.startsWith("--") && !CON_VALOR.has(args[i - 1]));
 
 if (rutas.length === 0) {
@@ -142,17 +142,49 @@ for (let i = 0; i < args.length; i++) {
   if (nombre && v != null) extras.push({ nombre, valor: Number(v) });
 }
 
-const plan = planificar(junto, {
-  estado,
-  fx,
-  catalogo,
-  precios: porSimbolo,
-  cuentaId: cuenta?.id,
-  valores,
-  mismos,
-  saldo,
-  extras,
-});
+// --titulos "FIDELITY PHYSICAL BITCOIN ET=0.0321": lo que dice el banco que
+// tienes de algo cuyos títulos se calculan con el cierre de cada día.
+const titulos = {};
+for (let i = 0; i < args.length; i++) {
+  if (args[i] !== "--titulos") continue;
+  const [clave, v] = (args[i + 1] ?? "").split("=");
+  if (clave && v != null) titulos[clave.toUpperCase()] = Number(v);
+}
+
+let cierres = {};
+const planear = () =>
+  planificar(junto, {
+    estado,
+    fx,
+    catalogo,
+    precios: porSimbolo,
+    cuentaId: cuenta?.id,
+    valores,
+    mismos,
+    saldo,
+    extras,
+    cierres,
+    titulos,
+  });
+let plan = planear();
+
+// Lo que el plan no sabe calcular sin el cierre de un día —los títulos de un
+// ETC de MyInvestor, los euros del oro de Revolut—: se pide como lo pide la
+// pantalla, y se vuelve a planear.
+if (plan.faltanCierres.length) {
+  const { cierresDe } = await import("../api/_lib/series.ts");
+  const simbolos = plan.faltanCierres.map((f) => f.simbolo);
+  const desde = plan.faltanCierres.map((f) => f.desde).sort()[0];
+  const r = await cierresDe(db, simbolos, desde);
+  cierres = Object.fromEntries(simbolos.map((s) => [s, r.series[s] ?? []]));
+  console.log(
+    `cierres desde ${desde}: ${simbolos
+      .map((s) => `${s} ${cierres[s].length} días (desde ${cierres[s][0]?.[0] ?? "—"})`)
+      .join(" · ")}` +
+      (r.fallos.length ? ` · fallos: ${r.fallos.join(", ")}` : ""),
+  );
+  plan = planear();
+}
 
 console.log(
   `plan: ${plan.nuevas.length} nuevas · ${plan.corregidas.length} se corrigen · ` +
@@ -229,6 +261,18 @@ if (plan.sinCubrir.length) {
   console.log(`     usa --valor "NOMBRE=123.45" para decir lo que vale cada uno`);
 }
 
+if (plan.estimados.length) {
+  console.log("\n-- títulos calculados con el cierre de cada día --");
+  for (const e of plan.estimados) {
+    console.log(
+      `  ${e.nombre.padEnd(34)} ${String(e.ops).padStart(2)} órdenes calculadas · ` +
+        `${e.titulos.toFixed(6)} títulos` +
+        (e.declarados != null ? "  (reescalados a lo que dice el banco)" : ""),
+    );
+  }
+  console.log(`     usa --titulos "NOMBRE=1.234" con lo que diga el banco`);
+}
+
 if (plan.descartes.length) {
   console.log("\n-- avisos --");
   for (const d of plan.descartes) console.log(`  linea ${d.linea}: ${d.motivo}`);
@@ -251,10 +295,8 @@ const m = plan.nuevas.length;
 
 // ── La cartera que saldría ───────────────────────────────────────────────
 
-const posiciones = calcularPosiciones(despues, porSimbolo, fx);
-const { realizadas } = calcularFifo(despues.operaciones);
 const hoy = new Date().toISOString().slice(0, 10);
-const r = calcularResumen(posiciones, despues.operaciones, realizadas, hoy);
+const { posiciones, resumen: r } = calcularCartera(despues, porSimbolo, fx, hoy);
 
 console.log(`\n=== LA CARTERA DESPUÉS (${desdeCero ? "desde cero" : "sobre lo que ya hay"}) ===`);
 console.log(`  patrimonio ${r.valor.toFixed(2)} €   inversión ${r.valorInv.toFixed(2)}   liquidez ${r.liquidez.toFixed(2)}`);

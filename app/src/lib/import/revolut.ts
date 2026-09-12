@@ -77,42 +77,87 @@ const METALES: Record<string, string> = {
   XPD: "Paladio",
 };
 
+/** Con qué se cotiza cada metal: el contrato continuo de Yahoo, en dólares la
+ *  onza, que el servidor pasa a euros con el cambio de cada día. */
+const SIMBOLO_METAL: Record<string, string> = {
+  XAU: "GC=F",
+  XAG: "SI=F",
+  XPT: "PL=F",
+  XPD: "PA=F",
+};
+
 export function leerRevolut(t: Tabla): Lectura {
   const out = lecturaVacia("revolut-csv", "Revolut");
   const filas: FilaImportada[] = [];
   const descartes: Descarte[] = [];
 
   // ── El extracto de la cuenta corriente ────────────────────────────────
-  // Es otro archivo distinto del de Inversiones, y tiene un problema que no
-  // se puede arreglar leyendolo mejor: cuando compras oro, la fila dice
-  // cuantas onzas entraron pero NO cuantos euros salieron. Sin ese dato no
-  // hay coste, y sin coste no hay ni ganancia ni aportado.
-  //
-  // Lo unico util que se puede hacer es decir exactamente cuanto metal hay
-  // —la columna Saldo lleva el acumulado— para poder apuntarlo a mano.
-  const saldos = new Map<string, { cantidad: number; veces: number; linea: number }>();
-  for (let i = 0; i < t.filas.length; i++) {
-    const f = t.filas[i];
+  // Es otro archivo distinto del de Inversiones. Cuando compras oro, la fila
+  // dice cuántas onzas entraron pero NO cuántos euros salieron. Antes eso era
+  // un aviso y el oro había que apuntarlo a mano; ahora entra como compra, y
+  // el importe sale del cierre del oro ese día (`estimarImporte`), que es lo
+  // que haría quien lo apuntase mirando el gráfico. La comisión viene en
+  // onzas y ya va restada del saldo: entra lo recibido y cuesta lo pagado.
+  const metales = new Set<number>();
+  t.filas.forEach((f, i) => {
     const divisa = (campo(f, "divisa", "currency") ?? "").toUpperCase();
-    if (!METALES[divisa]) continue;
-    const saldo = num(campo(f, "saldo", "balance"));
-    if (saldo == null) continue;
-    // El ultimo saldo de cada metal es el que vale: es acumulado.
-    saldos.set(divisa, { cantidad: saldo, veces: (saldos.get(divisa)?.veces ?? 0) + 1, linea: t.lineas[i] ?? i + 2 });
-  }
-  for (const [divisa, s] of saldos) {
-    descartes.push({
-      linea: s.linea,
-      motivo:
-        `${s.veces} compras de ${METALES[divisa]} (${divisa}). Este extracto dice cuanto ` +
-        `metal entro —te quedan ${s.cantidad} onzas— pero NO cuantos euros pagaste, asi que ` +
-        `no se puede calcular ni el coste ni la ganancia. Anade la posicion en ` +
-        `Historial → Posiciones con esas ${s.cantidad} onzas y lo que te costo`,
-      crudo: `${divisa} · saldo ${s.cantidad}`,
+    if (!METALES[divisa]) return;
+    metales.add(i);
+    // Una conversión pendiente o revertida no ha movido nada.
+    const estado = (campo(f, "state", "estado") ?? "").toUpperCase();
+    if (estado && !estado.startsWith("COMPLET")) return;
+    const linea = t.lineas[i] ?? i + 2;
+    const d = fecha(
+      campo(f, "fecha de finalización", "fecha de inicio", "completed date", "started date"),
+    );
+    const importe = num(campo(f, "importe", "amount"));
+    const comision = Math.abs(num(campo(f, "comisión", "fee")) ?? 0);
+    if (!d || importe == null || importe === 0) {
+      descartes.push({
+        linea,
+        motivo: `${METALES[divisa]} sin fecha o sin cantidad`,
+        crudo: Object.values(f).join(" · "),
+      });
+      return;
+    }
+    const onzas = Math.abs(importe);
+    const compra = importe > 0;
+    filas.push({
+      linea,
+      fecha: d,
+      tipo: compra ? "buy" : "sell",
+      ticker: SIMBOLO_METAL[divisa],
+      nombre: `${METALES[divisa]} (Revolut)`,
+      categoria: "metal",
+      subyacente: METALES[divisa],
+      unidad: "oz",
+      // Compra: entra lo recibido y se paga lo bruto. Venta: sale lo bruto y
+      // se cobra lo que queda después de la comisión.
+      cantidad: compra ? onzas - comision : onzas,
+      total: 0,
+      estimarImporte: compra ? onzas : onzas - comision,
+      divisa: "EUR",
+      nota: campo(f, "descripción", "description") ?? undefined,
     });
-  }
+    // El dinero del metal sale de la cuenta corriente de Revolut, que este
+    // extracto no cubre. Sin esto cada compra se comía el efectivo de la
+    // cuenta de inversión: con dos compras de oro quedaba en −149,77 €. Entra
+    // de fuera lo que cuesta, y al vender sale lo que se cobra. Sin nombre ni
+    // ticker a propósito: si no, el ingreso caería en el activo del metal.
+    filas.push({
+      linea,
+      fecha: d,
+      tipo: compra ? "deposit" : "withdrawal",
+      total: 0,
+      estimarImporte: compra ? onzas : onzas - comision,
+      estimarCon: SIMBOLO_METAL[divisa],
+      divisa: "EUR",
+      nota: `${METALES[divisa]}: ${compra ? "pagado" : "cobrado"} en la cuenta corriente`,
+    });
+  });
 
   t.filas.forEach((f, i) => {
+    if (metales.has(i)) return;
     const linea = t.lineas[i] ?? i + 2;
     const crudo = Object.values(f).join(" · ");
 

@@ -15,7 +15,7 @@
 //   · el selector  arrastrado o elegido, uno o varios a la vez.
 //   · pegado     para cuando sólo tienes unas líneas sueltas.
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDatos } from "../lib/datos";
 import { comoArchivo, descartar, marcarImportada, type EntradaBuzon } from "../lib/buzon";
@@ -45,6 +45,7 @@ import type { Activo, Cuenta, EntradaCatalogo, EstadoCartera, Operacion } from "
 import { OP_LBL } from "../lib/tipos";
 import { fd, fe, fn } from "../lib/formato";
 import { hayNube } from "../lib/supabase";
+import { pedirCierres } from "../lib/precios";
 import {
   Aviso,
   Boton,
@@ -71,7 +72,7 @@ const AYUDA: { broker: string; pasos: string; ojo?: string }[] = [
     broker: "MyInvestor",
     pasos:
       "Desde la web, con ordenador: la app no exporta. Lo más cómodo es el CSV de «Órdenes» de la sección de fondos: trae cada compra desde el primer día con su ISIN y sus participaciones, y los traspasos entre fondos se reconocen solos. Al importarlo te preguntamos cuánto dinero tienes sin invertir y si tienes algo fuera de los fondos, para que el total cuadre con el banco. La otra manera son dos archivos juntos: el PDF «Extracto de cuenta» —Perfil → Documentos y extractos— y el Excel de movimientos de la cuenta corriente.",
-    ojo: "Ninguno de los archivos de MyInvestor trae lo de la cuenta de valores —ETC y ETF—: eso lo añades a mano al importar. Y no abras el archivo en Excel antes de subirlo, que al guardarlo cambia fechas y decimales.",
+    ojo: "Las compras de ETC y ETF de la cuenta de valores sólo salen en el Excel de la cuenta corriente, y sin participaciones: súbelo junto al CSV de órdenes y se calculan con el precio de cierre de cada día, una orden por compra. Si nos dices cuántas tienes, se ajustan a eso. Y no abras el archivo en Excel antes de subirlo, que al guardarlo cambia fechas y decimales.",
   },
   {
     broker: "Cualquier otro",
@@ -208,6 +209,17 @@ export default function Importar() {
   // que lo hace /api/isin.
   const [resueltos, setResueltos] = useState<EntradaCatalogo[]>([]);
   const [resolviendo, setResolviendo] = useState(false);
+  // Los cierres de cada día de lo que el archivo no sabe contar: las
+  // participaciones de un ETC de MyInvestor, que sólo dice los euros, y los
+  // euros del oro de Revolut, que sólo dice las onzas. Valen para los archivos
+  // con los que se pidieron: otro archivo puede necesitar fechas anteriores.
+  const [cierres, setCierres] = useState<{
+    de: Cargado[];
+    series: Record<string, [string, number][]>;
+  }>({ de: [], series: {} });
+  // Las participaciones que dice el banco de algo calculado con los cierres,
+  // tal y como se teclean.
+  const [titulos, setTitulos] = useState<Record<string, string>>({});
 
   /** Lo que ha entendido de cada archivo, por separado. Se enseña archivo por
    *  archivo para que se vea de dónde sale cada cosa. */
@@ -235,6 +247,12 @@ export default function Importar() {
       extras: extras
         .map((e) => ({ nombre: e.nombre, valor: leerImporte(e.valor) ?? NaN }))
         .filter((e) => e.nombre.trim() && isFinite(e.valor)),
+      cierres: cierres.de === archivos ? cierres.series : {},
+      titulos: Object.fromEntries(
+        Object.entries(titulos)
+          .map(([k, t]) => [k, leerImporte(t)] as const)
+          .filter((x): x is readonly [string, number] => x[1] != null && x[1] > 0),
+      ),
     });
   }, [
     archivos,
@@ -248,7 +266,37 @@ export default function Importar() {
     mismos,
     saldo,
     extras,
+    cierres,
+    titulos,
   ]);
+
+  // ── Lo que falta y sabe el cierre de cada día ──────────────────────────
+  // El plan dice qué precios le faltan; se piden al servidor —Yahoo no manda
+  // CORS— y el plan se rehace solo con ellos. Lo que no llegue se guarda como
+  // serie vacía: así el plan deja de pedirlo y pasa a decir qué no ha podido
+  // calcular, en vez de quedarse esperando para siempre.
+  const faltan = JSON.stringify(plan?.faltanCierres ?? []);
+  const esperandoCierres = faltan !== "[]";
+  useEffect(() => {
+    const lista = JSON.parse(faltan) as Plan["faltanCierres"];
+    if (lista.length === 0) return;
+    let vivo = true;
+    const simbolos = lista.map((f) => f.simbolo);
+    const desde = lista.map((f) => f.desde).sort()[0];
+    void pedirCierres(simbolos, desde).then((series) => {
+      if (!vivo) return;
+      setCierres((c) => ({
+        de: archivos,
+        series: {
+          ...(c.de === archivos ? c.series : {}),
+          ...Object.fromEntries(simbolos.map((s) => [s, series?.[s] ?? []])),
+        },
+      }));
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [faltan, archivos]);
 
   /** El archivo que falta. Con MyInvestor hacen falta dos y ninguno de los dos
    *  vale solo, así que decirlo aquí ahorra la importación a medias y el
@@ -424,6 +472,7 @@ export default function Importar() {
     setValores({});
     setSaldo(null);
     setExtras([]);
+    setTitulos({});
     setTotalBanco("");
     setError(null);
     setHecho(null);
@@ -601,6 +650,7 @@ export default function Importar() {
       setValores({});
       setSaldo(null);
       setExtras([]);
+      setTitulos({});
       setTotalBanco("");
       setHecho({
         ops: ops.length,
@@ -915,6 +965,12 @@ export default function Importar() {
                 Buscando el símbolo de cotización de los ISIN que traen los archivos…
               </p>
             )}
+            {esperandoCierres && (
+              <p className="text-[12px] text-fg2">
+                Buscando el precio de cada día de lo que el archivo no dice: las participaciones de
+                los ETC, los euros del oro…
+              </p>
+            )}
 
             <Selector
               etiqueta="Cuenta destino"
@@ -964,6 +1020,8 @@ export default function Importar() {
               onExtras={setExtras}
               totalBanco={totalBanco}
               onTotalBanco={setTotalBanco}
+              titulos={titulos}
+              onTitulos={(clave, texto) => setTitulos((m) => ({ ...m, [clave]: texto }))}
               valores={valores}
               onValor={(clave, texto) =>
                 setValores((m) => {
@@ -1005,13 +1063,19 @@ export default function Importar() {
 
           {plan && hayTrabajo(plan) && (
             <div className="sticky bottom-24 z-20">
+              {/* Hasta que no llegan los precios, faltan operaciones: el oro
+                  todavía no ha entrado y los ETC van sin participaciones. */}
               <Boton
                 tipo="principal"
                 onClick={() => void confirmar()}
-                disabled={guardando}
+                disabled={guardando || esperandoCierres}
                 className="w-full py-3 shadow-e2"
               >
-                {guardando ? "Guardando…" : etiquetaBoton(plan)}
+                {guardando
+                  ? "Guardando…"
+                  : esperandoCierres
+                    ? "Buscando precios…"
+                    : etiquetaBoton(plan)}
               </Boton>
             </div>
           )}
@@ -1085,6 +1149,8 @@ function Resumen({
   onExtras,
   totalBanco,
   onTotalBanco,
+  titulos,
+  onTitulos,
   valores,
   onValor,
 }: {
@@ -1104,6 +1170,8 @@ function Resumen({
   onExtras(extras: Extra[]): void;
   totalBanco: string;
   onTotalBanco(texto: string): void;
+  titulos: Record<string, string>;
+  onTitulos(clave: string, texto: string): void;
   valores: Record<string, number>;
   onValor(clave: string, texto: string): void;
 }) {
@@ -1324,6 +1392,49 @@ function Resumen({
           </div>
         )}
 
+        {/* Compras que llegan sólo con los euros —los ETC y los ETF de la
+            cuenta de valores de MyInvestor, con el concepto cortado a 30
+            caracteres—: las participaciones salen del cierre de su día. Con
+            casilla, porque el banco sabe el número exacto y el cierre sólo se
+            acerca: comprar a media sesión no es comprar al cierre. */}
+        {plan.estimados.length > 0 && (
+          <div className="mt-2 flex flex-col gap-2">
+            <Aviso>
+              {plan.estimados.reduce((s, e) => s + e.ops, 0)} compras llegan sin participaciones:
+              el banco sólo dice los euros. Se han calculado con el precio de cierre de cada día,
+              así que entran como las órdenes que hiciste, una por día. Si en la app del banco ves
+              cuántas tienes, ponlo y se reparten en su proporción.
+            </Aviso>
+            {plan.estimados.map((e) => (
+              <div
+                key={e.clave}
+                className="tile flex flex-wrap items-center gap-x-3 gap-y-1 px-3.5 py-2.5"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] font-bold text-fg0">{e.nombre}</p>
+                  <p className="text-[11px] text-fg2">
+                    {e.ops} {e.ops === 1 ? "orden calculada" : "órdenes calculadas"} ·{" "}
+                    {fn(e.titulos, 4)} títulos
+                    {e.declarados != null ? " · ajustados a lo que dice el banco" : " · aproximados"}
+                  </p>
+                </div>
+                <label className="flex shrink-0 items-center gap-1.5">
+                  <span className="text-[11px] font-semibold text-fg2">Tienes</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={titulos[e.clave] ?? ""}
+                    onChange={(ev) => onTitulos(e.clave, ev.target.value)}
+                    placeholder={fn(e.titulos, 4)}
+                    aria-label={`Cuántas participaciones tienes de ${e.nombre}`}
+                    className="w-24 rounded-field border border-line2 bg-bg1 px-2 py-1 text-right text-[12.5px] font-bold text-fg0"
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Lo que ya estaba y entró mal. Se dice cuánto y por qué: «se
             corrigen 150» a secas asusta más que explica. */}
         {plan.corregidas.length > 0 && (
@@ -1368,7 +1479,7 @@ function Resumen({
           </Aviso>
         )}
 
-        {nada && plan.duplicadas.length === 0 && (
+        {nada && plan.duplicadas.length === 0 && plan.faltanCierres.length === 0 && (
           <Aviso tono="alerta">
             No se ha reconocido ninguna operación. Prueba a cambiar el formato arriba, o revisa el
             detalle de los descartes.

@@ -120,6 +120,9 @@ export interface Realizada {
   resultado: number;
   /** Fecha de la compra más antigua consumida: para saber la antigüedad */
   fechaCompra: string | null;
+  /** Sólo en la vista de rentabilidad: el reembolso de un traspaso, que se
+   *  cuenta como venta para medir cada fondo por separado pero NO tributa. */
+  traspaso?: boolean;
 }
 
 export interface Lote {
@@ -197,8 +200,12 @@ export function paresDeTraspaso(operaciones: Operacion[]): Map<string, string> {
  *  Hacienda en España para valores homogéneos, así que la pantalla Fiscal y
  *  la ganancia realizada salen del mismo sitio y no pueden discrepar.
  *
- *  Los traspasos entre fondos no cierran nada: ver `paresDeTraspaso`. */
-export function calcularFifo(operaciones: Operacion[]): {
+ *  Los traspasos entre fondos no cierran nada: ver `paresDeTraspaso`. Salvo
+ *  con `traspasos: false`, que es la vista de RENTABILIDAD: ver abajo. */
+export function calcularFifo(
+  operaciones: Operacion[],
+  opciones: { traspasos?: boolean } = {},
+): {
   saldos: Map<string, SaldoFifo>;
   realizadas: Realizada[];
   /** Reembolsos que fueron un traspaso, con el coste que se llevaron al
@@ -209,6 +216,15 @@ export function calcularFifo(operaciones: Operacion[]): {
   const realizadas: Realizada[] = [];
   const pares = paresDeTraspaso(operaciones);
   const destinos = new Set(pares.values());
+  // Dos maneras de contar un traspaso, y hacen falta las dos:
+  //   · La FISCAL, la de siempre: no es una venta, y el fondo de destino
+  //     hereda el coste y la antigüedad. Es la de Fiscal y la de Hacienda.
+  //   · La de RENTABILIDAD (`traspasos: false`): el de origen se vende y el
+  //     de destino se compra a lo que valía ese día, así que cada fondo
+  //     enseña lo que ha rendido ÉL. Con la fiscal, un monetario que recibió
+  //     un traspaso del S&P 500 enseñaba un +33 % que era del S&P 500.
+  const fiscal = opciones.traspasos !== false;
+  const porId = new Map(operaciones.map((o) => [o.id, o]));
   /** Lo que un reembolso deja pendiente para su suscripción: los trozos de
    *  lote que salieron, cada uno con su fecha de compra y su coste. */
   const arrastre = new Map<string, { fecha: string; qty: number; coste: number }[]>();
@@ -273,8 +289,12 @@ export function calcularFifo(operaciones: Operacion[]): {
       const s = saldoDe(o.asset_id);
       let porVender = o.quantity ?? 0;
       if (porVender <= 0) continue;
-      // La comisión de venta se resta de lo cobrado.
-      const ingreso = eur - (o.fees || 0);
+      // La comisión de venta se resta de lo cobrado. En la vista de
+      // rentabilidad, el reembolso de un traspaso cobra lo que LLEGÓ al fondo
+      // de destino: el reembolso se apunta a veces con un importe estimado, y
+      // con él la diferencia parecería dinero nuevo que nadie ha puesto.
+      const destinoEco = !fiscal && pares.has(o.id) ? porId.get(pares.get(o.id)!) : undefined;
+      const ingreso = destinoEco ? importeEur(destinoEco) : eur - (o.fees || 0);
       const precioUnit = (o.quantity ?? 0) > 0 ? ingreso / (o.quantity as number) : 0;
       let costeConsumido = 0;
       let vendido = 0;
@@ -312,7 +332,7 @@ export function calcularFifo(operaciones: Operacion[]): {
       // fondo de origen no hay coste que heredar, y entonces se queda como
       // una venta normal para no hacer desaparecer la ganancia.
       const destino = pares.get(o.id);
-      if (destino && trozos.length > 0) {
+      if (fiscal && destino && trozos.length > 0) {
         arrastre.set(destino, trozos);
         traspasos.set(o.id, { coste: costeConsumido, destino });
         continue;
@@ -327,6 +347,7 @@ export function calcularFifo(operaciones: Operacion[]): {
         coste: costeConsumido,
         resultado: precioUnit * (o.quantity ?? vendido) - costeConsumido,
         fechaCompra,
+        ...(destinoEco ? { traspaso: true } : {}),
       });
     }
   }
@@ -339,8 +360,12 @@ export function calcularFifo(operaciones: Operacion[]): {
 export interface Posicion {
   activo: Activo;
   qty: number;
-  /** Coste total en euros */
+  /** Coste total en euros, a lo que valía cada cosa el día que entró */
   coste: number;
+  /** El coste para Hacienda: igual que `coste` salvo en un fondo que recibió
+   *  un traspaso, que hereda el del fondo de origen —y con él la plusvalía
+   *  pendiente de tributar—. */
+  costeFiscal: number;
   costeUnit: number;
   precio: number | null;
   valor: number | null;
@@ -357,7 +382,11 @@ export function calcularPosiciones(
   precios: MapaPrecios,
   fx: MapaFx,
 ): Posicion[] {
-  const { saldos } = calcularFifo(estado.operaciones);
+  // El coste de cada posición, a lo que valía cuando entró: un fondo que
+  // recibe un traspaso enseña lo que ha rendido él, no lo que traía el de
+  // origen. El fiscal, heredado, va aparte.
+  const { saldos } = calcularFifo(estado.operaciones, { traspasos: false });
+  const fiscales = calcularFifo(estado.operaciones).saldos;
 
   return estado.activos
     // Lo que está a cero no es algo que tengas: una posición vendida entera,
@@ -393,11 +422,14 @@ export function calcularPosiciones(
       const p = buscaPrecio(a, precios);
       const prev = cierreFiable(precio, p?.prev ?? null);
       const dia = prev != null && precio != null ? qty * (precio - prev) : null;
+      const sf = fiscales.get(a.id);
+      const costeFiscal = desdeOps && !esLiquidez(a) && sf ? sf.coste : coste;
 
       return {
         activo: a,
         qty,
         coste,
+        costeFiscal,
         costeUnit: qty > 0 ? coste / qty : 0,
         precio,
         valor,
@@ -510,6 +542,70 @@ export function calcularResumen(
     gananciaPct: aportado > 0 ? (ganancia / aportado) * 100 : null,
     dia,
     diaPct: baseDia > 0 ? (dia / baseDia) * 100 : null,
+  };
+}
+
+/** Lo que enseña la app, calculado de una vez y igual en todas partes: las
+ *  posiciones, las ventas cerradas FISCALES —las de Fiscal e Historial— y el
+ *  resumen, que cuenta como realizado lo que cada fondo ganó hasta que se
+ *  traspasó. Así el total no cambia: lo que el fondo de destino ya no lleva
+ *  en su coste está en lo realizado. */
+export function calcularCartera(
+  estado: EstadoCartera,
+  precios: MapaPrecios,
+  fx: MapaFx,
+  hasta: string,
+): { posiciones: Posicion[]; realizadas: Realizada[]; resumen: Resumen } {
+  const posiciones = calcularPosiciones(estado, precios, fx);
+  const { realizadas } = calcularFifo(estado.operaciones);
+  const rendidas = calcularFifo(estado.operaciones, { traspasos: false }).realizadas;
+  const resumen = calcularResumen(posiciones, estado.operaciones, rendidas, hasta);
+  return { posiciones, realizadas, resumen };
+}
+
+// ── LO DE UN BANCO ───────────────────────────────────────────────────────
+
+export interface LoDeUnaCuenta {
+  operaciones: string[];
+  /** Activos que sólo existen por esta cuenta: se van con ella */
+  activos: Activo[];
+  /** Activos con operaciones también en otra cuenta: se quedan, con las de
+   *  la otra */
+  compartidos: Activo[];
+}
+
+/** Qué se va al borrar una cuenta, y nada más: sus operaciones, los activos
+ *  que sólo tienen operaciones suyas y su efectivo. Un activo comprado
+ *  también en otro banco se queda con las operaciones de allí, y lo puesto a
+ *  mano sin ningún movimiento no se sabe de qué banco es: tampoco se toca. */
+export function loDeLaCuenta(estado: EstadoCartera, cuentaId: string): LoDeUnaCuenta {
+  const cuenta = estado.cuentas.find((c) => c.id === cuentaId);
+  const cuentasPorActivo = new Map<string, Set<string | null>>();
+  for (const o of estado.operaciones) {
+    if (!o.asset_id) continue;
+    let s = cuentasPorActivo.get(o.asset_id);
+    if (!s) cuentasPorActivo.set(o.asset_id, (s = new Set()));
+    s.add(o.account_id);
+  }
+  const efectivo = new Set(
+    cuenta ? [`Efectivo · ${cuenta.broker}`, `Efectivo · ${cuenta.name}`] : [],
+  );
+  const activos: Activo[] = [];
+  const compartidos: Activo[] = [];
+  for (const a of estado.activos) {
+    const c = cuentasPorActivo.get(a.id);
+    if (c) {
+      if (!c.has(cuentaId)) continue;
+      if (c.size === 1) activos.push(a);
+      else compartidos.push(a);
+    } else if (a.cat === "liquidez" && efectivo.has(a.name)) {
+      activos.push(a);
+    }
+  }
+  return {
+    operaciones: estado.operaciones.filter((o) => o.account_id === cuentaId).map((o) => o.id),
+    activos,
+    compartidos,
   };
 }
 

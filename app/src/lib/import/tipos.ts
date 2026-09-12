@@ -78,6 +78,16 @@ export interface FilaImportada {
    *  historico de divisas: es el que el broker te aplico de verdad ese dia,
    *  con su margen incluido. Multiplica: importe * cambio = euros. */
   cambio?: number;
+  /** Unidades cuyo valor ES el importe, cuando el archivo no dice los euros:
+   *  el oro de Revolut llega en onzas y sin lo que costó. El importe sale del
+   *  cierre de ese día (`OpcionesPlan.cierres`) y, mientras no lo haya, la
+   *  fila no entra: una compra a cero euros sería una plusvalía inventada. */
+  estimarImporte?: number;
+  /** Con qué ticker se calcula `estimarImporte` cuando la fila no toca un
+   *  valor: el ingreso que paga el oro de Revolut desde la cuenta corriente. */
+  estimarCon?: string;
+  /** Cómo se cuenta lo que se compra: «oz» para el metal. Si no, títulos. */
+  unidad?: string;
   /** Traspaso entre cuentas propias: no es dinero nuevo */
   traspasoInterno?: boolean;
   nota?: string;

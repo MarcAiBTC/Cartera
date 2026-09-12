@@ -12,12 +12,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { POST } from "../api/historico.ts";
 import { cargarMercado } from "../src/lib/precios.ts";
-import {
-  calcularFifo,
-  calcularPosiciones,
-  calcularResumen,
-  porSubyacente,
-} from "../src/lib/cartera.ts";
+import { calcularCartera, porSubyacente } from "../src/lib/cartera.ts";
 import { evolucion, frenteAlIndice, valorEn } from "../src/lib/evolucion.ts";
 
 const args = process.argv.slice(2);
@@ -82,10 +77,8 @@ const estado = {
   ajustes: {},
 };
 const mercado = await cargarMercado();
-const posiciones = calcularPosiciones(estado, mercado.precios, mercado.fx);
-const { realizadas } = calcularFifo(estado.operaciones);
 const hoy = new Date().toISOString().slice(0, 10);
-const resumen = calcularResumen(posiciones, estado.operaciones, realizadas, hoy);
+const { posiciones, resumen } = calcularCartera(estado, mercado.precios, mercado.fx, hoy);
 console.log(
   `\nhoy: patrimonio ${resumen.valor.toFixed(2)} · aportado ${resumen.aportado.toFixed(2)} · ` +
     `ganancia ${resumen.ganancia.toFixed(2)} (${resumen.gananciaPct?.toFixed(2)} % sobre lo aportado)`,

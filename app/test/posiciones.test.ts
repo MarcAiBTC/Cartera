@@ -41,6 +41,7 @@ const pos = (
   activo: activo(name, extra),
   qty: 1,
   coste: 0,
+  costeFiscal: 0,
   costeUnit: 0,
   precio: valor,
   valor,

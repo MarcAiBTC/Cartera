@@ -455,6 +455,19 @@ function Ficha({
         )}
       </dl>
 
+      {/* Un fondo que llegó por traspaso: su rentabilidad es la suya, desde
+          lo que valía al entrar, pero Hacienda le hereda el coste del de
+          origen. Sin esto, la plusvalía que tributará no se veía en ningún
+          sitio. */}
+      {!liquidez && Math.abs(p.costeFiscal - p.coste) > 0.5 && (
+        <p className="mt-3 rounded-tile bg-bg2 px-3 py-2 text-[11.5px] leading-relaxed text-fg1">
+          Llegó por traspaso. Su rentabilidad se mide desde lo que valía al entrar; para Hacienda
+          hereda el coste del fondo de origen, <strong>{fe(p.costeFiscal)}</strong>, así que al
+          reembolsarlo a dinero tributarías por{" "}
+          <strong>{fe((p.valor ?? 0) - p.costeFiscal)}</strong>.
+        </p>
+      )}
+
       {enlaces.length > 0 && (
         <div className="mt-5 flex flex-wrap gap-2">
           {enlaces.map((e, i) => (

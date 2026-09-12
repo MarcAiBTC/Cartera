@@ -47,6 +47,7 @@ import {
 import type { Activo, Cuenta, EntradaCatalogo, EstadoCartera, Operacion } from "../tipos";
 import type { MapaFx, MapaPrecios } from "../cartera";
 import { precioEur, tasa } from "../cartera";
+import { valorEn } from "../evolucion";
 
 export * from "./tipos";
 export * from "./generico";
@@ -410,6 +411,21 @@ export interface Plan {
     /** Lo que ha dicho una persona que vale hoy, si lo ha dicho */
     valor?: number;
   }[];
+  /** Tickers cuyos cierres hacen falta para completar filas, desde la primera
+   *  fecha que los necesita. La pantalla los pide y vuelve a planear. */
+  faltanCierres: { simbolo: string; desde: string }[];
+  /** Activos con órdenes cuyos títulos se han calculado con el cierre de su
+   *  día. Se enseñan para poder corregirlos con lo que marque el banco. */
+  estimados: {
+    clave: string;
+    nombre: string;
+    /** Órdenes calculadas */
+    ops: number;
+    /** Lo que suman todas, calculadas o no, con lo que ya había guardado */
+    titulos: number;
+    /** Lo que ha dicho una persona que tiene, si lo ha dicho */
+    declarados?: number;
+  }[];
   /** El extracto declara un total y cuadra con lo que trae dentro. Dicho de
    *  otra manera: su alcance es exactamente el efectivo más esas posiciones y
    *  no llega a nada más, así que lo que falte no es que se le haya escapado —
@@ -490,6 +506,17 @@ export interface OpcionesPlan {
    *  porque el concepto viene cortado a 30 caracteres. Sin preguntarlo, esos
    *  valores entran a cero y no hay manera de que la cartera cuadre. */
   valores?: Record<string, number>;
+  /** Cierres diarios en euros por ticker (en mayúsculas), de /api/cierres.
+   *  Con ellos se calcula lo que el archivo no trae: los títulos de una
+   *  compra que sólo dice los euros —el concepto de MyInvestor cortado a 30
+   *  caracteres— y los euros de una que sólo dice las onzas —el oro de
+   *  Revolut—. Ver `Plan.faltanCierres`. Un ticker con la serie vacía es que
+   *  ya se pidió y no la hay. */
+  cierres?: Record<string, [string, number][]>;
+  /** Los títulos que dice el banco que tienes hoy de algo cuyos títulos se
+   *  han calculado con los cierres: `clave → títulos`. Las órdenes
+   *  calculadas se reescalan para sumar eso, cada una en su proporción. */
+  titulos?: Record<string, number>;
   /** «Este activo y ése son el mismo»: `clave → clave del que se queda`.
    *
    *  MyInvestor escribe el mismo fondo de tres maneras —«VANGUARD US 500 STOCK
@@ -1103,13 +1130,35 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
   }
   const isinDe = (c: EntradaCatalogo) =>
     c.isin?.toUpperCase() ?? isinPorYahoo.get((c.yahoo ?? c.symbol).toUpperCase());
-  const yaImportadas = new Set(
-    estado.operaciones.map((o) => o.import_hash).filter((h): h is string => Boolean(h)),
-  );
+  // La huella de una operación no dice de qué banco es: un ingreso de 100 €
+  // el mismo día en Revolut y en Trade Republic da la misma. Tomarla por ya
+  // importada dejaba fuera el ingreso de Revolut, y su efectivo salía en
+  // −100 €. Cada huella, con las cuentas en las que está.
+  const cuentasDeHuella = new Map<string, Set<string | null>>();
+  for (const o of estado.operaciones) {
+    if (!o.import_hash) continue;
+    let s = cuentasDeHuella.get(o.import_hash);
+    if (!s) cuentasDeHuella.set(o.import_hash, (s = new Set()));
+    s.add(o.account_id);
+  }
+  const yaImportadas = new Set(cuentasDeHuella.keys());
 
   const broker = op.broker ?? lectura.broker;
   /** Esta importación va a una cuenta, exista ya o la cree ella. */
   const hayDestino = Boolean(op.cuentaId || broker);
+  const destinoDeHuellas =
+    op.cuentaId ?? estado.cuentas.find((c) => c.broker === broker)?.id ?? null;
+  /** La huella de una fila EN SU CUENTA. Si la de siempre ya la lleva una
+   *  operación de otro banco, ésta lleva otra, marcada con el bróker: la base
+   *  no admite dos iguales, y reimportar el mismo archivo tiene que seguir
+   *  reconociéndola. Lo importado antes de que hubiera cuentas vale para
+   *  cualquiera, como hasta ahora. */
+  const huellaEnCuenta = (f: FilaImportada) => {
+    const h = huella(f);
+    const c = cuentasDeHuella.get(h);
+    if (!c || c.has(null) || (destinoDeHuellas != null && c.has(destinoDeHuellas))) return h;
+    return huella({ ...f, isin: undefined, ticker: `${f.isin || f.ticker || ""}@${broker}` });
+  };
 
   // ── Lo que ya se importó, pero mal ───────────────────────────────────
   // Las órdenes guardadas de cada activo, por día y dinero. Una fila del
@@ -1174,6 +1223,81 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
   const planeadas: Planeada[] = [];
   const vistas = new Set<string>();
 
+  // ── Lo que el archivo no dice y el cierre de ese día sí ──────────────
+  // Los títulos de una compra que sólo trae los euros —el concepto de
+  // MyInvestor cortado a 30 caracteres se come las participaciones de los
+  // ETC— y los euros de una que sólo trae las onzas —el oro de Revolut—. Lo
+  // que falte se apunta en `faltanCierres`; la pantalla lo pide al servidor
+  // y vuelve a planear.
+  const cierres = op.cierres ?? {};
+  const faltanCierres = new Map<string, string>();
+  const sinCierre: Descarte[] = [];
+  /** Las operaciones con títulos calculados, por la clave de su activo. */
+  const calculadas = new Map<string, Planeada[]>();
+  const cierreEn = (s: string, fecha: string): number | null => {
+    if (!(s in cierres)) {
+      const f = faltanCierres.get(s);
+      if (!f || fecha < f) faltanCierres.set(s, fecha);
+      return null;
+    }
+    const p = valorEn(cierres[s], fecha);
+    return p != null && p > 0 ? p : null;
+  };
+  const conNota = (f: FilaImportada, nota: string) => [f.nota, nota].filter(Boolean).join(" · ");
+  /** La fila con lo que le falte ya calculado. Sin fila si le faltan los
+   *  euros y no hay con qué calcularlos: una compra a cero euros sería una
+   *  plusvalía inventada, así que no entra. */
+  const completar = (
+    f: FilaImportada,
+    ticker: string | null | undefined,
+  ): { fila: FilaImportada | null; calculada: boolean } => {
+    const s = ticker?.toUpperCase();
+    if (f.estimarImporte != null) {
+      const p = s ? cierreEn(s, f.fecha) : null;
+      if (p == null) {
+        // Si todavía no se ha pedido, no es un aviso: está en camino. Y el
+        // ingreso que la paga no avisa otra vez de lo mismo.
+        if ((!s || s in cierres) && (f.tipo === "buy" || f.tipo === "sell")) {
+          sinCierre.push({
+            linea: f.linea,
+            motivo:
+              `${f.nombre ?? s ?? "Una compra"}: el archivo dice cuánto entró pero no cuántos ` +
+              `euros costó, y sin el precio de ese día no se puede calcular. Entrando con tu ` +
+              `cuenta se calcula solo; si no, apúntalo a mano en Historial → Posiciones`,
+            crudo: `${f.fecha} · ${f.estimarImporte}`,
+          });
+        }
+        return { fila: null, calculada: false };
+      }
+      return {
+        fila: {
+          ...f,
+          total: f.estimarImporte * p,
+          divisa: "EUR",
+          cambio: 1,
+          precio: p,
+          nota: conNota(f, "importe calculado con el cierre del día"),
+        },
+        calculada: false,
+      };
+    }
+    if ((f.tipo === "buy" || f.tipo === "sell") && f.cantidad == null && s && f.total > 0) {
+      const p = cierreEn(s, f.fecha);
+      if (p == null) return { fila: f, calculada: false };
+      const cambio =
+        f.cambio != null && f.cambio > 0 ? f.cambio : tasaEn(f.divisa, f.fecha, fx, fxHistorico);
+      return {
+        fila: {
+          ...f,
+          cantidad: (f.total * cambio) / p,
+          nota: conNota(f, "títulos calculados con el cierre del día"),
+        },
+        calculada: true,
+      };
+    }
+    return { fila: f, calculada: false };
+  };
+
   // Solo estas tres tocan un valor. Un ingreso, unos intereses o una comision
   // mueven el saldo y nada mas: si se les deja crear activo, la cartera se
   // llena de fantasmas llamados «Interest payment for payout collection
@@ -1181,7 +1305,8 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
   // Trade Republic: 24 de los 41 activos creados eran conceptos bancarios.
   const TOCA_UN_VALOR = new Set(["buy", "sell", "dividend"]);
 
-  for (const fila of lectura.filas) {
+  for (const original of lectura.filas) {
+    let fila = original;
     const esValor = TOCA_UN_VALOR.has(fila.tipo);
     const clave = esValor ? (fila.isin || fila.ticker || fila.nombre || "").toUpperCase() : "";
     // Un ETC que llega sólo con el nombre, y cortado: se busca en el catálogo
@@ -1233,7 +1358,7 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
           cat: categoriaDe(fila, entradaCat),
           currency: fila.divisa || entradaCat?.currency || "EUR",
           underlying: entradaCat?.underlying ?? fila.subyacente ?? null,
-          unit: "títulos",
+          unit: fila.unidad ?? "títulos",
           mode: "operations",
         };
         nuevosPorClave.set(suya, nuevoActivo);
@@ -1244,7 +1369,12 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
       }
     }
 
-    const h = huella(fila);
+    // La huella, de la fila TAL CUAL viene y en su cuenta: lo que se calcule
+    // con los cierres no puede convertir la misma orden en otra.
+    const h = huellaEnCuenta(fila);
+    const completa = completar(fila, existente?.ticker ?? nuevoActivo?.ticker ?? fila.estimarCon);
+    if (!completa.fila) continue;
+    fila = completa.fila;
 
     // El cambio que venga en el extracto gana: es el que el broker aplico
     // de verdad ese dia, margen incluido. El historico es una aproximacion.
@@ -1296,6 +1426,58 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
       operacion,
       corrige: cambios ? gemela : undefined,
       cambios,
+    });
+    if (completa.calculada) {
+      const k = canon(fila);
+      const l = calculadas.get(k);
+      const esta = planeadas[planeadas.length - 1];
+      if (l) l.push(esta);
+      else calculadas.set(k, [esta]);
+    }
+  }
+
+  // ── Los títulos calculados, contra lo que dice el banco ──────────────
+  // Con el cierre del día, cada orden sale con el error de haber comprado a
+  // media sesión: uno o dos por ciento. Si una persona dice cuántos tiene hoy,
+  // las órdenes calculadas se reescalan para sumar eso, cada una en su
+  // proporción; las que ya traían sus títulos no se tocan.
+  const estimados: Plan["estimados"] = [];
+  const signo = (t: string) => (t === "sell" ? -1 : 1);
+  for (const [clave, calc] of calculadas) {
+    const vivas = calc.filter((p) => !p.duplicada);
+    if (vivas.length === 0) continue;
+    const activoId = vivas[0].activo?.id;
+    const corregidasIds = new Set(vivas.map((p) => p.corrige?.id).filter(Boolean));
+    // Lo que ya se sabe: lo guardado de ese activo y lo de este archivo que
+    // traía sus títulos.
+    const guardados = activoId
+      ? estado.operaciones
+          .filter((o) => o.asset_id === activoId && !corregidasIds.has(o.id))
+          .reduce((s, o) => s + signo(o.type) * (o.quantity ?? 0), 0)
+      : 0;
+    const traidos = planeadas
+      .filter((p) => !p.duplicada && canon(p.fila) === clave && !calc.includes(p))
+      .reduce((s, p) => s + signo(p.fila.tipo) * (p.fila.cantidad ?? 0), 0);
+    const fijos = guardados + traidos;
+    const suma = () => vivas.reduce((s, p) => s + signo(p.fila.tipo) * (p.fila.cantidad ?? 0), 0);
+    const dicho = op.titulos?.[clave];
+    const antes = suma();
+    if (dicho != null && dicho > fijos && antes > 1e-12) {
+      const factor = (dicho - fijos) / antes;
+      for (const p of vivas) {
+        const q = (p.fila.cantidad ?? 0) * factor;
+        p.fila = { ...p.fila, cantidad: q };
+        p.operacion.quantity = q;
+        if (p.cambios && "quantity" in p.cambios) p.cambios.quantity = q;
+      }
+    }
+    estimados.push({
+      clave,
+      nombre:
+        nuevosPorClave.get(clave)?.name ?? vivas[0].activo?.name ?? vivas[0].fila.nombre ?? clave,
+      ops: vivas.length,
+      titulos: fijos + suma(),
+      declarados: dicho != null && dicho > fijos ? dicho : undefined,
     });
   }
 
@@ -1634,6 +1816,14 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
       };
     });
 
+  /** Lo que llegó sin participaciones y ya las tiene, calculadas con el
+   *  cierre de cada día: su aviso de «sube el PDF» ya no toca. */
+  const conTitulos = new Set(
+    estimados
+      .filter((e) => !sinCubrir.some((c) => c.clave === e.clave))
+      .flatMap((e) => comoSeLlama(e.clave)),
+  );
+
   // ── Cómo se llama cada cosa, para la vista previa ────────────────────
   const nuevoNombre = new Map(renombrar.map((r) => [r.activo.id, r.campos.name]));
   const nombres: Record<string, string> = {};
@@ -1671,10 +1861,14 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
     // sobra igual cuando alguien ha dicho a mano lo que vale. Dejarlo puesto
     // era pedir dos veces el archivo que se acaba de subir.
     descartes: lectura.descartes.filter(
-      (d) => !d.clave || !(reclamadas.has(d.clave) || resueltos.has(d.clave)),
-    ),
+      (d) =>
+        !d.clave ||
+        !(reclamadas.has(d.clave) || resueltos.has(d.clave) || conTitulos.has(d.clave)),
+    ).concat(sinCierre),
     posiciones,
     sinCubrir,
+    faltanCierres: [...faltanCierres].map(([simbolo, desde]) => ({ simbolo, desde })),
+    estimados,
     extractoCuadra,
     cuentaNueva:
       broker && !cuentaExiste && !op.cuentaId

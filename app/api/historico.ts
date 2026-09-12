@@ -8,36 +8,16 @@
 //   POST /api/historico    Authorization: Bearer <token de la sesión>
 //
 // Yahoo no manda CORS: esto sólo puede hacerse en el servidor. La conversión a
-// euros va con el cambio de CADA fecha, no con el de hoy; si no, la historia
-// de un fondo en dólares mediría el dólar, no el fondo.
+// euros va con el cambio de CADA fecha: ver `_lib/series.ts`.
 
 import { clienteServicio, respuesta } from "./_lib/supabase.js";
 import { simbolosDeCartera, type EntradaCat } from "./_lib/refresco.js";
-import { serieCambios, serieYahoo } from "./_lib/mercado.js";
+import { seriesEnEuros, type Serie } from "./_lib/series.js";
 
 export const config = { maxDuration: 60 };
 
-type Serie = [string, number][];
-
 /** Símbolos de Yahoo como mucho por llamada. */
 const TOPE = 60;
-
-/** Busca en una serie ordenada el último valor con fecha ≤ `fecha`; antes del
- *  primero, el primero. */
-function enFecha(serie: Serie, fecha: string): number | null {
-  if (serie.length === 0) return null;
-  let lo = 0;
-  let hi = serie.length - 1;
-  let r = serie[0][1];
-  while (lo <= hi) {
-    const m = (lo + hi) >> 1;
-    if (serie[m][0] <= fecha) {
-      r = serie[m][1];
-      lo = m + 1;
-    } else hi = m - 1;
-  }
-  return r;
-}
 
 // Por nombre de método, nunca `export default`: ver la nota en _lib/supabase.ts.
 export async function POST(req: Request): Promise<Response> {
@@ -94,62 +74,22 @@ export async function POST(req: Request): Promise<Response> {
   //     mediodía y el cierre de Nueva York se mide también la hora. Daba
   //     3,5 puntos más que el ETF en tres años (sept 2023 – sept 2026).
   const INDICE = "SXR8.DE";
-  const crudas = new Map<string, { divisa: string; puntos: Serie }>();
-  const fallos: string[] = [];
-  const cola = [...grupos.keys(), INDICE];
-  const trabajar = async () => {
-    for (let y = cola.shift(); y; y = cola.shift()) {
-      try {
-        crudas.set(y, await serieYahoo(y, inicio, y === INDICE ? "1d" : "1wk"));
-      } catch (e) {
-        fallos.push(`${y}: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: 4 }, trabajar));
-
-  // Las divisas, con su serie del BCE. GBp son peniques de libra.
-  const base = (d: string) => (d === "GBp" || d === "GBX" ? "GBP" : d);
-  const divisas = new Set(
-    [...crudas.values()].map((c) => base(c.divisa)).filter((d) => d !== "EUR"),
+  const { series: conv, fallos } = await seriesEnEuros(
+    [...grupos.keys(), INDICE],
+    inicio,
+    (y) => (y === INDICE ? "1d" : "1wk"),
   );
-  const dias = Math.ceil((Date.now() - Date.parse(inicio)) / 86400e3) + 7;
-  const cambios: Record<string, Serie> = {};
-  await Promise.all(
-    [...divisas].map(async (d) => {
-      try {
-        const s = await serieCambios(d, "EUR", dias);
-        cambios[d] = Object.entries(s).sort((a, b) => a[0].localeCompare(b[0]));
-      } catch {
-        fallos.push(`cambio ${d}`);
-      }
-    }),
-  );
-
-  const aEuros = (c: { divisa: string; puntos: Serie }): Serie => {
-    const d = base(c.divisa);
-    const peniques = d !== c.divisa ? 100 : 1;
-    const out: Serie = [];
-    for (const [fecha, v] of c.puntos) {
-      const t = d === "EUR" ? 1 : enFecha(cambios[d] ?? [], fecha);
-      if (t == null) continue;
-      out.push([fecha, Number(((v * t) / peniques).toFixed(4))]);
-    }
-    return out;
-  };
 
   const series: Record<string, Serie> = {};
   for (const [y, claves] of grupos) {
-    const c = crudas.get(y);
-    if (!c) continue;
-    const s = aEuros(c);
+    const s = conv.get(y);
+    if (!s) continue;
     for (const k of claves) series[k] = s;
   }
-  const sp = crudas.get(INDICE);
 
   // Sin sangrar, a diferencia de `respuesta()`: con cientos de puntos, la
   // sangría triplica lo que viaja.
-  const cuerpo = { desde, series, sp500: sp ? aEuros(sp) : [], indice: INDICE, fallos };
+  const cuerpo = { desde, series, sp500: conv.get(INDICE) ?? [], indice: INDICE, fallos };
   return new Response(JSON.stringify(cuerpo), {
     status: 200,
     headers: { "content-type": "application/json; charset=utf-8" },

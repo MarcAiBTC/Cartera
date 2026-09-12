@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useSesion } from "../lib/sesion";
 import { useDatos } from "../lib/datos";
 import type { Alcance } from "../lib/almacen";
+import { loDeLaCuenta } from "../lib/cartera";
 import { claveSubida, crearClaveSubida, enlaceSubida, type ClaveSubida } from "../lib/buzon";
 import { hoyISO } from "../lib/formato";
 import {
@@ -156,6 +157,8 @@ export default function Ajustes() {
           {almacen.tipo === "nube" ? "Cerrar sesión" : "Salir del modo local"}
         </Boton>
       </Tarjeta>
+
+      <BorrarBanco onExportar={exportar} />
 
       <ZonaPeligrosa onExportar={exportar} />
     </div>
@@ -350,6 +353,128 @@ function EnviarDesdeElMovil() {
 // escribir. Un boton rojo con un «¿seguro?» se pulsa dos veces sin leerlo.
 
 const PALABRA = "BORRAR";
+
+// ── BORRAR UN BANCO ───────────────────────────────────────────────────────
+// Para rehacer una importación que entró mal sin tocar lo demás: se va lo de
+// ese banco —sus movimientos, lo que sólo existe por ellos y su efectivo— y
+// los otros se quedan como estaban. Es igual de irreversible que vaciarlo
+// todo, así que pide la misma palabra.
+
+function BorrarBanco({ onExportar }: { onExportar: () => void }) {
+  const { estado, borrarVarios } = useDatos();
+  const [cuentaId, setCuentaId] = useState<string | null>(null);
+  const [escrito, setEscrito] = useState("");
+  const [borrando, setBorrando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (estado.cuentas.length === 0) return null;
+  const cuenta = estado.cuentas.find((c) => c.id === cuentaId) ?? null;
+  const lo = cuenta ? loDeLaCuenta(estado, cuenta.id) : null;
+
+  const cerrar = () => {
+    setCuentaId(null);
+    setEscrito("");
+    setError(null);
+  };
+
+  async function confirmar() {
+    if (!cuenta || !lo || escrito.trim().toUpperCase() !== PALABRA) return;
+    setBorrando(true);
+    setError(null);
+    try {
+      // Las operaciones primero: cuelgan de los activos y de la cuenta.
+      await borrarVarios("operations", lo.operaciones);
+      await borrarVarios(
+        "assets",
+        lo.activos.map((a) => a.id),
+      );
+      await borrarVarios("accounts", [cuenta.id]);
+      cerrar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se ha podido borrar");
+    } finally {
+      setBorrando(false);
+    }
+  }
+
+  return (
+    <Tarjeta>
+      <TituloSeccion nota="Para volver a importar un banco desde cero sin tocar los demás.">
+        Borrar un banco
+      </TituloSeccion>
+
+      {!cuenta || !lo ? (
+        <ul className="flex flex-col gap-2">
+          {estado.cuentas.map((c) => {
+            const l = loDeLaCuenta(estado, c.id);
+            return (
+              <li key={c.id} className="tile flex items-center gap-3 px-3.5 py-2.5">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-bold text-fg0">{c.name}</span>
+                  <span className="text-[11px] text-fg2">
+                    {l.operaciones.length} movimientos · {l.activos.length}{" "}
+                    {l.activos.length === 1 ? "activo" : "activos"}
+                  </span>
+                </span>
+                <Boton
+                  tipo="peligro"
+                  onClick={() => {
+                    cerrar();
+                    setCuentaId(c.id);
+                  }}
+                >
+                  Borrar
+                </Boton>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <Aviso tono="error">
+            Vas a borrar <strong>{cuenta.name}</strong>: {lo.operaciones.length} movimientos y{" "}
+            {lo.activos.length} {lo.activos.length === 1 ? "activo" : "activos"}
+            {lo.activos.length > 0 && <> ({lo.activos.map((a) => a.name).join(", ")})</>}.{" "}
+            {lo.compartidos.length > 0 && (
+              <>
+                Se quedan {lo.compartidos.map((a) => a.name).join(", ")}, que también tienen
+                movimientos en otro banco.{" "}
+              </>
+            )}
+            Los demás bancos no se tocan. No hay vuelta atrás.
+          </Aviso>
+
+          <Boton tipo="suave" onClick={onExportar}>
+            Descargar una copia antes
+          </Boton>
+
+          <Campo
+            etiqueta={`Escribe ${PALABRA} para confirmar`}
+            valor={escrito}
+            onChange={setEscrito}
+            placeholder={PALABRA}
+          />
+
+          {error && <Aviso tono="error">{error}</Aviso>}
+
+          <div className="flex gap-2">
+            <Boton tipo="suave" onClick={cerrar}>
+              Cancelar
+            </Boton>
+            <Boton
+              tipo="peligro"
+              className="flex-1"
+              disabled={borrando || escrito.trim().toUpperCase() !== PALABRA}
+              onClick={() => void confirmar()}
+            >
+              {borrando ? "Borrando…" : `Borrar ${cuenta.name}`}
+            </Boton>
+          </div>
+        </div>
+      )}
+    </Tarjeta>
+  );
+}
 
 function ZonaPeligrosa({ onExportar }: { onExportar: () => void }) {
   const { estado, vaciar } = useDatos();
