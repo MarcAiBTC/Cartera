@@ -197,6 +197,57 @@ export async function historicoYahoo(
   throw ultimo instanceof Error ? ultimo : new Error(`sin histórico para ${simbolo}`);
 }
 
+/** Cierres de Yahoo desde una fecha, con la divisa en que vienen. Semanal
+ *  para la historia de una cartera —ciento cincuenta puntos en vez de
+ *  ochocientos, y el gráfico no dibuja más— o diaria para un índice. */
+export async function serieYahoo(
+  simbolo: string,
+  desde: string,
+  intervalo: "1d" | "1wk" = "1d",
+): Promise<{ divisa: string; puntos: [string, number][] }> {
+  const p1 = Math.floor(Date.parse(desde) / 1000);
+  const p2 = Math.floor(Date.now() / 1000) + 86400;
+  const ruta =
+    `/v8/finance/chart/${encodeURIComponent(simbolo)}` +
+    `?period1=${p1}&period2=${p2}&interval=${intervalo}`;
+  let ultimo: unknown;
+
+  for (const host of YF_HOSTS) {
+    try {
+      const d = await pedirJson<{
+        chart: {
+          result: [
+            {
+              meta: { currency?: string };
+              timestamp?: number[];
+              indicators: { quote: [{ close: (number | null)[] }] };
+            },
+          ];
+        };
+      }>(`https://${host}${ruta}`, 2);
+
+      const res = d.chart.result[0];
+      const cierres = res.indicators.quote[0].close ?? [];
+      const puntos: [string, number][] = [];
+      // La vela semanal viene fechada el LUNES —el domingo a las 23:00 UTC,
+      // en Xetra— pero lleva el cierre del VIERNES. Con la fecha del lunes,
+      // cada semana se valoraba con precios de hasta seis días después y la
+      // cartera «sabía» el martes lo que iba a pasar el viernes. Se fecha el
+      // viernes: cuatro días y medio cae en viernes desde las dos horas.
+      const desfase = intervalo === "1wk" ? 4.5 * 86400 : 0;
+      (res.timestamp ?? []).forEach((ts, i) => {
+        const c = cierres[i];
+        if (c == null || !isFinite(c) || c <= 0) return;
+        puntos.push([new Date((ts + desfase) * 1000).toISOString().slice(0, 10), c]);
+      });
+      if (puntos.length > 0) return { divisa: res.meta.currency || "USD", puntos };
+    } catch (e) {
+      ultimo = e;
+    }
+  }
+  throw ultimo instanceof Error ? ultimo : new Error(`sin serie para ${simbolo}`);
+}
+
 /** Serie diaria del BCE vía Frankfurter: `{ fecha: tipo }`. */
 export async function serieCambios(
   base: string,

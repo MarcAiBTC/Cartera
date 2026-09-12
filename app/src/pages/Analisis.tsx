@@ -11,9 +11,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDatos } from "../lib/datos";
 import { CAT_COLOR, SERIE_COLOR } from "../lib/tipos";
-import { contraIndice, movimientoDelDia, porSubyacente } from "../lib/cartera";
-import { cargarBenchmark, type PuntoBenchmark } from "../lib/precios";
-import { fd, fe, fp, fpc } from "../lib/formato";
+import { movimientoDelDia, porSubyacente } from "../lib/cartera";
+import { cargarBenchmark, pedirHistorico } from "../lib/precios";
+import {
+  evolucion,
+  frenteAlIndice,
+  type Historico,
+  type PuntoEvolucion,
+  type SerieEur,
+} from "../lib/evolucion";
+import { fd, fdl, fe, fp, fpc, hoyISO } from "../lib/formato";
 import {
   Etiqueta,
   Pastilla,
@@ -27,24 +34,46 @@ import { Serie, Tarta } from "../components/graficos";
 export default function Analisis() {
   const { resumen, posiciones, estado } = useDatos();
   const [conLiquidez, setConLiquidez] = useState<"todo" | "mercado">("todo");
+  /** `undefined` mientras se pide; `null` sin cuenta o sin servidor. */
+  const [historico, setHistorico] = useState<Historico | null | undefined>(undefined);
 
   const subyacentes = useMemo(
     () => porSubyacente(posiciones, conLiquidez === "todo"),
     [posiciones, conLiquidez],
   );
 
-  const serie = useMemo(
+  // Qué activos hay. Si cambian —una importación—, la historia se vuelve a
+  // pedir; si no, vale la del día.
+  const firma = useMemo(
     () =>
-      [...estado.snapshots]
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .map((s) => ({
-          fecha: fd(s.date),
-          valor: s.val,
-          // El aportado guardado ya viene corregido; si falta, se deja el
-          // coste, que es lo más cercano.
-          base: s.cost,
-        })),
-    [estado.snapshots],
+      estado.activos
+        .map((a) => a.ticker ?? a.isin ?? a.id)
+        .sort()
+        .join(","),
+    [estado.activos],
+  );
+  useEffect(() => {
+    let vivo = true;
+    void pedirHistorico(firma).then((h) => {
+      if (vivo) setHistorico(h);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [firma]);
+
+  const puntos = useMemo(
+    () =>
+      evolucion(estado, historico ?? null, {
+        fecha: hoyISO(),
+        valor: resumen.valor,
+        aportado: resumen.aportado,
+      }),
+    [estado, historico, resumen.valor, resumen.aportado],
+  );
+  const serie = useMemo(
+    () => puntos.map((p) => ({ fecha: fd(p.fecha), valor: p.valor, base: p.aportado })),
+    [puntos],
   );
 
   const movers = movimientoDelDia(posiciones);
@@ -52,6 +81,15 @@ export default function Analisis() {
   if (estado.activos.length === 0) {
     return <Vacio titulo="Sin datos que analizar" texto="Añade posiciones y vuelve por aquí." />;
   }
+
+  const notaSerie =
+    historico === undefined
+      ? "Calculando con los precios de cada semana…"
+      : historico === null
+        ? "Sin conexión con el servidor de precios: cada activo se valora al precio de su última operación."
+        : `Semana a semana desde tu primera operación${
+            puntos[0] ? `, el ${fdl(puntos[0].fecha)}` : ""
+          }, con el precio de cada semana. El hueco entre las dos líneas es la ganancia.`;
 
   return (
     <div className="flex flex-col gap-5">
@@ -85,9 +123,7 @@ export default function Analisis() {
 
       {/* 2 · ¿Cómo ha crecido? */}
       <Tarjeta>
-        <TituloSeccion nota="La línea de puntos es tu dinero; el hueco hasta la línea azul, la ganancia.">
-          Patrimonio y dinero aportado
-        </TituloSeccion>
+        <TituloSeccion nota={notaSerie}>Patrimonio y dinero aportado</TituloSeccion>
         <Serie puntos={serie} />
       </Tarjeta>
 
@@ -162,7 +198,7 @@ export default function Analisis() {
       </Tarjeta>
 
       {/* 5 · Contra el índice */}
-      <ContraElIndice />
+      <ContraElIndice puntos={puntos} historico={historico} />
     </div>
   );
 }
@@ -180,75 +216,112 @@ function Trozo({ t, v }: { t: string; v: number }) {
 }
 
 // ── Contra el S&P 500 ─────────────────────────────────────────────────────
+// Dos preguntas, y las dos hacen falta:
+//
+//   · ¿Cuánto ha subido el índice desde mi primera inversión, y cuánto yo en
+//     el mismo tiempo? Mi parte se mide POR TIEMPO, como la de un fondo:
+//     «ganancia entre aportado» no vale al lado del índice, porque el euro
+//     metido la semana pasada no ha tenido tiempo de rendir nada.
+//   · ¿Cuánto tendría si cada euro que puse hubiera ido al índice el mismo
+//     día? Ésta es en euros, y es la que dice si elegir ha salido a cuenta.
 
-function ContraElIndice() {
-  const { estado, resumen } = useDatos();
-  const [indice, setIndice] = useState<PuntoBenchmark[] | null>(null);
+function ContraElIndice({
+  puntos,
+  historico,
+}: {
+  puntos: PuntoEvolucion[];
+  historico: Historico | null | undefined;
+}) {
+  const [respaldo, setRespaldo] = useState<SerieEur | null>(null);
+  // La serie del servidor viene fresca y desde la primera operación; si no
+  // la hay, la de la tabla y el feed.
+  const propia = historico?.sp500?.length ? historico.sp500 : null;
 
   useEffect(() => {
+    if (propia || historico === undefined) return;
     let vivo = true;
     void cargarBenchmark().then((d) => {
-      if (vivo) setIndice(d);
+      if (vivo) setRespaldo(d.map((p) => [p.date, p.value]));
     });
     return () => {
       vivo = false;
     };
-  }, []);
+  }, [propia, historico]);
 
-  // Antes esto arrancaba en la primera FOTO guardada de la cartera, que es la
-  // primera vez que abriste la app — no el dia que empezaste a invertir. En
-  // una cuenta recien importada no hay ninguna foto, asi que la tarjeta ni
-  // aparecia teniendo dos anos de operaciones dentro. Ahora arranca en tu
-  // primer movimiento de dinero y replica tus aportaciones sobre el indice.
-  const c = useMemo(
-    () => (indice ? contraIndice(estado.operaciones, indice, resumen.valor) : null),
-    [indice, estado.operaciones, resumen.valor],
-  );
-
-  if (indice == null) return null;
+  const sp = propia ?? respaldo;
+  const c = useMemo(() => (sp ? frenteAlIndice(puntos, sp) : null), [sp, puntos]);
+  const dif = c?.tuyoPct != null ? c.tuyoPct - c.indicePct : null;
+  // La serie del servidor es un ETF que reinvierte los dividendos; la de
+  // respaldo, el índice de precio. Se dice cuál es: son seis puntos en tres
+  // años.
+  const esEtf = propia != null && historico?.indice != null;
 
   return (
     <Tarjeta>
-      <TituloSeccion nota="Cada aportacion tuya compra indice al precio de SU dia: es la unica forma de comparar cuando se aporta a plazos. En euros, porque comparar una cartera en euros con un indice en dolares mide sobre todo el dolar.">
+      <TituloSeccion
+        nota={`${
+          esEtf
+            ? "Contra un ETF del S&P 500 en euros que reinvierte los dividendos (SXR8): lo que de verdad podías haber comprado, con su comisión."
+            : "En euros y sin contar los dividendos del índice."
+        } Tu rentabilidad está medida por tiempo, como la de un fondo: no depende de cuándo metiste cada euro, y por eso se puede poner al lado de la del índice.`}
+      >
         Contra el S&amp;P 500
       </TituloSeccion>
 
-      {!c ? (
+      {!sp ? (
+        <p className="text-[12px] text-fg2">Cargando el índice…</p>
+      ) : !c ? (
         <p className="text-[12px] text-fg2">
-          Para comparar hacen falta ingresos con fecha. Importa un extracto que los traiga o
-          apuntalos en Historial.
+          Para comparar hace falta al menos una operación con fecha.
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          <p className="text-[12.5px] text-fg1">
+            Desde tu primera inversión, el <strong>{fdl(c.desde)}</strong>:
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-3">
             <div>
               <Etiqueta>Tu cartera</Etiqueta>
-              <p className={`font-disp text-[22px] font-bold ${c.tuyo >= c.indice ? "text-up" : "text-dn"}`}>
-                {fe(c.tuyo)}
+              <p
+                className={`font-disp text-[22px] font-bold ${
+                  dif == null ? "text-fg1" : dif >= 0 ? "text-up" : "text-dn"
+                }`}
+              >
+                {fp(c.tuyoPct)}
               </p>
-              <p className="text-[11.5px] text-fg2">{c.tuyoPct == null ? "" : fp(c.tuyoPct)}</p>
             </div>
             <div>
-              <Etiqueta>Si hubieras comprado el indice</Etiqueta>
-              <p className="font-disp text-[22px] font-bold text-fg1">{fe(c.indice)}</p>
-              <p className="text-[11.5px] text-fg2">{c.indicePct == null ? "" : fp(c.indicePct)}</p>
+              <Etiqueta>S&amp;P 500</Etiqueta>
+              <p className="font-disp text-[22px] font-bold text-fg1">{fp(c.indicePct)}</p>
             </div>
           </div>
+          {dif != null && (
+            <p className="mt-1 text-[12px] text-fg2">
+              {Math.abs(dif) < 0.5
+                ? "Prácticamente lo mismo que el índice."
+                : `${Math.abs(dif).toFixed(1).replace(".", ",")} puntos ${
+                    dif > 0 ? "por delante" : "por detrás"
+                  } del índice.`}
+            </p>
+          )}
 
-          <p className="mt-3 border-t border-line pt-3 text-[12.5px] leading-relaxed text-fg1">
-            Desde el {fd(c.desde)} has puesto <strong>{fe(c.aportadoNeto)}</strong>.{" "}
-            {c.diferencia >= 0 ? (
-              <>
-                Hoy tienes <strong className="text-up">{fe(c.diferencia)}</strong> mas de lo que
-                tendrias comprando el indice con ese mismo dinero y en esas mismas fechas.
-              </>
-            ) : (
-              <>
-                Hoy tienes <strong className="text-dn">{fe(Math.abs(c.diferencia))}</strong> menos
-                de lo que tendrias comprando el indice con ese mismo dinero y en esas mismas
-                fechas. Comprarlo y olvidarte habria salido mejor.
-              </>
-            )}
+          {c.indice != null && c.diferencia != null && (
+            <p className="mt-3 border-t border-line pt-3 text-[12.5px] leading-relaxed text-fg1">
+              Con tu mismo dinero: si cada euro que has puesto —{fe(c.aportado, 0)} en total—
+              hubiera ido al S&amp;P 500 el día que lo pusiste, hoy tendrías{" "}
+              <strong>{fe(c.indice, 0)}</strong>. Tienes{" "}
+              <strong className={c.diferencia >= 0 ? "text-up" : "text-dn"}>
+                {fe(c.tuyo, 0)}
+              </strong>
+              : {fe(Math.abs(c.diferencia), 0)} {c.diferencia >= 0 ? "más" : "menos"}.
+            </p>
+          )}
+
+          <p className="mt-2 text-[11px] text-fg3">
+            {c.desdeIndice !== c.desde
+              ? `La serie del índice empieza el ${fd(c.desdeIndice)}: antes no hay con qué comparar. `
+              : ""}
+            Índice a {fd(c.hasta)}.
           </p>
         </>
       )}

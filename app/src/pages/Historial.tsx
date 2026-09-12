@@ -556,6 +556,10 @@ function FormOperacion({
 
 function Posiciones() {
   const { estado, posiciones, borrar, borrarVarios } = useDatos();
+  const abiertas = new Set(posiciones.map((p) => p.activo.id));
+  const fuera = estado.activos
+    .filter((a) => !abiertas.has(a.id))
+    .sort((x, y) => x.name.localeCompare(y.name, "es"));
   const [editando, setEditando] = useState<Activo | null>(null);
   const [nuevo, setNuevo] = useState(false);
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
@@ -663,6 +667,38 @@ function Posiciones() {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Lo que está a cero no sale en la cartera, pero sigue siendo tuyo
+          para editarlo o borrarlo: una posición vendida, una cuenta vaciada,
+          un activo recién creado sin compras. */}
+      {fuera.length > 0 && (
+        <details className="tile overflow-hidden">
+          <summary className="cursor-pointer px-3.5 py-2.5 text-[12.5px] font-bold text-fg1">
+            Vendidas o a cero · {fuera.length}
+          </summary>
+          <p className="border-t border-line px-3.5 py-2 text-[11px] leading-snug text-fg2">
+            No salen en la cartera ni en los totales. Sus ventas siguen contando en lo realizado
+            y en Fiscal.
+          </p>
+          <ul className="border-t border-line">
+            {fuera.map((a) => (
+              <li key={a.id}>
+                <button
+                  onClick={() => (modoSeleccion ? alterna(a.id) : setEditando(a))}
+                  className={`flex w-full items-center gap-3 border-b border-line px-3.5 py-2 text-left transition-colors last:border-0 hover:bg-bg2 ${
+                    modoSeleccion && seleccion.has(a.id) ? "ring-2 ring-dn ring-inset" : ""
+                  }`}
+                >
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-fg1">{a.name}</span>
+                  <span className="shrink-0 text-[10.5px] text-fg3">
+                    {a.archived ? "archivada" : "a cero"}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       <FormActivo

@@ -214,7 +214,7 @@ export function Segmentos<T extends string>({
           title={o.titulo}
           aria-pressed={o.valor === valor}
           onClick={() => onChange(o.valor)}
-          className={`flex-1 rounded-[9px] px-2.5 py-1.5 text-[11px] font-bold transition-all ${
+          className={`flex-1 whitespace-nowrap rounded-[9px] px-2.5 py-1.5 text-[11px] font-bold transition-all ${
             o.valor === valor
               ? "bg-bg1 text-blue shadow-e1"
               : "text-fg2 hover:text-fg0"

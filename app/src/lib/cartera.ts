@@ -297,6 +297,14 @@ export function calcularFifo(operaciones: Operacion[]): {
       // se da por coste cero, que es lo conservador para Hacienda.
       s.qty = Math.max(0, s.qty - (o.quantity ?? 0));
       s.coste = Math.max(0, s.coste - costeConsumido);
+      // Restos de coma flotante: 0,1 + 0,2 − 0,3 no da cero. El Gold 3x de
+      // Trade Republic, vendido entero, se quedaba «abierto» con
+      // 0,0000000000000000555 títulos y salía en la cartera valiendo cero.
+      if (s.qty < 1e-9) {
+        s.qty = 0;
+        s.coste = 0;
+        s.lotes = [];
+      }
 
       // El reembolso de un traspaso no cierra nada: su coste viaja al fondo
       // de destino. Sólo si había lotes que llevarse — sin histórico del
@@ -351,7 +359,17 @@ export function calcularPosiciones(
   const { saldos } = calcularFifo(estado.operaciones);
 
   return estado.activos
-    .filter((a) => !a.archived)
+    // Lo que está a cero no es algo que tengas: una posición vendida entera,
+    // una cuenta vaciada, un activo creado sin compras todavía. Sus ventas
+    // siguen contando en lo realizado y en Fiscal, y en Historial →
+    // Posiciones se ven aparte, para editarlos o borrarlos. Un saldo negativo
+    // sí se lista: es un error que tiene que verse.
+    .filter((a) => {
+      if (a.archived) return false;
+      const s = saldos.get(a.id);
+      const qty = a.mode === "operations" && s != null ? s.qty : (a.manual_qty ?? 0);
+      return Math.abs(qty) > 1e-9;
+    })
     .map((a): Posicion => {
       const s = saldos.get(a.id);
       const desdeOps = a.mode === "operations" && s != null;
@@ -589,6 +607,92 @@ export function movimientoDelDia(posiciones: Posicion[]): Posicion[] {
     .sort((a, b) => Math.abs(b.dia!) - Math.abs(a.dia!));
 }
 
+// ── ORDEN ────────────────────────────────────────────────────────────────
+// Las posiciones y las bandas se ordenan por lo mismo. «Hoy» va en euros,
+// como «Qué la mueve hoy»: un +9 % sobre 30 € no es lo que más se ha movido.
+
+export type OrdenPosiciones = "valor" | "rentabilidad" | "ganancia" | "hoy" | "nombre";
+
+interface Medidas {
+  nombre: string;
+  valor: number;
+  ganancia: number | null;
+  pct: number | null;
+  dia: number | null;
+}
+
+const COTEJO = new Intl.Collator("es", { sensitivity: "base", numeric: true });
+
+function ordenar<T>(xs: T[], medir: (x: T) => Medidas, orden: OrdenPosiciones, asc: boolean): T[] {
+  const clave = (m: Medidas): number | string | null =>
+    orden === "valor"
+      ? m.valor
+      : orden === "rentabilidad"
+        ? m.pct
+        : orden === "ganancia"
+          ? m.ganancia
+          : orden === "hoy"
+            ? m.dia
+            : m.nombre;
+  return xs
+    .map((x) => ({ x, k: clave(medir(x)) }))
+    .sort((a, b) => {
+      // Sin dato —el efectivo no tiene rentabilidad; lo que no tiene cierre
+      // de ayer no tiene «hoy»— va al final en los dos sentidos: arriba del
+      // todo, un «—» no dice nada.
+      if (a.k == null || b.k == null) return a.k == null ? (b.k == null ? 0 : 1) : -1;
+      const c =
+        typeof a.k === "string" ? COTEJO.compare(a.k, String(b.k)) : a.k - (b.k as number);
+      return asc ? c : -c;
+    })
+    .map((e) => e.x);
+}
+
+export function ordenarPosiciones(
+  posiciones: Posicion[],
+  orden: OrdenPosiciones,
+  asc = false,
+): Posicion[] {
+  return ordenar(
+    posiciones,
+    (p) => {
+      const liq = esLiquidez(p.activo);
+      return {
+        nombre: p.activo.name,
+        valor: p.valor ?? 0,
+        ganancia: liq ? null : p.ganancia,
+        pct: liq ? null : p.gananciaPct,
+        dia: liq ? null : p.dia,
+      };
+    },
+    orden,
+    asc,
+  );
+}
+
+export function ordenarGrupos(
+  grupos: Grupo[],
+  orden: OrdenPosiciones,
+  asc = false,
+  etiqueta: (clave: string) => string = (k) => k,
+): Grupo[] {
+  return ordenar(
+    grupos,
+    (g) => {
+      const liq = g.clave === "liquidez";
+      return {
+        nombre: etiqueta(g.clave),
+        valor: g.valor,
+        ganancia: liq ? null : g.ganancia,
+        pct: liq ? null : g.gananciaPct,
+        dia: liq ? null : g.dia,
+      };
+    },
+    orden,
+    asc,
+  );
+}
+
 // ── FISCAL ───────────────────────────────────────────────────────────────
 
 export interface Ejercicio {
@@ -635,100 +739,3 @@ export function porEjercicio(realizadas: Realizada[], operaciones: Operacion[]):
 }
 
 export const caducaEn = (anio: number) => anio + 4;
-
-// ── CONTRA EL ÍNDICE ─────────────────────────────────────────────────────
-// «¿Lo habría hecho mejor comprando el S&P 500 y olvidándome?»
-//
-// La comparación honesta NO es «tu rentabilidad contra la del índice entre
-// dos fechas». Eso sólo valdría si hubieras metido todo el dinero el primer
-// día. Aportando a plazos durante dos años, la fecha de cada euro importa
-// tanto como el índice: el que entró en un techo lleva menos recorrido.
-//
-// Así que se replica tu comportamiento sobre el índice. Cada euro que
-// ingresaste compra participaciones del índice al precio DE SU DÍA, y cada
-// euro que sacaste las vende. Al final se comparan dos patrimonios que han
-// vivido las mismas entradas y salidas en las mismas fechas, y la diferencia
-// es lo que costó (o ganó) elegir en vez de comprar el índice.
-
-export interface PuntoIndice {
-  date: string;
-  value: number;
-}
-
-export interface ContraIndice {
-  /** Primer movimiento de dinero: desde aquí se compara */
-  desde: string;
-  /** Lo que has puesto de tu bolsillo, menos lo que has sacado */
-  aportadoNeto: number;
-  /** Tu patrimonio hoy */
-  tuyo: number;
-  /** Lo que tendrías si cada aportación hubiera comprado el índice */
-  indice: number;
-  /** tuyo − indice: positivo es que lo has hecho mejor */
-  diferencia: number;
-  tuyoPct: number | null;
-  indicePct: number | null;
-}
-
-/** Valor del índice en una fecha, o el del día hábil anterior más cercano.
- *  Un ingreso puede caer en sábado; el índice, no. */
-function valorEn(serie: PuntoIndice[], fecha: string): number | null {
-  let elegido: number | null = null;
-  for (const p of serie) {
-    if (p.date > fecha) break;
-    if (p.value > 0) elegido = p.value;
-  }
-  // Antes del primer dato de la serie no se puede simular nada.
-  return elegido;
-}
-
-export function contraIndice(
-  operaciones: Operacion[],
-  serie: PuntoIndice[],
-  patrimonioHoy: number,
-): ContraIndice | null {
-  if (serie.length < 2) return null;
-
-  const ordenada = [...serie].sort((a, b) => a.date.localeCompare(b.date));
-  const ultimo = ordenada[ordenada.length - 1];
-  if (!ultimo || ultimo.value <= 0) return null;
-
-  // Sólo el dinero que entra y sale de FUERA. Una compra no es una
-  // aportación: es mover a acciones un dinero que ya estaba dentro, y
-  // contarla aquí sería aportar dos veces.
-  const flujos = operaciones
-    .filter((o) => o.type === "deposit" || o.type === "withdrawal")
-    .map((o) => ({
-      fecha: o.date,
-      importe: (o.type === "deposit" ? 1 : -1) * Math.abs(o.total_eur ?? o.total ?? 0),
-    }))
-    .filter((f) => f.importe !== 0)
-    .sort((a, b) => a.fecha.localeCompare(b.fecha));
-
-  if (flujos.length === 0) return null;
-
-  let participaciones = 0;
-  let aportadoNeto = 0;
-  for (const f of flujos) {
-    const v = valorEn(ordenada, f.fecha);
-    if (v == null) continue; // el índice no llega tan atrás: se ignora ese flujo
-    aportadoNeto += f.importe;
-    participaciones += f.importe / v;
-  }
-
-  // Sacar más de lo que se metió deja participaciones negativas y la
-  // comparación deja de significar nada.
-  if (participaciones <= 0 || aportadoNeto <= 0) return null;
-
-  const indice = participaciones * ultimo.value;
-
-  return {
-    desde: flujos[0].fecha,
-    aportadoNeto,
-    tuyo: patrimonioHoy,
-    indice,
-    diferencia: patrimonioHoy - indice,
-    tuyoPct: aportadoNeto > 0 ? ((patrimonioHoy - aportadoNeto) / aportadoNeto) * 100 : null,
-    indicePct: aportadoNeto > 0 ? ((indice - aportadoNeto) / aportadoNeto) * 100 : null,
-  };
-}

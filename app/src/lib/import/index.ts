@@ -1527,7 +1527,12 @@ export function planificar(lectura: Lectura, op: OpcionesPlan): Plan {
       //     vez de los títulos, el importador de Trade Republic preguntaba por
       //     seis posiciones cerradas hace meses.
       //   · O se calcula solo: títulos y un sitio donde mirar el precio.
-      const cerrada = titulos != null && titulos <= 0;
+      const cerrada = titulos != null && titulos <= 1e-9;
+      // Comprada y vendida entera dentro del mismo archivo —un warrant, un
+      // ETC que ya no tienes—: no es un activo tuyo. Entra archivada, con
+      // sus operaciones, para que la venta cuente en lo realizado y en Fiscal
+      // sin aparecer en la cartera valiendo cero.
+      if (cerrada) activo.archived = true;
       const seCalculaSolo = titulos != null && titulos > 0 && activo.ticker != null;
       if (cerrada || seCalculaSolo || euros <= 0.005) continue;
 

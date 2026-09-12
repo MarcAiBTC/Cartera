@@ -16,6 +16,7 @@
 import { supabase, hayNube } from "./supabase";
 import type { EntradaCatalogo, Precio } from "./tipos";
 import type { MapaFx, MapaPrecios } from "./cartera";
+import type { Historico } from "./evolucion";
 
 const FEED =
   (import.meta.env.VITE_FEED_URL as string | undefined) ??
@@ -278,7 +279,61 @@ export interface PuntoBenchmark {
   value: number;
 }
 
+/** La historia de precios de la cartera, de /api/historico. Se guarda en este
+ *  dispositivo hasta el día siguiente o hasta que cambien los activos
+ *  (`firma`): son veinte peticiones a Yahoo, y el gráfico no necesita más de
+ *  una al día. Sin cuenta o sin servidor, null: entonces el gráfico valora
+ *  cada activo al precio de su última operación. */
+export async function pedirHistorico(firma: string): Promise<Historico | null> {
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  const sesion = data.session;
+  if (!sesion) return null;
+
+  const CLAVE = "cartera:historico";
+  // La «v2» es la forma de la respuesta: el S&P 500 como ETF en euros y las
+  // semanas fechadas el viernes. Lo guardado con la forma anterior no vale.
+  const clave = `v2|${sesion.user.id}|${new Date().toISOString().slice(0, 10)}|${firma}`;
+  try {
+    const c = JSON.parse(localStorage.getItem(CLAVE) ?? "null") as {
+      clave: string;
+      datos: Historico;
+    } | null;
+    if (c?.clave === clave) return c.datos;
+  } catch {
+    /* sin almacenamiento: se pide */
+  }
+
+  try {
+    const r = await fetch("/api/historico", {
+      method: "POST",
+      headers: { authorization: `Bearer ${sesion.access_token}` },
+    });
+    if (!r.ok || !(r.headers.get("content-type") ?? "").includes("json")) return null;
+    const datos = (await r.json()) as Historico;
+    try {
+      localStorage.setItem(CLAVE, JSON.stringify({ clave, datos }));
+    } catch {
+      /* no cabe o no se puede: da igual, se volverá a pedir */
+    }
+    return datos;
+  } catch {
+    return null;
+  }
+}
+
+/** La tabla `benchmark` de Supabase tiene cinco años pero la escribe un cron
+ *  diario que se puede quedar atrás; el feed público está al día pero sólo
+ *  trae dos años, y no llega a una primera inversión de 2023. Se juntan: la
+ *  tabla para la historia y el feed para lo que falte al final. */
 export async function cargarBenchmark(): Promise<PuntoBenchmark[]> {
+  const deLaTabla = await benchmarkDeLaTabla();
+  const delFeed = await benchmarkDelFeed();
+  const ultimo = deLaTabla.at(-1)?.date ?? "";
+  return [...deLaTabla, ...delFeed.filter((p) => p.date > ultimo)];
+}
+
+async function benchmarkDeLaTabla(): Promise<PuntoBenchmark[]> {
   if (hayNube) {
     try {
       // Por paginas de mil. PostgREST corta en 1000 filas por defecto y no
@@ -299,12 +354,15 @@ export async function cargarBenchmark(): Promise<PuntoBenchmark[]> {
         puntos.push(...(data as PuntoBenchmark[]));
         if (data.length < PAGINA) break;
       }
-      if (puntos.length > 0) return puntos;
+      return puntos;
     } catch {
       /* se prueba el feed */
     }
   }
+  return [];
+}
 
+async function benchmarkDelFeed(): Promise<PuntoBenchmark[]> {
   try {
     const r = await fetch(`${FEED}/benchmark.json`, { cache: "no-store" });
     if (!r.ok) return [];

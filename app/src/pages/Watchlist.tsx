@@ -9,6 +9,7 @@ import { useDatos } from "../lib/datos";
 import type { Seguimiento } from "../lib/tipos";
 import { fe, fp } from "../lib/formato";
 import { cierreFiable } from "../lib/cartera";
+import { urlTradingView } from "../lib/enlaces";
 import {
   Aviso,
   Boton,
@@ -73,6 +74,7 @@ export default function Watchlist() {
             const dia = p && prev ? ((p.eur - prev) / prev) * 100 : null;
             const lejos =
               s.target_price != null && p ? ((p.eur - s.target_price) / s.target_price) * 100 : null;
+            const tv = urlTradingView(s.ticker);
 
             return (
               <li key={s.id} className="tile flex flex-col gap-1 px-3.5 py-3">
@@ -114,6 +116,16 @@ export default function Watchlist() {
                     Sin precio. El símbolo tiene que ser el de Yahoo Finance, con su sufijo de
                     mercado si lo lleva (por ejemplo <code className="font-mono">IGLN.L</code>).
                   </p>
+                )}
+                {tv && (
+                  <a
+                    href={tv}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="self-start text-[11px] font-semibold text-blue hover:underline"
+                  >
+                    Ver en TradingView ↗
+                  </a>
                 )}
               </li>
             );
